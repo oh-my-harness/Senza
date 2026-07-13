@@ -5,19 +5,18 @@
 
 ---
 
-> **Review 修正记录**（2026-07-13）
+> **Review 修正记录**
 >
-> 本文档经代码级逐条验证后修正了以下内容：
-> 1. §2 当前状态：eda-agent-py **已用 FFI WorkflowEngine 跑通**（非 Python 镜像版），G1/G2/G3/G4 均已修复
-> 2. §2 缺口表：FFI 函数计数修正（13 harness + 2 tool + 7 workflow = 22），新增 F-10 已有 CI 的说明
-> 3. §2 缺口表："零 type hints/docstrings" 修正为"几乎无"
-> 4. §4.1：`restore()` API 补充 `register_executor()` 步骤（Rust 侧不接收 executor_callback）
-> 5. §4.3：`state()` 已返回 status/current_step/step_history_len，降级为 P2
-> 6. §3：补充 `binding.py` 归属分层方案（cdef 留 runtime，高层封装放 Senza）
-> 7. §5：`06_sub_agent.py` 标记为依赖 FFI 扩展（spawn_agent 未在 FFI 层暴露）
-> 8. 新增 §8：包名迁移影响清单（eda-agent-py 硬编码导入）
-> 9. 新增 §9：Python 版本矩阵
-> 10. README.md 同步修正（PyO3→cffi、包名、CPython 版本）
+> **第一轮**（2026-07-13）：经代码级逐条验证后修正了 10 项内容，见下方 §1–§10。
+>
+> **第二轮**（2026-07-13）：深入对照 `engine.rs`（3239 行）编排引擎后，发现设计文档遗漏大量 LangGraph 类似编排能力，spawn_agent 结论有误，新增以下内容：
+> 1. 修正 §5 `06_sub_agent.py`：spawn_agent 对 LLM step 可用（引擎内部自动注册），删掉"依赖 FFI 扩展"的标注
+> 2. 新增 §11：Workflow JSON Schema 完整参考（Step / Edge / ConditionExpr / Transition / StepResult / StepRecord / WorkflowState / TaskResult）
+> 3. 新增 §12：LangGraph 类似编排能力总览（runtime 有 → FFI 暴露 → 设计文档提及 三列对照）
+> 4. 新增 §13：FFI 暴露缺口补充（subscribe / pause / resume / cancel / checkpoint / total_cost 6 项）
+> 5. 新增 §14：内置 executor 被 FFI 覆盖问题（json_transform / shell / http_call）
+> 6. §5 examples 补充 `08_event_streaming.py`、`09_pause_resume.py`、`10_llm_step.py`、`11_builtin_executor.py`
+> 7. 新增 §15：Harness Event 类型完整参考（text_delta / message_end / tool_start / tool_end / tool_update / agent_end / save_point / phase_change / settled / aborted / error / prompt_start）
 
 ---
 
@@ -112,6 +111,8 @@ pub struct ffi_workflow_t {
 | F-10 | ~~无自动化 wheel 构建~~ **已有 CI（runtime 仓库 ffi-sdk-wheels.yml，4 平台）**，但仅上传 artifact，未发布到 PyPI / GitHub Release | P1 |
 | — | `WorkflowEngine` 缺 `step_history()`（完整步骤列表，非长度）便捷查询 | P2 |
 | — | `WorkflowEngine.run()` 是同步阻塞，无 async 版本 | P2 |
+| F-20 | subscribe / pause / resume / cancel / checkpoint / total_cost 6 项编排能力 FFI 未暴露（见 §13） | P1 |
+| F-21 | 内置 executor 被 FFI Python callback 覆盖（见 §14） | P1 |
 
 ### cffi vs PyO3
 
@@ -153,8 +154,12 @@ senza/                           # 本仓库 (github.com/oh-my-harness/llm-harne
 │       ├── 03_executor_steps.py
 │       ├── 04_shared_context.py
 │       ├── 05_crash_recovery.py
-│       ├── 06_sub_agent.py       # ← 依赖 FFI 扩展（spawn_agent 未暴露），v0.1.0 暂不实现
-│       └── 07_mixed_llm_executor.py
+│       ├── 06_sub_agent.py
+│       ├── 07_mixed_llm_executor.py
+│       ├── 08_event_streaming.py       # ← 依赖 FFI 扩展（subscribe），见 §13
+│       ├── 09_pause_resume.py          # ← 依赖 FFI 扩展（pause/resume），见 §13
+│       ├── 10_llm_step.py              # ← 展示 LLM step（kind: "llm"）
+│       └── 11_builtin_executor.py      # ← 展示 json_transform 内置 executor
 ├── ci/
 │   └── build_wheel.sh           # clone runtime → cargo build → copy .so → pip build
 └── .github/
@@ -219,10 +224,10 @@ engine.run()            # 从断点续跑
 #### 4.2 Type hints + docstrings
 
 当前 `binding.py`（667 行）仅 3 处 docstring，仅 `WorkflowEngine.__init__` 有基本类型标注。需要补全：
-- `Harness.__init__` 参数类型（provider/model/api_key/system_prompt/max_tokens/work_dir 等）
+- `Harness.__init__` 参数类型（provider/model/api_key/api_key_env/work_dir/max_tokens/base_url/chat_path/messages_path/event_queue_capacity/event_forwarder_timeout_secs/system_prompt/callback_timeout）
 - `Harness.prompt` / `wait_event` / `register_tool` / `abort` / `close` 签名 + docstring
 - `WorkflowEngine.__init__` / `run` / `state` / `get_var` / `register_executor` / `restore` 签名 + docstring
-- event 类型文档（`text_delta` / `tool_start` / `tool_end` / `message_end` / `settled` / `aborted` / `error`）
+- event 类型文档（见 §15 完整列表）
 
 #### 4.3 ~~`WorkflowEngine` 便捷查询方法~~ 已部分实现
 
@@ -263,6 +268,14 @@ runtime 仓库已有 CI（`ffi-sdk-wheels.yml`）构建 4 平台 wheel 并上传
 
 可选：直接复用 runtime 仓库的 CI 产物，Senza 仓库只做 Release + PyPI 发布。
 
+#### 4.7 编排能力 FFI 暴露缺口 (F-20)
+
+见 §13 详细列表。6 项编排能力在 Rust runtime 中已实现但 FFI 未暴露，需新增 FFI 函数。
+
+#### 4.8 内置 executor 被 FFI 覆盖 (F-21)
+
+见 §14。`ffi_workflow_new` 会用 Python callback 覆盖同名的内置 executor，导致用户无法通过 FFI 使用 `json_transform` 等内置 executor。
+
 ---
 
 ## 5. Examples 规划
@@ -274,7 +287,7 @@ runtime 仓库已有 CI（`ffi-sdk-wheels.yml`）构建 4 平台 wheel 并上传
 | `01_basic_prompt.py` | 创建 Harness → prompt → 收 events → 拿最终回复 | 最小可用示例 |
 | `02_tool_calling.py` | 注册 tool → LLM 调 tool → 拿结果 → 继续对话 | tool calling 闭环 |
 | `03_system_prompt.py` | 设置 system_prompt 定义 agent 角色 | system_prompt 参数 |
-| `04_streaming.py` | 逐 token 流式输出，展示所有 event 类型 | streaming events |
+| `04_streaming.py` | 逐 token 流式输出，展示所有 event 类型 | streaming events（见 §15 完整列表） |
 | `05_multi_harness.py` | 多个 Harness 实例并行 | 实例隔离性 |
 
 ### Runtime 层 (`examples/runtime/`) — 用 `WorkflowEngine`
@@ -283,11 +296,15 @@ runtime 仓库已有 CI（`ffi-sdk-wheels.yml`）构建 4 平台 wheel 并上传
 |------|------|---------|------|
 | `01_linear_workflow.py` | step A → step B → 完成 | 最简线性流程：workflow JSON + executor + judge | |
 | `02_conditional_routing.py` | 结果合格 → 下一步，不合格 → 返工 | `EdgeCondition::Expr` 声明式条件边 | |
-| `03_executor_steps.py` | 非 LLM 确定性步骤（json_transform + 自定义 executor） | `Step::Executor` 类型 | |
+| `03_executor_steps.py` | 非 LLM 确定性步骤（json_transform + 自定义 executor） | `Step::Executor` 类型 | 注意 FFI 覆盖问题（§14） |
 | `04_shared_context.py` | step 间通过 WorkflowContext 传数据 | `get_var()` / 共享 KV 黑板 | |
 | `05_crash_recovery.py` | 跑到一半模拟崩溃 → `restore()` → `register_executor()` → 续跑 | **runtime 杀手级能力：崩溃恢复** | 注意 restore 后必须重新注册 executor |
-| `06_sub_agent.py` | step 内派发 sub-agent 处理子任务 | `spawn_agent` tool | **依赖 FFI 扩展**：`spawn_agent` tool 当前未在 FFI 层暴露（`ffi_harness_new` 不注册，`HarnessBuilder` 无 spawn 代码），需先在 FFI 增加支持。v0.1.0 暂不实现 |
+| `06_sub_agent.py` | LLM step 中 LLM 调 `spawn_agent` tool 派发 sub-agent | `SyncSpawnAgentTool` | LLM step 的 `allowed_tools` 含 `"spawn_agent"` 时引擎自动注册。依赖 LLM step（eda-agent-py 目前全用 Executor step，此路径未经端到端验证） |
 | `07_mixed_llm_executor.py` | LLM 步和 executor 步混合 | `Step::Llm` + `Step::Executor` 混合 | |
+| `08_event_streaming.py` | subscribe 事件流，展示 WorkflowEvent 6 种类型 | StepStarted / StepFinished / Paused / Resumed / Cancelled / Failed | **依赖 FFI 扩展**（subscribe 未暴露，见 §13） |
+| `09_pause_resume.py` | 运行中 pause → resume 续跑 | pause() / resume() | **依赖 FFI 扩展**（pause/resume 未暴露，见 §13） |
+| `10_llm_step.py` | 最小 LLM step 示例 | `kind: "llm"` step + prompt + allowed_tools | 展示 LLM step 基础用法 |
+| `11_builtin_executor.py` | 使用 `json_transform` 内置 executor | `executor_name: "json_transform"` | 注意 FFI 覆盖问题（§14），可能需要 Rust 侧修复 |
 
 ---
 
@@ -297,9 +314,12 @@ runtime 仓库已有 CI（`ffi-sdk-wheels.yml`）构建 4 平台 wheel 并上传
 2. **拆分 binding.py** — `_binding.py`（cdef 层，从 runtime 同步）+ `binding.py`（高层封装，Senza 维护）
 3. **补 `restore()` Python 包装** — P0 缺口，examples 依赖它（注意 register_executor 步骤）
 4. **打磨高层 binding.py** — type hints + docstrings + 便捷 property
-5. **写 examples** — agent 层 01 → runtime 层 01 → 逐步到 05 crash recovery
+5. **写 examples** — agent 层 01 → runtime 层 01 → 逐步到 05 crash recovery → 10 llm_step
 6. **CI wheel 发布** — 复用或对接 runtime CI 产物 → GitHub Release → PyPI
-7. **发布 v0.1.0** — PyPI `pip install senza`
+7. **FFI 编排能力补全**（F-20）— subscribe / pause / resume / cancel / checkpoint / total_cost
+8. **内置 executor 修复**（F-21）— 让 FFI 能使用 json_transform 等
+9. **补 examples** — 08 event_streaming / 09 pause_resume / 11 builtin_executor
+10. **发布 v0.1.0** — PyPI `pip install senza`
 
 ---
 
@@ -368,3 +388,379 @@ cffi 是纯 C ABI，不依赖特定 CPython 版本，wheel 标记为 `py3-none-{
 | 包名 | `pip install llm_harness_py` | `pip install senza` |
 | import 名 | `llm_harness_py` | `senza` |
 | find-links URL | `releases/expanded_assets/v0.2.0` | 改为 Senza 仓库的 Release URL |
+
+---
+
+## 11. Workflow JSON Schema 完整参考
+
+> 来源：`llm-harness-runtime/crates/llm-harness-runtime/src/workflow/model.rs`
+
+### Workflow
+
+```json
+{
+  "entry_step": "step_a",
+  "steps": [ ... ],
+  "edges": [ ... ]
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `entry_step` | string | 入口步骤 ID（必须在 steps 里） |
+| `steps` | array | 步骤定义列表 |
+| `edges` | array | 边定义列表（条件跳转 / 无条件顺序） |
+
+### Step（tagged union，`kind` 字段区分）
+
+```json
+// LLM step — 引擎构造 AgentHarness，用 prompt 驱动 LLM
+{
+  "kind": "llm",
+  "id": "step_analyze",
+  "name": "分析阶段",
+  "prompt": "请分析以下数据并返回 JSON...",
+  "allowed_tools": ["spawn_agent", "submit_step_result"],
+  "policy": { "timeout_ms": 60000, "max_attempts": 3, "retry_backoff_ms": 1000 }
+}
+
+// Executor step — 确定性非 LLM 步骤，调用注册的 executor
+{
+  "kind": "executor",
+  "id": "step_transform",
+  "name": "数据转换",
+  "executor_name": "json_transform",
+  "config": { "fields": { "result": "/output" } },
+  "policy": { "timeout_ms": 5000 }
+}
+```
+
+| 字段 | 类型 | 说明 | Llm | Executor |
+|------|------|------|:---:|:--------:|
+| `kind` | `"llm"` \| `"executor"` | 步骤类型标签 | ✅ | ✅ |
+| `id` | string | 步骤唯一标识 | ✅ | ✅ |
+| `name` | string | 人类可读名称 | ✅ | ✅ |
+| `prompt` | string | LLM 指令（Llm only） | ✅ | — |
+| `allowed_tools` | string[] | 本步允许的工具集（空 = 不允许任何工具） | ✅ | — |
+| `executor_name` | string | Executor 注册键（Executor only） | — | ✅ |
+| `config` | JSON | Executor 特定配置（Executor only） | — | ✅ |
+| `policy` | object | 执行策略（可选） | ✅ | ✅ |
+
+### StepExecutionPolicy
+
+```json
+{
+  "timeout_ms": 60000,
+  "max_attempts": 3,
+  "retry_backoff_ms": 1000
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `timeout_ms` | u64? | 单次尝试超时（毫秒），缺省 = 无超时 |
+| `max_attempts` | u32? | 最大执行尝试次数（含首次），与 judge Retry 独立 |
+| `retry_backoff_ms` | u64? | 重试前固定延迟（毫秒） |
+
+### Edge
+
+```json
+{
+  "from": "step_a",
+  "to": "step_b",
+  "condition": "pass"                    // string = 自定义 judge label
+  // 或
+  "condition": { "op": "eq", "pointer": "/status", "value": "ok" }  // 声明式条件
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `from` | string | 起始步骤 ID |
+| `to` | string | 目标步骤 ID |
+| `condition` | string \| object? | 跳转条件（缺省 = 无条件顺序） |
+
+### EdgeCondition（untagged union）
+
+**Label**（string）：自定义 judge 的路由标签，由 Python judge callback 解析。
+
+**Expr**（object，tag = `op`）：
+
+| op | 参数 | 语义 |
+|----|------|------|
+| `exists` | `pointer` | structured 中该 JSON Pointer 路径存在 |
+| `missing` | `pointer` | structured 中该路径不存在 |
+| `eq` | `pointer`, `value` | structured 中该路径的值 == value |
+| `ne` | `pointer`, `value` | structured 中该路径的值 != value |
+| `gt` | `pointer`, `value`(f64) | structured 中该路径的数值 > value |
+| `gte` | `pointer`, `value`(f64) | >= |
+| `lt` | `pointer`, `value`(f64) | < |
+| `lte` | `pointer`, `value`(f64) | <= |
+
+`pointer` 使用 RFC 6901 JSON Pointer 语法（如 `/status`、`/data/0/score`）。条件对 `StepResult.structured` 求值。
+
+**声明式条件自动启用**：如果 workflow 的 edges 中有任意 `EdgeCondition::Expr`，且 judge 是 NoopJudge，引擎自动替换为内置 `EdgeConditionJudge`（`engine.rs:62 default_declarative_judge`）。
+
+### Transition（judge 返回值，snake_case 序列化）
+
+```json
+{ "to": "step_b" }                    // 跳到指定步骤
+{ "retry": true }                     // 重跑当前步
+{ "fail": { "reason": "不合格" } }     // 标记流程失败
+{ "abort": { "reason": "正常结束" } }  // 终止流程（正常结束或 abort）
+```
+
+| 变体 | 字段 | 说明 |
+|------|------|------|
+| `to` | `step_id: string` | 跳到指定步骤（引擎校验合法性，非法跳转 = Failed） |
+| `retry` | — | 重跑当前步（新建 harness） |
+| `fail` | `reason: string` | 标记流程 Failed |
+| `abort` | `reason: string` | 终止流程（Succeeded） |
+
+### StepResult（executor callback 返回值）
+
+```json
+{
+  "output": "完整文本输出",
+  "structured": { "status": "ok", "score": 0.95 },
+  "tool_calls_count": 2,
+  "session_id": "sess_abc123",
+  "cost": { "total_input_tokens": 100, "total_output_tokens": 50, ... },
+  "started_at": "2026-07-13T10:00:00Z",
+  "ended_at": "2026-07-13T10:00:05Z"
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `output` | string | 完整文本输出 |
+| `structured` | JSON? | 结构化结果（judge 读此字段做路由决策） |
+| `tool_calls_count` | u32 | 工具调用次数 |
+| `session_id` | string | 本步 session ID |
+| `cost` | CostAggregate | 本步开销 |
+| `started_at` | DateTime? | 开始时间 |
+| `ended_at` | DateTime? | 结束时间 |
+
+**executor callback 写回 context**：Python executor 返回的 `structured._context_update`（JSON object）会被引擎写回 `WorkflowContext.variables`（全量替换）。
+
+### WorkflowState（`state()` 返回值的一部分）
+
+```json
+{
+  "status": "running",
+  "current_step": "step_b",
+  "step_history_len": 3
+}
+```
+
+`ffi_workflow_state` 返回的 JSON 包含以上三个字段。完整的 `WorkflowState`（Rust 内部）还含 `reason`、`result`、`error`、`started_at`、`ended_at`、`step_history`（完整列表）、`context`，但这些目前 FFI 未暴露。
+
+### WorkflowStatus（snake_case）
+
+`idle` | `running` | `paused` | `succeeded` | `failed` | `cancelled`
+
+### TaskResult（`run()` 返回值）
+
+```json
+{
+  "cost": { "total_input_tokens": 500, "total_output_tokens": 200, ... },
+  "turns": 5,
+  "final_message": "最终输出文本"
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `cost` | CostAggregate | 所有步骤的聚合开销 |
+| `turns` | u32 | 完成的步骤数（step_history 中 result: Some 的条目数） |
+| `final_message` | string? | 最后一步的 output |
+
+### CostAggregate
+
+```json
+{
+  "total_input_tokens": 500,
+  "total_output_tokens": 200,
+  "total_cache_read_tokens": 0,
+  "total_cache_write_tokens": 0,
+  "total_cost": 0.015,
+  "by_model": { "gpt-4": { ... } }
+}
+```
+
+---
+
+## 12. LangGraph 类似编排能力总览
+
+> Runtime 的 WorkflowEngine 引入了与 LangGraph 类似的编排机制。以下对照 runtime 有 → FFI 暴露 → 设计文档提及。
+
+### 核心编排
+
+| 能力 | Rust 实现 | LangGraph 对应 | FFI 暴露 | 设计文档 |
+|------|-----------|---------------|---------|---------|
+| DAG workflow (steps+edges+entry) | `Workflow` struct | `StateGraph` | ✅ `ffi_workflow_new` | ✅ |
+| 两种 step 类型 (Llm/Executor) | `Step` enum | Node types | ✅ JSON 传入 | ✅ §11 |
+| 声明式条件边 (8 种 op) | `EdgeConditionJudge` | Conditional edges | ✅ 引擎内部自动 | ✅ §11 |
+| 自定义 judge 路由 | `StepTransitionJudge` trait | Edge routing | ✅ judge callback | ✅ §11 |
+| Transition: To/Retry/Fail/Abort | `Transition` enum | Edge transitions | ✅ judge 返回 | ✅ §11 |
+| 共享 context 黑板 (KV) | `WorkflowContext` | Shared state | ✅ `get_var` | ✅ |
+| 崩溃恢复 | `restore()` + `TaskStore` | Checkpointer | ✅ `ffi_workflow_restore` | ✅ |
+| StepExecutionPolicy (timeout/retry) | `StepExecutionPolicy` | Node retry policy | ✅ JSON 传入 | ✅ §11 |
+| max_steps / max_retries 安全阀 | engine 字段 | Recursion limit | ✅ config 传入 | ❌ 应补 |
+| Gate hook (工具收窄) | `WorkflowGateHook` | — | ✅ 引擎内部 | ❌ 应补 |
+| 动态 workflow 规划 | `PlanWorkflowTool` | — | ❌ 未暴露 | ❌ |
+| 内置 executor (json_transform) | `builtin_executors()` | — | ⚠️ 被 FFI 覆盖 (§14) | ❌ 应补 |
+| shell executor | `ShellExecutor` | — | ❌ 未自动注册 | ❌ |
+| http_call executor | `HttpCallExecutor` | — | ❌ 未自动注册 | ❌ |
+
+### 运行时控制（LangGraph 核心能力）
+
+| 能力 | Rust 实现 | LangGraph 对应 | FFI 暴露 | 设计文档 |
+|------|-----------|---------------|---------|---------|
+| 事件流 subscribe | `subscribe()` → broadcast | `astream_events` | ❌ | ✅ §13 |
+| Pause | `pause()` | `interrupt` | ❌ | ✅ §13 |
+| Resume | `resume()` | `Command(resume=)` | ❌ | ✅ §13 |
+| Cancel | `cancel()` | — | ❌ | ✅ §13 |
+| Checkpoint | `checkpoint()` | Checkpointer | ❌ | ✅ §13 |
+| Cost 追踪 | `total_cost()` | — | ❌ | ✅ §13 |
+| Step plugin (每步可注入 plugin) | `with_step_plugin()` | — | ❌ | ❌ |
+| Hooks (BeforeToolCall/AfterToolCall 等) | `with_hooks()` | — | ❌ | ❌ |
+| Extra tools (引擎级注入) | `with_tool()` | — | ❌ | ❌ |
+
+### Sub-agent
+
+| 能力 | Rust 实现 | LangGraph 对应 | FFI 暴露 | 设计文档 |
+|------|-----------|---------------|---------|---------|
+| spawn_agent (同步等待) | `SyncSpawnAgentTool` | Subgraph | ✅ LLM step 内部自动注册 | ✅ §5 |
+| spawn_agent (异步) | `SpawnAgentTool` (spawn_tool.rs) | — | ❌ 未在 FFI harness 注册 | ❌ |
+
+**spawn_agent 注册条件**（`engine.rs:1122`）：LLM step 的 `allowed_tools` 含 `"spawn_agent"` 时，引擎自动构造 `SyncSpawnAgentTool` 并注入 step harness。不需要额外 FFI 函数。但要求 step 类型为 `kind: "llm"`。
+
+---
+
+## 13. FFI 编排能力暴露缺口 (F-20)
+
+以下 6 项能力在 Rust `WorkflowEngine` 中已实现，但 FFI 未暴露。这些是 LangGraph 的核心运行时控制能力。
+
+| # | Rust 方法 | 功能 | FFI 需新增 | 优先级 | Example |
+|---|-----------|------|-----------|--------|---------|
+| 1 | `subscribe()` | 返回 broadcast Receiver，推送 6 种 WorkflowEvent | `ffi_workflow_subscribe` | P1 | `08_event_streaming.py` |
+| 2 | `pause(reason)` | 非阻塞暂停，run() 在步边界消费 | `ffi_workflow_pause` | P1 | `09_pause_resume.py` |
+| 3 | `resume()` | 从 Paused/Failed 恢复，重置为 Paused | `ffi_workflow_resume` | P1 | `09_pause_resume.py` |
+| 4 | `cancel(reason)` | 立即 abort 当前 step | `ffi_workflow_cancel` | P1 | — |
+| 5 | `checkpoint(desc, payload)` | 保存检查点（append-only） | `ffi_workflow_checkpoint` | P2 | — |
+| 6 | `total_cost()` | 聚合所有步骤开销 | `ffi_workflow_total_cost` | P2 | — |
+
+### WorkflowEvent 类型（subscribe 推送）
+
+```rust
+pub enum WorkflowEvent {
+    StepStarted { step_id, step_name },
+    StepFinished { step_id, result: StepResult },
+    Paused { reason },
+    Resumed,
+    Cancelled { reason },
+    Failed { error },
+}
+```
+
+### 注意事项
+
+- `pause()` 是非阻塞的（设标志即返回），`run()` 在步边界检查并消费。这意味着 pause 不会中断当前正在执行的 step。
+- `resume()` 接受 `Paused` 和 `Failed` 两种状态。`Failed` 恢复时重置为 `Paused`，由 `run()` 驱动 `Paused → Running`。
+- `cancel()` 会 abort 当前 step 的 CancellationToken，并置 `Cancelled` 状态。
+- `subscribe()` 返回 `broadcast::Receiver`，溢出时丢弃旧事件。FFI 需设计轮询 API（类似 `ffi_harness_wait_event`）。
+
+---
+
+## 14. 内置 executor 被 FFI 覆盖问题 (F-21)
+
+### 问题
+
+`WorkflowEngine::new()` 内部调 `from_parts()`，自动注册 `builtin_executors()`（当前只有 `json_transform`，`executor.rs:57`）。
+
+但 FFI 的 `ffi_workflow_new`（`lib.rs:1555`）会提取 workflow 中**所有** Executor step 的 `executor_name`，统一注册为 Python callback：
+
+```rust
+let executor_names: Vec<String> = workflow.steps.iter()
+    .filter_map(|s| s.executor_name().map(|n| n.to_string()))
+    .collect();
+for name in &executor_names {
+    engine = engine.with_executor(name.clone(), executor.clone()); // insert → 覆盖 builtin
+}
+```
+
+`with_executor` 用 `HashMap::insert`（`engine.rs:607`），会覆盖同名的内置 executor。所以如果 workflow 里有 `executor_name: "json_transform"` 的 step，Python callback 会覆盖 Rust 内置实现。
+
+### 影响
+
+- 用户无法通过 FFI 使用 Rust 内置的 `json_transform` executor
+- `shell` 和 `http_call` executor 本来就没在 `builtin_executors()` 中自动注册，FFI 更无法使用
+
+### 修复方向
+
+**方案 A**（Rust 侧）：FFI `ffi_workflow_new` 中跳过已知内置 executor name，不注册 Python callback：
+
+```rust
+const BUILTIN_EXECUTORS: &[&str] = &["json_transform"];
+for name in &executor_names {
+    if !BUILTIN_EXECUTORS.contains(&name.as_str()) {
+        engine = engine.with_executor(name.clone(), executor.clone());
+    }
+}
+```
+
+**方案 B**（Rust 侧）：`builtin_executors()` 注册 `shell` 和 `http_call`，FFI 同样跳过。
+
+**方案 C**（Python 侧）：Senza 高层 API 中，用户可选注册 builtin executor 的 Python 镜像（不经过 Rust）。
+
+建议方案 A + B：Rust 侧补全 builtin 注册 + FFI 跳过 builtin name。
+
+---
+
+## 15. Harness Event 类型完整参考
+
+> 来源：`llm-harness-ffi/src/lib.rs` `forward_agent_event` + `forward_harness_event`
+
+Harness 的 `wait_event()` 返回 JSON dict，`type` 字段区分事件类型。
+
+### 终端事件（TERMINAL_EVENTS）
+
+收到这些事件后 `collect_until_settled` 会计数：
+
+| type | 来源 | 含义 |
+|------|------|------|
+| `settled` | `AgentHarnessEvent::Settled` | Agent loop 正常完成 |
+| `aborted` | `AgentHarnessEvent::Aborted` | 被 abort() 中断 |
+| `error` | `AgentEvent::Error` | 发生错误 |
+
+### 流式事件
+
+| type | 字段 | 含义 |
+|------|------|------|
+| `prompt_start` | `prompt: string` | prompt 发送开始 |
+| `text_delta` | `message_id: string`, `text: string` | LLM 流式文本增量 |
+| `message_end` | `message_id: string`, `message: object` | LLM 消息结束（含 usage） |
+| `tool_start` | `tool_call_id: string`, `tool_name: string`, `args: JSON` | 工具调用开始 |
+| `tool_end` | `tool_call_id: string`, `tool_name: string`, `result: object` | 工具调用结束 |
+| `tool_update` | `tool_call_id: string`, `partial: object` | 工具执行中间进度 |
+| `agent_end` | `new_messages: array` | Agent 一轮结束 |
+| `save_point` | `entries_flushed: int` | Session 持久化保存点 |
+| `phase_change` | `from: string`, `to: string` | Harness 阶段变更 |
+| `progress` | `text: string` | 进度文本 |
+| `final_answer` | `text: string` | 最终答案 |
+
+### Python 侧聚合
+
+`get_final_response()` / `aggregate_events()` 会把事件列表聚合为：
+
+```python
+{
+    "text": "...",           # final_answer 优先，否则 text_delta 拼接
+    "message": {...},        # 最后一个 message_end 的 message
+    "usage": {...},          # message 中的 usage
+    "tool_calls": [...],     # 所有 tool_start/tool_end 配对
+    "errors": [...],         # 所有 error 事件
+    "progress": [...],       # 所有 progress 事件
+}
+```
