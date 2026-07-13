@@ -117,7 +117,7 @@ PyO3 module 名：`llm_harness_py`（Senza 改名后 import 名为 `senza`）。
 | — | 无自动化 wheel 构建 CI（旧 `ffi-sdk-wheels.yml` 已删，新的未建） | **P0** |
 | — | `WorkflowEngine` 缺 `state()` / `get_var()` / `pause()` / `resume()` / `cancel()` / `checkpoint()` / `total_cost()` Python 方法 | P1 |
 | — | `AgentHarness` 缺 `close()` / context manager（`__enter__`/`__exit__`） | P1 |
-| — | eda-agent-py 仍引用旧 `llm_harness_sdk`（cffi），需迁移到 PyO3 | P1 |
+| — | ~~eda-agent-py 仍引用旧 `llm_harness_sdk`~~ **已迁移到 PyO3**（commit efba9a1） | ✅ |
 | — | `ShellExecutor` / `HttpCallExecutor` 未在 `builtin_executors()` 中注册 | P2 |
 | — | `WorkflowEngine.run()` 是同步阻塞，无 async 版本 | P2 |
 
@@ -595,22 +595,20 @@ PyO3 的 Rust doc comments 不自动导出为 Python `__doc__`。需要：
 
 当前无 `__enter__` / `__exit__` / `close()`。需要补充以支持 `with` 语法。
 
-#### 8.6 eda-agent-py 迁移
+#### 8.6 ~~eda-agent-py 迁移~~ 已完成
 
-eda-agent-py 中以下文件仍引用旧 `llm_harness_sdk`：
+eda-agent-py 已完成从 cffi `llm_harness_sdk` 到 PyO3 `llm_harness_py` 的迁移（commit `efba9a1`, 2026-07-13）。
 
-| 文件 | 当前导入 | 迁移后 |
-|------|---------|--------|
-| `eda_agent_py/cli.py:23` | `from llm_harness_sdk import WorkflowEngine` | `from senza import WorkflowEngine` |
-| `eda_agent_py/cli.py:24` | `from llm_harness_sdk import HarnessError` | `from senza import ...` |
-| `eda_agent_py/agent_call.py:33` | `from llm_harness_sdk import Harness` | `from senza import HarnessBuilder` |
-| `eda_agent_py/agent_call.py:91` | `from llm_harness_sdk import Harness, HarnessError` | 同上 |
+迁移内容：
+- `agent_call.py`：`Harness(**kwargs)` → `HarnessBuilder(model).provider(model, provider).max_tokens(n).system_prompt(sp).build()` + `collect_until_settled()`
+- `config.py`：新增 `create_py_provider()` → `create_openai_provider()` / `create_anthropic_provider()`
+- `ffi_bridge.py`：重写为 PyO3 路径，新增 `run_workflow()` 入口，用 `WorkflowEngine(workflow, provider, model, judge).with_executor(name, executor)` + `set_context_variable()` + `run()`
+- `cli.py`：简化为 `run_workflow(pipeline, eda_config, llm_config, on_step=...)`
+- `test_ffi_gaps.py`：从 cffi gap 测试重写为 PyO3 能力测试（12 个测试）
+- 43/43 测试通过，33-stage E2E --no-llm pipeline 成功
+- `llm_harness_sdk` 引用零残留
 
-迁移后 API 变化：
-- `Harness(**kwargs)` → `HarnessBuilder(model).provider(pattern, provider).system_prompt(sp).build()`
-- `harness.prompt(text)` → 不变（但不再返回 `__exit__` 自动 close）
-- `harness.get_final_response()` → `harness.collect_until_settled()` + 手动聚合
-- `WorkflowEngine(workflow, config, executor_fn, judge_fn)` → `WorkflowEngine(workflow, provider, model, judge).with_executor(name, executor)`
+改名为 `senza` 后，eda-agent-py 的 `import llm_harness_py` 需改为 `import senza`（机械替换）。
 
 ### P2：可选
 
