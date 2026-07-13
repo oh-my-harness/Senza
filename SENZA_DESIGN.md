@@ -5,22 +5,20 @@
 
 ---
 
-> **Review 修正记录**
+> **架构变更说明**（2026-07-13）
 >
-> **第一轮**（2026-07-13）：经代码级逐条验证后修正了 10 项内容，见下方 §1–§10。
+> **CFFI 已全删，替换为 PyO3。** 旧 `llm-harness-ffi` crate（`extern "C"` + cffi `binding.py`）已从 runtime 仓库移除，替换为 `llm-harness-py` crate（PyO3 0.29，`#[pyclass]` + `#[pyfunction]`）。本文档已据此完全重写。
 >
-> **第二轮**（2026-07-13）：深入对照 `engine.rs`（3239 行）编排引擎后，发现设计文档遗漏大量 LangGraph 类似编排能力，spawn_agent 结论有误，新增以下内容：
-> 1. 修正 §5 `06_sub_agent.py`：spawn_agent 对 LLM step 可用（引擎内部自动注册），删掉"依赖 FFI 扩展"的标注
-> 2. 新增 §11：Workflow JSON Schema 完整参考（Step / Edge / ConditionExpr / Transition / StepResult / StepRecord / WorkflowState / TaskResult）
-> 3. 新增 §12：LangGraph 类似编排能力总览（runtime 有 → FFI 暴露 → 设计文档提及 三列对照）
-> 4. 新增 §13：FFI 暴露缺口补充（subscribe / pause / resume / cancel / checkpoint / total_cost 6 项）
-> 5. 新增 §14：内置 executor 被 FFI 覆盖问题（json_transform / shell / http_call）
-> 6. §5 examples 补充 `08_event_streaming.py`、`09_pause_resume.py`、`10_llm_step.py`、`11_builtin_executor.py`
-> 7. 新增 §15：Harness Event 类型完整参考（text_delta / message_end / tool_start / tool_end / tool_update / agent_end / save_point / phase_change / settled / aborted / error / prompt_start）
+> PyO3 的优势：
+> - 原生 Python 类型，无需手动 cdef / JSON 序列化
+> - 原生 `#[pyclass]`，Python 侧直接 `import`，有真正的类方法
+> - 异步回调支持（`async def` tool/hook/judge/executor）
+> - maturin 构建，abi3-py39 一个 wheel 覆盖 Python 3.9–3.14+
+> - 编译时类型安全（Rust trait ↔ Python class）
 
 ---
 
-## 1. 层级定位（已验证）
+## 1. 层级定位
 
 oh-my-harness 分三层，依赖只能向下：
 
@@ -33,7 +31,8 @@ oh-my-harness 分三层，依赖只能向下：
 ┌──────────────────▼───────────────────────────┐
 │  runtime 层 (llm-harness-runtime, 14 crate)   │
 │  WorkflowEngine + AgentHarness + TaskStore    │
-│  + Sandbox + ToolRegistry + Budget + FFI      │
+│  + Sandbox + ToolRegistry + Budget            │
+│  + llm-harness-py (PyO3 SDK)                  │
 └──────────────────┬───────────────────────────┘
                    │ 依赖
 ┌──────────────────▼───────────────────────────┐
@@ -42,87 +41,85 @@ oh-my-harness 分三层，依赖只能向下：
 └──────────────────────────────────────────────┘
 ```
 
-### Python SDK 暴露的两个类，分别对应两个层级
+### Python SDK 暴露的类与函数
 
-| Python 类 | Rust 来源 | 层级定位 | 暴露的能力 |
-|-----------|-----------|---------|-----------|
-| `Harness` | `AgentHarness`（`llm-harness-agent` crate）经 `HarnessBuilder`（`llm-harness-runtime` crate）构建 | **agent 层** | 单轮 LLM prompt → streaming response；tool calling；abort；system_prompt |
-| `WorkflowEngine` | `WorkflowEngine` + `TaskStore`（`llm-harness-runtime` crate） | **runtime 层** | 多步 workflow 编排；条件路由；executor/judge 回调；shared context；崩溃恢复 |
+PyO3 module 名：`llm_harness_py`（Senza 改名后 import 名为 `senza`）。
 
-### 为什么 `Harness` 属于 agent 层？
+#### Agent 层
 
-`HarnessBuilder` 虽然定义在 `llm-harness-runtime` crate 的 `builder.rs` 中，但它的职责是**组装 runtime 基础设施**（provider、env、sandbox、tool registry）为一个 `AgentHarness` 实例。`AgentHarness` 本身来自 `llm-harness-agent` crate，封装的是 **agent loop**（prompt → think → tool call → respond）。
+| Python 类 / 函数 | Rust 来源 | 说明 |
+|------------------|-----------|------|
+| `HarnessBuilder` | `HarnessBuilder` (`llm-harness-runtime`) | Fluent API 构建 AgentHarness |
+| `AgentHarness` | `AgentHarness` (`llm-harness-agent`) | 单轮 LLM prompt → streaming events；tool calling；abort |
+| `create_tool()` | `PyTool` → `Tool` trait | 从 Python callable 创建 Tool（支持 sync/async） |
+| `create_sync_tool()` | 同上（别名） | 显式同步 tool |
+| `create_openai_provider()` | `OpenAIProvider` | 创建 OpenAI 兼容 provider |
+| `create_anthropic_provider()` | `AnthropicProvider` | 创建 Anthropic provider |
+| `create_plugin()` | `PyPlugin` → `Plugin` trait | 从 tools + hooks 组装 plugin |
+| `create_event_channel()` | `EventStream` + `WaitForExternalEventTool` | Human-in-the-loop 事件通道 |
 
-从 Python 用户视角：
-- `Harness` = "给 LLM 发一个 prompt，拿回回复，中间可以调 tool" → **agent 能力**
-- `WorkflowEngine` = "定义一个多步流程图，引擎驱动步骤执行、路由、崩溃恢复" → **runtime 能力**
+#### Runtime 层
 
-### FFI 数据结构验证
+| Python 类 / 函数 | Rust 来源 | 说明 |
+|------------------|-----------|------|
+| `WorkflowEngine` | `WorkflowEngine` (`llm-harness-runtime`) | 多步 workflow 编排；条件路由；崩溃恢复；事件流 |
+| `create_judge()` | `PyJudge` → `StepTransitionJudge` trait | 从 Python callable 创建 judge |
+| `create_executor()` | `PyExecutor` → `StepExecutor` trait | 从 Python callable 创建 executor |
+| `Judge` / `Executor` | wrapper class | 持有已创建的 judge/executor 供注册 |
 
-```c
-// agent 层 — ffi_harness_t 持有 AgentHarness
-pub struct ffi_harness_t {
-    shared: Arc<SharedState>,
-    runtime: Arc<Runtime>,
-    harness: Arc<AgentHarness>,        // ← 来自 llm-harness-agent crate
-    event_forwarder_timeout: Option<Duration>,
-    tools: Mutex<Vec<ToolRegistration>>,
-}
+#### Hooks（11 种）
 
-// runtime 层 — ffi_workflow_t 持有 WorkflowEngine + TaskStore
-pub struct ffi_workflow_t {
-    runtime: Arc<Runtime>,
-    engine: Option<WorkflowEngine>,     // ← 来自 llm-harness-runtime crate
-    task_store: Arc<dyn TaskStoreTrait>, // ← 来自 llm-harness-runtime crate
-}
-```
+| 函数 | Hook 类型 | callback 签名 |
+|------|-----------|--------------|
+| `create_before_turn_hook()` | `BeforeTurnHook` | `callback(ctx: dict) -> None` |
+| `create_after_turn_hook()` | `AfterTurnHook` | `callback(ctx: dict) -> None` |
+| `create_before_run_hook()` | `BeforeRunHook` | `callback(ctx: dict) -> None` |
+| `create_after_provider_response_hook()` | `AfterProviderResponseHook` | `callback(ctx: dict) -> None` |
+| `create_before_provider_request_hook()` | `BeforeProviderRequestHook` | `callback(ctx: dict) -> None` |
+| `create_before_tool_call_hook()` | `BeforeToolCallHook` | `callback(ctx: dict) -> str \| None` |
+| `create_after_tool_call_hook()` | `AfterToolCallHook` | `callback(ctx: dict) -> str \| dict` |
+| `create_should_stop_hook()` | `ShouldStopHook` | `callback(ctx: dict) -> bool` |
+| `create_before_compact_hook()` | `BeforeCompactHook` | `callback(ctx: dict) -> str \| dict` |
+| `create_transform_context_hook()` | `TransformContextHook` | `callback(ctx: dict) -> dict` |
+| `create_prepare_next_turn_hook()` | `PrepareNextTurnHook` | `callback(ctx: dict) -> dict \| None` |
 
-### FFI 函数清单（已验证）
-
-| 分类 | 数量 | 函数 |
-|------|------|------|
-| harness | 13 | `abi_version`, `version`, `error_code_callback`, `new`, `free`, `free_string`, `alloc_string`, `last_error`, `register_tool`, `prompt`, `abort`, `close`, `wait_event` |
-| tool | 2 | `ffi_tool_is_cancelled`, `ffi_tool_send_update` |
-| workflow | 7 | `new`, `restore`, `register_executor`, `run`, `state`, `get_var`, `free` |
-| **合计** | **22** | |
+所有 hook 均支持 `async def` 回调。
 
 ---
 
-## 2. 当前状态（已验证）
+## 2. 当前状态
 
 ### 已有
 
-- Rust FFI (`crates/llm-harness-ffi/src/lib.rs`)：22 个 extern "C" 函数（13 harness + 2 tool + 7 workflow），ABI v2
-- Python SDK (`sdk-python/llm_harness_sdk/binding.py`，667 行)：cffi binding，`Harness` + `WorkflowEngine` 两个类
-- 预编译 `.so` 已放在 `sdk-python/llm_harness_sdk/native/`
-- **eda-agent-py 已通过 FFI WorkflowEngine 跑通生产路径**（`cli.py` 直接 `from llm_harness_sdk import WorkflowEngine`，G1/G2/G3/G4 全部修复，commit c416ee0, 2026-07-11）
-- eda-agent-py 的 `agent_call.py` 通过 `Harness` 做 LLM 单次调用（system_prompt 已通过 FFI HarnessConfig 支持）
-- eda-agent-py 的 `workflow_engine/` Python 镜像保留用于 mock 测试（不依赖真实 .so），**生产路径不走它**
-- runtime 仓库已有 CI（`.github/workflows/ffi-sdk-wheels.yml`）：4 平台构建 wheel（Windows/Linux/macOS x64/macOS arm64），Python 3.11，上传为 artifact
+- **PyO3 crate** (`crates/llm-harness-py/`)：11 个源文件，~1300 行 Rust 代码
+  - `lib.rs` — module 入口，注册所有 class + function
+  - `pyharness.rs` — `AgentHarness` Python 类
+  - `pyworkflow.rs` — `WorkflowEngine` Python 类 + judge/executor wrapper
+  - `pybuilder.rs` — `HarnessBuilder` Python 类
+  - `pytool.rs` — `create_tool()` / Tool trait 实现
+  - `pyprovider.rs` — `create_openai_provider()` / `create_anthropic_provider()`
+  - `pyhooks.rs` — 11 种 hook 创建函数
+  - `pyplugin.rs` — `create_plugin()`
+  - `pyeventstream.rs` — `create_event_channel()` + human-in-the-loop
+  - `pyagent.rs` — `Agent` 类（仅 test-utils feature）
+  - `event_stream.rs` — Agent 事件转 Python dict
+  - `value_conv.rs` — Python ↔ serde_json::Value 转换
+- **maturin 构建**：`pyproject.toml` 配置 `abi3-py39`，一个 wheel 覆盖 Python 3.9–3.14+
+- **测试**：16 个测试文件（Rust 集成测试 + Python 测试）
+- eda-agent-py 仍引用旧的 `llm_harness_sdk`（cffi），**需要迁移到 PyO3 SDK**
 
 ### 缺口
 
 | ID | 问题 | 严重度 |
 |----|------|--------|
-| — | `WorkflowEngine.restore()` Rust FFI 已有 `ffi_workflow_restore`，Python 类未包装 | **P0** |
-| — | 几乎无 type hints、几乎无 docstrings（仅 3 处 docstring、WorkflowEngine.__init__ 有基本标注） | **P0** |
-| F-03 | Tool 错误被拍平为 `{"error": str(exc)}`，丢失异常类型/code | P1 |
-| F-06 | ToolContext 只有 `is_cancelled()` + `send_update()`，无 work_dir / 共享 context | P1 |
-| F-10 | ~~无自动化 wheel 构建~~ **已有 CI（runtime 仓库 ffi-sdk-wheels.yml，4 平台）**，但仅上传 artifact，未发布到 PyPI / GitHub Release | P1 |
-| — | `WorkflowEngine` 缺 `step_history()`（完整步骤列表，非长度）便捷查询 | P2 |
+| — | `WorkflowEngine` 缺 `restore()` Python 包装（Rust `WorkflowEngine::restore()` 已实现，PyO3 未暴露） | **P0** |
+| — | PyO3 crate 无 docstring（Rust 侧有 doc comments 但 PyO3 不自动导出为 `__doc__`） | **P0** |
+| — | 无自动化 wheel 构建 CI（旧 `ffi-sdk-wheels.yml` 已删，新的未建） | **P0** |
+| — | `WorkflowEngine` 缺 `state()` / `get_var()` / `pause()` / `resume()` / `cancel()` / `checkpoint()` / `total_cost()` Python 方法 | P1 |
+| — | `AgentHarness` 缺 `close()` / context manager（`__enter__`/`__exit__`） | P1 |
+| — | eda-agent-py 仍引用旧 `llm_harness_sdk`（cffi），需迁移到 PyO3 | P1 |
+| — | `ShellExecutor` / `HttpCallExecutor` 未在 `builtin_executors()` 中注册 | P2 |
 | — | `WorkflowEngine.run()` 是同步阻塞，无 async 版本 | P2 |
-| F-20 | subscribe / pause / resume / cancel / checkpoint / total_cost 6 项编排能力 FFI 未暴露（见 §13） | P1 |
-| F-21 | 内置 executor 被 FFI Python callback 覆盖（见 §14） | P1 |
-
-### cffi vs PyO3
-
-当前实现基于 **cffi**（`sdk-python/llm_harness_sdk/binding.py`）。README.md 提到 "PyO3 extension" 但实际代码是 cffi——README 需修正。
-
-| | cffi (当前) | PyO3 (可选迁移) |
-|---|---|---|
-| 优点 | 简单，Rust 侧只管 `extern "C"`，Python 侧纯字符串 cdef | 原生 Python 类型，更好的错误处理，可直接定义 `#[pyclass]` |
-| 缺点 | 无类型安全，cdef 和 Rust 签名手动同步，error handling 笨拙 | 需引入 `pyo3` 依赖，编译更复杂，ABI 耦合更深 |
-| 建议 | **短期保留 cffi**，先补功能缺口 | 长期可迁移，但非当前优先级 |
 
 ---
 
@@ -132,635 +129,595 @@ pub struct ffi_workflow_t {
 senza/                           # 本仓库 (github.com/oh-my-harness/llm-harness-py-wheels → 改名)
 ├── README.md                    # 面向用户：pip install senza + 快速上手
 ├── SENZA_DESIGN.md              # 本文档
-├── pyproject.toml               # package name = "senza", deps = ["cffi>=1.15"]
-├── src/
-│   └── senza/
-│       ├── __init__.py          # 导出 Harness, WorkflowEngine, HarnessError, ...
-│       ├── _binding.py          # cffi cdef + 低层 FFI 调用（从 runtime 仓库同步，见下方同步机制）
-│       ├── binding.py           # 高层 API 封装（type hints + docstrings + restore() + 便捷方法，Senza 仓库维护）
-│       ├── errors.py            # HarnessError（从 runtime 仓库同步）
-│       └── native/
-│           └── .gitkeep         # .so 在 build 时放入
-├── examples/
-│   ├── agent/                   # ← agent 层示例（用 Harness）
-│   │   ├── 01_basic_prompt.py
-│   │   ├── 02_tool_calling.py
-│   │   ├── 03_system_prompt.py
-│   │   ├── 04_streaming.py
-│   │   └── 05_multi_harness.py
-│   └── runtime/                 # ← runtime 层示例（用 WorkflowEngine）
-│       ├── 01_linear_workflow.py
-│       ├── 02_conditional_routing.py
-│       ├── 03_executor_steps.py
-│       ├── 04_shared_context.py
-│       ├── 05_crash_recovery.py
-│       ├── 06_sub_agent.py
-│       ├── 07_mixed_llm_executor.py
-│       ├── 08_event_streaming.py       # ← 依赖 FFI 扩展（subscribe），见 §13
-│       ├── 09_pause_resume.py          # ← 依赖 FFI 扩展（pause/resume），见 §13
-│       ├── 10_llm_step.py              # ← 展示 LLM step（kind: "llm"）
-│       └── 11_builtin_executor.py      # ← 展示 json_transform 内置 executor
+├── pyproject.toml               # package name = "senza"
 ├── ci/
-│   └── build_wheel.sh           # clone runtime → cargo build → copy .so → pip build
-└── .github/
-    └── workflows/
-        └── build.yml            # tag push → build wheel → publish release
+│   └── build_wheel.sh           # clone runtime → maturin build → publish
+├── .github/
+│   └── workflows/
+│       └── build.yml            # tag push → maturin build → wheel → publish
+└── examples/
+    ├── agent/                   # ← agent 层示例（用 HarnessBuilder + AgentHarness）
+    │   ├── 01_basic_prompt.py
+    │   ├── 02_tool_calling.py
+    │   ├── 03_system_prompt.py
+    │   ├── 04_streaming.py
+    │   └── 05_multi_harness.py
+    └── runtime/                 # ← runtime 层示例（用 WorkflowEngine）
+        ├── 01_linear_workflow.py
+        ├── 02_conditional_routing.py
+        ├── 03_executor_steps.py
+        ├── 04_shared_context.py
+        ├── 05_crash_recovery.py
+        ├── 06_sub_agent.py
+        ├── 07_mixed_llm_executor.py
+        ├── 08_event_streaming.py
+        ├── 09_pause_resume.py
+        ├── 10_llm_step.py
+        └── 11_human_in_the_loop.py
 ```
 
-### binding.py 分层归属（解决原方案 A 的矛盾）
+### 与旧 cffi 架构的区别
 
-原方案 A 将 `binding.py` 源码全部留在 runtime 仓库，Senza build 时同步拷贝。但这与 §4 FFI 打磨清单矛盾——type hints、docstrings、`restore()` 包装、便捷方法都需要改 `binding.py`。
-
-**修正方案：拆分为两层**
-
-| 文件 | 归属 | 内容 | 同步方式 |
-|------|------|------|---------|
-| `_binding.py` | runtime 仓库（`crates/llm-harness-ffi/sdk-python/llm_harness_sdk/binding.py`） | cffi cdef、`_load_lib`、低层 FFI 调用、`_check_rc` 等 | build 时从 runtime 指定 commit 拷贝，Senza 仓库不直接改 |
-| `binding.py` | Senza 仓库 | 高层 API：`Harness` / `WorkflowEngine` / `ToolContext` 类定义、type hints、docstrings、`restore()` classmethod、`step_history()` 等便捷方法 | Senza 仓库独立维护，import `_binding` |
-
-```bash
-# ci/build_wheel.sh 核心逻辑
-RUNTIME_REV=<pinned commit>
-git clone --depth 1 https://github.com/oh-my-harness/llm-harness-runtime.git /tmp/runtime
-cd /tmp/runtime && cargo build -p llm-harness-ffi --release
-cp /tmp/runtime/target/release/libllm_harness_ffi.so src/senza/native/
-cp /tmp/runtime/crates/llm-harness-ffi/sdk-python/llm_harness_sdk/binding.py src/senza/_binding.py
-cp /tmp/runtime/crates/llm-harness-ffi/sdk-python/llm_harness_sdk/errors.py src/senza/errors.py
-python -m build
-```
+| 项 | cffi (旧) | PyO3 (新) |
+|----|-----------|-----------|
+| Python binding | `binding.py` 手写 cdef + JSON 序列化 | `#[pyclass]` + `#[pyfunction]` 自动生成 |
+| 数据传递 | 所有参数/返回值 JSON 序列化 | 原生 Python 类型（dict/list/str/int/bool） |
+| 构建 | `cargo build` + 手动 copy `.so` + `setup.py` | `maturin build` 一步到位 |
+| Wheel | 平台特定 + Python 版本特定 | `abi3-py39` 一个 wheel 覆盖 3.9–3.14+ |
+| 异步 | 不支持 async callback | 支持 `async def` tool/hook/judge/executor |
+| Type safety | cdef 手动维护，易错 | 编译时 Rust trait 约束 |
+| Senza 仓库职责 | 打包 `.so` + `binding.py` + 高层封装 | 仅打包 wheel + examples（SDK 源码在 runtime 仓库） |
 
 ### 包名
 
 - PyPI 包名：`senza`
 - import 名：`senza`（PEP 8 小写）
-- 用户代码：`from senza import Harness, WorkflowEngine`
+- 用户代码：`from senza import HarnessBuilder, AgentHarness, WorkflowEngine, ...`
 
 ---
 
-## 4. FFI 打磨清单
+## 4. API 参考
+
+### 4.1 Provider 创建
+
+```python
+import senza
+
+# OpenAI 兼容（含 DeepSeek、本地模型等）
+provider = senza.create_openai_provider(
+    api_key="sk-...",
+    base_url="https://api.openai.com",       # 可选，空则用默认
+    parse_reasoning_content=True,              # 解析 DeepSeek reasoning_content
+    tolerant_keepalive=True,                   # 容忍 keepalive 消息
+)
+
+# Anthropic
+provider = senza.create_anthropic_provider(
+    api_key="sk-ant-...",
+    base_url="https://api.anthropic.com",    # 可选
+)
+```
+
+### 4.2 HarnessBuilder + AgentHarness（Agent 层）
+
+```python
+# 创建 harness
+harness = (
+    senza.HarnessBuilder("gpt-4o")
+    .provider("gpt-*", provider)
+    .system_prompt("You are a helpful assistant.")
+    .max_tokens(1024)
+    .temperature(0.7)
+    .tool(my_tool)           # create_tool() 创建的 Tool
+    .plugin(my_plugin)       # create_plugin() 创建的 Plugin
+    .build()
+)
+
+# 发送 prompt
+harness.prompt("Hello!")
+
+# 收集事件直到 settled
+events = harness.collect_until_settled(timeout_ms=30000)
+for event in events:
+    print(event["type"], event.get("text", ""))
+
+# 或逐个迭代事件
+for event in harness.events(timeout_ms=5000):
+    if event["type"] in ("settled", "aborted"):
+        break
+    print(event)
+
+# 获取状态
+print(harness.phase())          # "idle" / "turning" / "compacting" / "branching"
+print(harness.message_count())  # 消息数
+
+# 取消
+harness.abort()
+```
+
+**AgentHarness 方法**：
+
+| 方法 | 签名 | 说明 |
+|------|------|------|
+| `prompt(text)` | `str → None` | 同步执行 prompt，阻塞直到完成 |
+| `events(timeout_ms=5000)` | `int → Iterator[dict]` | 返回事件迭代器 |
+| `collect_until_settled(timeout_ms=30000)` | `int → list[dict]` | 收集事件直到 settled/aborted |
+| `message_count()` | `→ int` | 当前消息数 |
+| `phase()` | `→ str` | "idle"/"turning"/"compacting"/"branching" |
+| `abort()` | `→ None` | 取消当前 prompt |
+
+### 4.3 Tool 创建
+
+```python
+import json
+
+# 同步 tool
+my_tool = senza.create_tool(
+    name="search",
+    description="Search the web",
+    parameters_schema=json.dumps({
+        "type": "object",
+        "properties": {"query": {"type": "string"}},
+        "required": ["query"],
+    }),
+    callback=lambda args, ctx: {
+        "content": [{"type": "text", "text": f"Results for {args['query']}"}],
+        "terminate": False,
+    },
+)
+
+# 异步 tool
+async def async_search(args, ctx):
+    results = await some_async_api(args["query"])
+    return {"content": [{"type": "text", "text": results}], "terminate": False}
+
+my_async_tool = senza.create_tool(
+    name="async_search",
+    description="Async web search",
+    parameters_schema=json.dumps({...}),
+    callback=async_search,
+)
+```
+
+### 4.4 WorkflowEngine（Runtime 层）
+
+```python
+# 创建 workflow dict
+workflow = {
+    "entry_step": "step1",
+    "steps": [
+        # LLM step
+        {"id": "step1", "name": "分析", "prompt": "分析数据", "allowed_tools": ["search"]},
+        # Executor step
+        {"id": "step2", "name": "转换", "executor": "transform", "executor_config": {"fields": {"result": "/output"}}},
+    ],
+    "edges": [
+        {"from": "step1", "to": "step2"},
+        {"from": "step2", "to": "step1", "condition": {"op": "eq", "pointer": "/status", "value": "retry"}},
+    ],
+}
+
+# 创建 judge
+judge = senza.create_judge(lambda ctx: "to:step2" if ctx.get("structured", {}).get("ok") else "retry")
+
+# 创建 executor
+executor = senza.create_executor(lambda ctx: {"output": "done", "structured": {"status": "ok"}})
+
+# 创建 engine
+engine = (
+    senza.WorkflowEngine(workflow, provider, "gpt-4o", judge)
+    .with_tool(my_tool)
+    .with_executor("transform", executor)
+    .with_hooks([before_turn_hook, after_turn_hook])
+    .with_step_plugin("step1", my_plugin)
+    .with_max_tokens(4096)
+)
+
+# 设置 context 变量
+engine.set_context_variable("user_input", "hello")
+engine.set_context_variable("count", 42)
+
+# 订阅事件流
+event_iter = engine.subscribe(timeout_ms=5000)
+
+# 运行
+engine.run()
+
+# 获取 task ID
+print(engine.task_id())  # "task-<uuid>"
+```
+
+**WorkflowEngine 方法**：
+
+| 方法 | 签名 | 说明 |
+|------|------|------|
+| `__new__(workflow_dict, provider, model, judge, session_base_dir="sessions")` | — | 构造引擎 |
+| `with_tool(tool)` | `Tool → self` | 注册额外 tool（链式） |
+| `with_external_tool(tool)` | `WaitForExternalEventTool → self` | 注册外部事件 tool（链式） |
+| `with_executor(name, executor)` | `str, Executor → self` | 注册命名 executor（链式） |
+| `with_hooks(hooks_list)` | `list[Hook] → self` | 注入 hooks（链式） |
+| `with_step_plugin(step_id, plugin)` | `str, Plugin → self` | 为指定 step 注册 plugin（链式） |
+| `with_max_tokens(tokens)` | `int? → self` | 设置每步最大输出 token（链式） |
+| `set_context_variable(key, value)` | `str, Any → None` | 设置 workflow context 变量 |
+| `run()` | `→ None` | 启动/恢复执行，阻塞直到完成 |
+| `task_id()` | `→ str` | 返回 task ID（"task-<uuid>"） |
+| `subscribe(timeout_ms=5000)` | `int → WorkflowEventIterator` | 订阅事件流 |
+
+### 4.5 Judge callback
+
+```python
+def my_judge(ctx: dict) -> str:
+    # ctx 包含: step_id, output, structured, step_count
+    structured = ctx.get("structured") or {}
+    if structured.get("status") == "ok":
+        return "to:next_step"
+    elif structured.get("retry_needed"):
+        return "retry"
+    else:
+        return "fail:quality gate failed"
+
+judge = senza.create_judge(my_judge)
+```
+
+返回值编码：
+- `"to:<step_id>"` → 跳到指定步骤
+- `"retry"` → 重跑当前步
+- `"fail:<reason>"` → 标记流程失败
+- `"abort:<reason>"` → 终止流程（正常结束）
+
+### 4.6 Executor callback
+
+```python
+def my_executor(ctx: dict) -> dict:
+    # ctx 包含: step_id, step_name, config, prev_output, context
+    return {
+        "output": "处理完成",
+        "structured": {"status": "ok", "result": 42},
+    }
+
+executor = senza.create_executor(my_executor)
+```
+
+### 4.7 Human-in-the-loop（Event Channel）
+
+```python
+# 创建事件通道
+handle, wait_tool = senza.create_event_channel("review-task")
+
+# 注册 wait_tool 到 engine（LLM 可调用它等待外部事件）
+engine = (
+    senza.WorkflowEngine(workflow, provider, "gpt-4o", judge)
+    .with_external_tool(wait_tool)
+)
+
+# 在另一个线程/协程中推送事件
+handle.submit("审核通过", {"approved": True, "reviewer": "alice"})
+```
+
+---
+
+## 5. Workflow JSON Schema
+
+> 来源：`pyworkflow.rs` `dict_to_workflow()` + `model.rs`
+
+### Workflow dict
+
+```python
+{
+    "entry_step": "step1",
+    "steps": [...],
+    "edges": [...],
+}
+```
+
+### Step
+
+```python
+# LLM step
+{"id": "step1", "name": "分析", "prompt": "请分析...", "allowed_tools": ["search", "spawn_agent"]}
+
+# Executor step
+{"id": "step2", "name": "转换", "executor": "transform", "executor_config": {"fields": {"result": "/output"}}}
+```
+
+**判断逻辑**（`dict_to_workflow`）：step dict 含 `"executor"` 键 → Executor step；否则 → LLM step。
+
+| 字段 | 类型 | LLM | Executor | 说明 |
+|------|------|:---:|:--------:|------|
+| `id` | str | ✅ | ✅ | 步骤唯一标识 |
+| `name` | str | ✅ | ✅ | 人类可读名称 |
+| `prompt` | str | ✅ | — | LLM 指令 |
+| `allowed_tools` | str[] | ✅ | — | 允许的工具集（空 = 不允许任何工具） |
+| `executor` | str | — | ✅ | Executor 注册键 |
+| `executor_config` | dict | — | ✅ | Executor 特定配置 |
+
+### Edge
+
+```python
+{"from": "step1", "to": "step2"}                                          # 无条件
+{"from": "step1", "to": "step2", "condition": "success"}                  # label（judge 解析）
+{"from": "step1", "to": "step2", "condition": {"op": "eq", "pointer": "/status", "value": "ok"}}  # 声明式
+```
+
+### ConditionExpr（`op` tag）
+
+| op | 参数 | 语义 |
+|----|------|------|
+| `exists` | `pointer` | structured 中该 JSON Pointer 路径存在 |
+| `missing` | `pointer` | 不存在 |
+| `eq` | `pointer`, `value` | == |
+| `ne` | `pointer`, `value` | != |
+| `gt` / `gte` / `lt` / `lte` | `pointer`, `value`(f64) | 数值比较 |
+
+声明式条件自动启用：如果 edges 中有 `Expr` 条件且 judge 是 NoopJudge，引擎自动替换为 `EdgeConditionJudge`。
+
+### spawn_agent
+
+LLM step 的 `allowed_tools` 含 `"spawn_agent"` 时，引擎自动注册 `SyncSpawnAgentTool`（`engine.rs:1122`）。LLM 可调用它派发 sub-agent 处理子任务，同步等待结果。
+
+---
+
+## 6. 事件类型参考
+
+### AgentHarness 事件（`events()` / `collect_until_settled()`）
+
+来源：`pyharness.rs` `harness_event_to_dict()` + `event_stream.rs` `agent_event_to_dict()`
+
+**Agent 事件**（底层 `AgentEvent`）：
+
+| type | 字段 | 说明 |
+|------|------|------|
+| `agent_start` | — | Agent 开始 |
+| `agent_end` | `new_messages_count`, `new_messages` | Agent 一轮结束 |
+| `turn_start` | `index` | Turn 开始 |
+| `turn_end` | `index`, `message_text`, `tool_results` | Turn 结束 |
+| `message_start` | `message_id` | 消息开始 |
+| `message_update` | `message_id`, ... | 消息更新 |
+| `message_end` | `message_id`, ... | 消息结束 |
+| `text_delta` | `message_id`, `text` | 流式文本增量 |
+| `thinking_delta` | `message_id`, `thinking` | 推理/思考增量 |
+| `tool_call_start` | ... | 工具调用开始 |
+| `tool_call_args_delta` | ... | 工具参数增量 |
+| `tool_call_end` | ... | 工具调用结束 |
+| `tool_execution_start` | ... | 工具执行开始 |
+| `tool_execution_update` | ... | 工具执行进度 |
+| `tool_execution_end` | ... | 工具执行结束 |
+| `error` | `message` | 错误 |
+| `retry_attempt` | ... | 重试 |
+
+**Harness 级事件**（`AgentHarnessEvent` 非 Agent 变体）：
+
+| type | 字段 | 说明 |
+|------|------|------|
+| `phase_change` | `from`, `to` | 阶段变更（idle/turning/compacting/branching） |
+| `model_update` | `from`, `to` | 模型变更 |
+| `thinking_level_update` | `from`, `to` | 思考级别变更 |
+| `tools_update` | `added`, `removed` | 工具列表变更 |
+| `active_tools_update` | `active` | 活跃工具子集变更 |
+| `resources_update` | `skills`, `templates`, `diagnostics` | 资源加载变更 |
+| `session_info_update` | `name` | Session 名称变更 |
+| `compaction_start` | `estimated_tokens` | Compaction 开始 |
+| `compaction_end` | `stats`, `error` | Compaction 结束 |
+| `settled` | — | Agent loop 正常完成（终端事件） |
+| `aborted` | — | 被 abort 中断（终端事件） |
+
+### WorkflowEngine 事件（`subscribe()`）
+
+来源：`pyworkflow.rs` `workflow_event_to_dict()`
+
+| type | 字段 | 说明 |
+|------|------|------|
+| `step_started` | `step_id`, `step_name` | 步骤开始 |
+| `step_finished` | `step_id`, `output`, `structured`, `tool_calls_count` | 步骤完成 |
+| `paused` | `reason` | 暂停 |
+| `resumed` | — | 恢复 |
+| `cancelled` | `reason` | 取消 |
+| `failed` | `error` | 失败 |
+
+---
+
+## 7. 编排能力总览
+
+| 能力 | Rust 实现 | PyO3 暴露 | 说明 |
+|------|-----------|----------|------|
+| DAG workflow | `Workflow` | ✅ `WorkflowEngine(workflow_dict, ...)` | steps + edges + entry_step |
+| LLM step | `Step::Llm` | ✅ dict 中无 `"executor"` 键 | prompt + allowed_tools |
+| Executor step | `Step::Executor` | ✅ dict 中有 `"executor"` 键 | executor_name + config |
+| 声明式条件边 (8 种 op) | `EdgeConditionJudge` | ✅ edge `"condition"` dict | 自动启用 |
+| 自定义 judge 路由 | `StepTransitionJudge` | ✅ `create_judge()` | To/Retry/Fail/Abort |
+| 共享 context 黑板 | `WorkflowContext` | ✅ `set_context_variable()` | KV 黑板 |
+| 崩溃恢复 | `restore()` + `TaskStore` | ❌ **未暴露** | P0 缺口 |
+| 事件流 subscribe | `subscribe()` | ✅ `engine.subscribe()` | 6 种 WorkflowEvent |
+| Pause / Resume | `pause()` / `resume()` | ❌ **未暴露** | P1 缺口 |
+| Cancel | `cancel()` | ❌ **未暴露** | P1 缺口 |
+| Checkpoint | `checkpoint()` | ❌ **未暴露** | P2 缺口 |
+| Cost 追踪 | `total_cost()` | ❌ **未暴露** | P2 缺口 |
+| Step plugin | `with_step_plugin()` | ✅ `engine.with_step_plugin()` | 每步可注入 plugin |
+| Hooks (11 种) | `with_hooks()` | ✅ `engine.with_hooks()` + 11 个 `create_*_hook()` | 全部暴露 |
+| Extra tools | `with_tool()` | ✅ `engine.with_tool()` | 引擎级注入 |
+| spawn_agent | `SyncSpawnAgentTool` | ✅ LLM step 内部自动注册 | `allowed_tools` 含 `"spawn_agent"` |
+| Human-in-the-loop | `WaitForExternalEventTool` | ✅ `create_event_channel()` | 外部事件注入 |
+| 内置 executor (json_transform) | `builtin_executors()` | ✅ 自动注册 | 不再被 Python callback 覆盖 |
+| max_tokens | `with_max_tokens()` | ✅ `engine.with_max_tokens()` | 每步最大输出 |
+| max_steps / max_retries | engine 字段 | ❌ 未暴露 | P2 缺口 |
+
+---
+
+## 8. FFI 打磨清单
 
 ### P0：必须先做
 
-#### 4.1 补 `WorkflowEngine.restore()` Python 包装
+#### 8.1 补 `WorkflowEngine.restore()` Python 包装
 
-Rust 侧 `ffi_workflow_restore` 已实现，cdef 已声明，但 Python `WorkflowEngine` 类没有对应的 classmethod。
-
-**关键注意**：`ffi_workflow_restore` 只接收 `judge_callback`，**不接收 `executor_callback`**（与 `ffi_workflow_new` 不同）。`ffi_workflow_new` 会从 workflow steps 中提取 executor_name 自动注册，但 `restore` 不会。因此恢复后**必须手动调用 `register_executor()` 重新注册所有 executor**，否则 `run()` 会报 "no executor registered" 错误。
+Rust `WorkflowEngine::restore()` 已实现（从 TaskStore 恢复），PyO3 `PyWorkflowEngine` 未暴露。
 
 ```python
 # 目标 API
 engine = WorkflowEngine.restore(
-    task_id="task_abc123",
-    config={...},
-    judge_fn=my_judge,
+    task_id="task-abc123",
+    provider=provider,
+    model="gpt-4o",
+    judge=judge,
+    session_base_dir="sessions",
 )
-# restore 不接收 executor_fn — 必须手动重新注册
-engine.register_executor("my_executor", my_executor_fn)
-engine.register_executor("json_transform", other_fn)
-state = engine.state()  # 应恢复到崩溃前的 step
-engine.run()            # 从断点续跑
+engine.with_executor("transform", executor)  # 需重新注册 executor
+engine.run()  # 从断点续跑
 ```
 
-#### 4.2 Type hints + docstrings
+#### 8.2 Docstrings
 
-当前 `binding.py`（667 行）仅 3 处 docstring，仅 `WorkflowEngine.__init__` 有基本类型标注。需要补全：
-- `Harness.__init__` 参数类型（provider/model/api_key/api_key_env/work_dir/max_tokens/base_url/chat_path/messages_path/event_queue_capacity/event_forwarder_timeout_secs/system_prompt/callback_timeout）
-- `Harness.prompt` / `wait_event` / `register_tool` / `abort` / `close` 签名 + docstring
-- `WorkflowEngine.__init__` / `run` / `state` / `get_var` / `register_executor` / `restore` 签名 + docstring
-- event 类型文档（见 §15 完整列表）
+PyO3 的 Rust doc comments 不自动导出为 Python `__doc__`。需要：
+- 在 `#[pymethods]` 上加 `#[pyo3(text_signature = "...")]`（部分已有）
+- 手动设置 `__doc__` 或用 `#[doc = "..."]` 属性
 
-#### 4.3 ~~`WorkflowEngine` 便捷查询方法~~ 已部分实现
+#### 8.3 自动化 wheel 构建 CI
 
-`ffi_workflow_state` 已返回 `status` / `current_step` / `step_history_len` 三个字段（Rust 侧 `serde_json::json!` 序列化），Python `state()` 返回 parsed JSON 即可获取。只需在高层封装中增加便捷 property 即可，**无需新增 FFI 函数**。
-
-真正缺的只有：
-- `step_history()` — 返回完整步骤列表（非长度），需新增 FFI 函数
-
-**优先级从 P0 降为 P2。**
+需要新建 `.github/workflows/build.yml`：
+1. push tag `v*` → trigger
+2. `maturin build --release`（指定 `PYO3_PYTHON`）
+3. 上传 wheel 到 GitHub Release + PyPI
 
 ### P1：应做
 
-#### 4.4 Tool 错误结构化 (F-03)
+#### 8.4 WorkflowEngine 缺失方法
 
-当前 Python tool callback 抛异常 → Rust 侧拍平为 `{"error": str(exc)}`。改为：
-```python
-# tool callback 可返回结构化错误
-return {
-    "content": [],
-    "details": {},
-    "terminate": False,
-    "error": {"message": "...", "type": "ValueError", "code": 42}
-}
-```
+| 方法 | Rust 来源 | 说明 |
+|------|-----------|------|
+| `state()` | `engine.state()` | 返回 WorkflowStatus + current_step + step_history_len |
+| `get_var(key)` | `task_store.load_workflow_state()` | 读取 context 变量 |
+| `pause(reason)` | `engine.pause()` | 非阻塞暂停 |
+| `resume()` | `engine.resume()` | 从 Paused/Failed 恢复 |
+| `cancel(reason)` | `engine.cancel()` | 取消执行 |
+| `checkpoint(desc, payload)` | `engine.checkpoint()` | 保存检查点 |
+| `total_cost()` | `engine.total_cost()` | 聚合开销 |
 
-#### 4.5 ToolContext 增强 (F-06/F-12)
+#### 8.5 AgentHarness 缺 context manager
 
-当前 `ToolContext` 只有 `is_cancelled()` + `send_update()`。增加：
-- `work_dir` — 工作目录路径
-- `get_var(key)` / `set_var(key, value)` — 读写 WorkflowContext 共享变量
+当前无 `__enter__` / `__exit__` / `close()`。需要补充以支持 `with` 语法。
 
-#### 4.6 自动化 wheel 发布 (F-10 修正)
+#### 8.6 eda-agent-py 迁移
 
-runtime 仓库已有 CI（`ffi-sdk-wheels.yml`）构建 4 平台 wheel 并上传 artifact。Senza 仓库需要：
-1. 接收 runtime CI 的 wheel artifact（或自行 clone + build）
-2. 发布到 GitHub Release（tag `v*` 触发）
-3. 发布到 PyPI（`senza` 包名）
+eda-agent-py 中以下文件仍引用旧 `llm_harness_sdk`：
 
-可选：直接复用 runtime 仓库的 CI 产物，Senza 仓库只做 Release + PyPI 发布。
+| 文件 | 当前导入 | 迁移后 |
+|------|---------|--------|
+| `eda_agent_py/cli.py:23` | `from llm_harness_sdk import WorkflowEngine` | `from senza import WorkflowEngine` |
+| `eda_agent_py/cli.py:24` | `from llm_harness_sdk import HarnessError` | `from senza import ...` |
+| `eda_agent_py/agent_call.py:33` | `from llm_harness_sdk import Harness` | `from senza import HarnessBuilder` |
+| `eda_agent_py/agent_call.py:91` | `from llm_harness_sdk import Harness, HarnessError` | 同上 |
 
-#### 4.7 编排能力 FFI 暴露缺口 (F-20)
+迁移后 API 变化：
+- `Harness(**kwargs)` → `HarnessBuilder(model).provider(pattern, provider).system_prompt(sp).build()`
+- `harness.prompt(text)` → 不变（但不再返回 `__exit__` 自动 close）
+- `harness.get_final_response()` → `harness.collect_until_settled()` + 手动聚合
+- `WorkflowEngine(workflow, config, executor_fn, judge_fn)` → `WorkflowEngine(workflow, provider, model, judge).with_executor(name, executor)`
 
-见 §13 详细列表。6 项编排能力在 Rust runtime 中已实现但 FFI 未暴露，需新增 FFI 函数。
+### P2：可选
 
-#### 4.8 内置 executor 被 FFI 覆盖 (F-21)
-
-见 §14。`ffi_workflow_new` 会用 Python callback 覆盖同名的内置 executor，导致用户无法通过 FFI 使用 `json_transform` 等内置 executor。
+- `max_steps` / `max_retries` 配置暴露
+- `ShellExecutor` / `HttpCallExecutor` 注册到 `builtin_executors()`
+- `WorkflowEngine.run()` async 版本
 
 ---
 
-## 5. Examples 规划
+## 9. Examples 规划
 
-### Agent 层 (`examples/agent/`) — 用 `Harness`
+### Agent 层 (`examples/agent/`)
 
 | 文件 | 内容 | 核心展示 |
 |------|------|---------|
-| `01_basic_prompt.py` | 创建 Harness → prompt → 收 events → 拿最终回复 | 最小可用示例 |
-| `02_tool_calling.py` | 注册 tool → LLM 调 tool → 拿结果 → 继续对话 | tool calling 闭环 |
-| `03_system_prompt.py` | 设置 system_prompt 定义 agent 角色 | system_prompt 参数 |
-| `04_streaming.py` | 逐 token 流式输出，展示所有 event 类型 | streaming events（见 §15 完整列表） |
-| `05_multi_harness.py` | 多个 Harness 实例并行 | 实例隔离性 |
+| `01_basic_prompt.py` | HarnessBuilder → build → prompt → collect_until_settled | 最小可用示例 |
+| `02_tool_calling.py` | create_tool → register → LLM 调 tool → 继续对话 | tool calling 闭环 |
+| `03_system_prompt.py` | .system_prompt() 定义 agent 角色 | system_prompt |
+| `04_streaming.py` | events() 逐事件迭代，展示所有 event 类型 | streaming events |
+| `05_multi_harness.py` | 多个 AgentHarness 实例并行 | 实例隔离性 |
 
-### Runtime 层 (`examples/runtime/`) — 用 `WorkflowEngine`
+### Runtime 层 (`examples/runtime/`)
 
 | 文件 | 内容 | 核心展示 | 备注 |
 |------|------|---------|------|
-| `01_linear_workflow.py` | step A → step B → 完成 | 最简线性流程：workflow JSON + executor + judge | |
-| `02_conditional_routing.py` | 结果合格 → 下一步，不合格 → 返工 | `EdgeCondition::Expr` 声明式条件边 | |
-| `03_executor_steps.py` | 非 LLM 确定性步骤（json_transform + 自定义 executor） | `Step::Executor` 类型 | 注意 FFI 覆盖问题（§14） |
-| `04_shared_context.py` | step 间通过 WorkflowContext 传数据 | `get_var()` / 共享 KV 黑板 | |
-| `05_crash_recovery.py` | 跑到一半模拟崩溃 → `restore()` → `register_executor()` → 续跑 | **runtime 杀手级能力：崩溃恢复** | 注意 restore 后必须重新注册 executor |
-| `06_sub_agent.py` | LLM step 中 LLM 调 `spawn_agent` tool 派发 sub-agent | `SyncSpawnAgentTool` | LLM step 的 `allowed_tools` 含 `"spawn_agent"` 时引擎自动注册。依赖 LLM step（eda-agent-py 目前全用 Executor step，此路径未经端到端验证） |
-| `07_mixed_llm_executor.py` | LLM 步和 executor 步混合 | `Step::Llm` + `Step::Executor` 混合 | |
-| `08_event_streaming.py` | subscribe 事件流，展示 WorkflowEvent 6 种类型 | StepStarted / StepFinished / Paused / Resumed / Cancelled / Failed | **依赖 FFI 扩展**（subscribe 未暴露，见 §13） |
-| `09_pause_resume.py` | 运行中 pause → resume 续跑 | pause() / resume() | **依赖 FFI 扩展**（pause/resume 未暴露，见 §13） |
-| `10_llm_step.py` | 最小 LLM step 示例 | `kind: "llm"` step + prompt + allowed_tools | 展示 LLM step 基础用法 |
-| `11_builtin_executor.py` | 使用 `json_transform` 内置 executor | `executor_name: "json_transform"` | 注意 FFI 覆盖问题（§14），可能需要 Rust 侧修复 |
+| `01_linear_workflow.py` | step A → step B → 完成 | 最简线性流程 | |
+| `02_conditional_routing.py` | 声明式条件边 | `{"op": "eq", ...}` | |
+| `03_executor_steps.py` | create_executor + executor step | `Step::Executor` | |
+| `04_shared_context.py` | set_context_variable + executor 读写 | 共享 KV 黑板 | |
+| `05_crash_recovery.py` | 崩溃 → restore() → 续跑 | 崩溃恢复 | **依赖 P0: restore() 暴露** |
+| `06_sub_agent.py` | LLM step + spawn_agent | sub-agent 派发 | `allowed_tools: ["spawn_agent"]` |
+| `07_mixed_llm_executor.py` | LLM 步 + Executor 步混合 | 混合流程 | |
+| `08_event_streaming.py` | subscribe() 事件流 | WorkflowEvent 6 种 | |
+| `09_pause_resume.py` | pause → resume | 暂停恢复 | **依赖 P1: pause/resume 暴露** |
+| `10_llm_step.py` | 最小 LLM step | `kind: "llm"` | |
+| `11_human_in_the_loop.py` | create_event_channel + wait_tool | 外部事件注入 | |
 
 ---
 
-## 6. 执行顺序
+## 10. 执行顺序
 
-1. **建 Senza 仓库结构** — pyproject.toml、目录骨架、build 脚本
-2. **拆分 binding.py** — `_binding.py`（cdef 层，从 runtime 同步）+ `binding.py`（高层封装，Senza 维护）
-3. **补 `restore()` Python 包装** — P0 缺口，examples 依赖它（注意 register_executor 步骤）
-4. **打磨高层 binding.py** — type hints + docstrings + 便捷 property
-5. **写 examples** — agent 层 01 → runtime 层 01 → 逐步到 05 crash recovery → 10 llm_step
-6. **CI wheel 发布** — 复用或对接 runtime CI 产物 → GitHub Release → PyPI
-7. **FFI 编排能力补全**（F-20）— subscribe / pause / resume / cancel / checkpoint / total_cost
-8. **内置 executor 修复**（F-21）— 让 FFI 能使用 json_transform 等
-9. **补 examples** — 08 event_streaming / 09 pause_resume / 11 builtin_executor
-10. **发布 v0.1.0** — PyPI `pip install senza`
+1. **建 Senza 仓库结构** — pyproject.toml、目录骨架
+2. **补 `restore()` PyO3 包装** — P0 缺口，examples 依赖
+3. **补 docstrings** — `#[pyo3(text_signature = "...")]` + `__doc__`
+4. **写 examples** — agent 01 → runtime 01 → 逐步到 06
+5. **CI wheel 构建** — maturin build → GitHub Release → PyPI
+6. **补 WorkflowEngine 缺失方法** — state/get_var/pause/resume/cancel
+7. **eda-agent-py 迁移** — 从 `llm_harness_sdk` 改为 `senza`
+8. **补 examples** — 08-11
+9. **发布 v0.1.0** — PyPI `pip install senza`
 
 ---
 
-## 7. 仓库改名
+## 11. 仓库改名
 
 ```
 github.com/oh-my-harness/llm-harness-py-wheels  →  github.com/oh-my-harness/senza
 ```
 
-GitHub Settings → Repository name → `senza`。旧 URL 自动 redirect。
-
 PyPI 包名同步注册为 `senza`。
 
 ---
 
-## 8. 包名迁移影响清单
+## 12. Python 版本矩阵
 
-改名为 `senza` 后，eda-agent-py 中以下硬编码导入需要迁移：
+`pyproject.toml` 配置 `abi3-py39`（`pyo3/abi3-py39` feature），一个 wheel 覆盖：
 
-| 文件 | 行 | 当前导入 | 迁移后 |
-|------|-----|---------|--------|
-| `eda_agent_py/cli.py` | 23 | `from llm_harness_sdk import WorkflowEngine as FfiWorkflowEngine` | `from senza import WorkflowEngine as FfiWorkflowEngine` |
-| `eda_agent_py/cli.py` | 24 | `from llm_harness_sdk import HarnessError` | `from senza import HarnessError` |
-| `eda_agent_py/agent_call.py` | 33 | `from llm_harness_sdk import Harness` | `from senza import Harness` |
-| `eda_agent_py/agent_call.py` | 91 | `from llm_harness_sdk import Harness, HarnessError` | `from senza import Harness, HarnessError` |
-| `tests/test_ffi_gaps.py` | — | `from llm_harness_sdk import ...` | `from senza import ...` |
+| Python | 支持 |
+|--------|------|
+| 3.9 | ✅ abi3 下限 |
+| 3.10 | ✅ |
+| 3.11 | ✅ |
+| 3.12 | ✅ |
+| 3.13 | ✅ |
+| 3.14 | ✅ eda-agent-py 运行环境 |
 
-**迁移方案**（二选一）：
-- **方案 A（推荐）**：eda-agent-py 直接改导入为 `senza`，一次性完成
-- **方案 B（过渡）**：Senza 包提供兼容 shim — `llm_harness_sdk/__init__.py` 内容为 `from senza import *`，等所有下游迁移完成后删除
-
----
-
-## 9. Python 版本矩阵
-
-当前各处 Python 版本不一致，需统一：
-
-| 来源 | 版本 |
-|------|------|
-| README.md（旧） | CPython 3.12 |
-| runtime CI (`ffi-sdk-wheels.yml`) | 3.11 |
-| `setup.py` `python_requires` | >=3.9 |
-| eda-agent-py 运行环境 | 3.14.4 |
-
-**Senza 目标版本矩阵**（建议）：
-
-| Python | 支持 | 说明 |
-|--------|------|------|
-| 3.9 | ✅ | `setup.py` 下限，CI 覆盖 |
-| 3.11 | ✅ | runtime CI 已覆盖 |
-| 3.12 | ✅ | README 原定版本 |
-| 3.14 | ✅ | eda-agent-py 运行环境 |
-
-cffi 是纯 C ABI，不依赖特定 CPython 版本，wheel 标记为 `py3-none-{platform}` 即可跨版本使用（当前 `setup.py` 的 `PlatformWheel` 已这样做）。CI 只需在一个 Python 版本上构建 .so + wheel，安装时跨版本兼容。
+abi3 wheel 不依赖特定 CPython 版本，只需构建一次。
 
 ---
 
-## 10. README.md 修正项
+## 13. 构建方式
 
-原 README.md 有以下错误，需在改名时一并修正：
+```bash
+# 前提：安装 maturin + 指定 Python
+export PYO3_PYTHON=/usr/local/bin/python3.14
 
-| 项 | 原文 | 修正 |
-|----|------|------|
-| 技术描述 | "PyO3 extension" | "cffi binding to Rust `extern \"C\"` library" |
-| CPython 版本 | "CPython 3.12" | 删除固定版本，改为 "Python >=3.9"（cffi 纯 C ABI 跨版本兼容） |
-| 包名 | `pip install llm_harness_py` | `pip install senza` |
-| import 名 | `llm_harness_py` | `senza` |
-| find-links URL | `releases/expanded_assets/v0.2.0` | 改为 Senza 仓库的 Release URL |
+# 在 runtime 仓库的 llm-harness-py crate 目录下
+cd crates/llm-harness-py
+maturin build --release
 
----
+# 产物：target/wheels/llm_harness_py-<version>-cp39-abi3-<platform>.whl
 
-## 11. Workflow JSON Schema 完整参考
+# 本地开发安装
+maturin develop --release
 
-> 来源：`llm-harness-runtime/crates/llm-harness-runtime/src/workflow/model.rs`
-
-### Workflow
-
-```json
-{
-  "entry_step": "step_a",
-  "steps": [ ... ],
-  "edges": [ ... ]
-}
+# 发布到 PyPI
+maturin publish --release
 ```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `entry_step` | string | 入口步骤 ID（必须在 steps 里） |
-| `steps` | array | 步骤定义列表 |
-| `edges` | array | 边定义列表（条件跳转 / 无条件顺序） |
-
-### Step（tagged union，`kind` 字段区分）
-
-```json
-// LLM step — 引擎构造 AgentHarness，用 prompt 驱动 LLM
-{
-  "kind": "llm",
-  "id": "step_analyze",
-  "name": "分析阶段",
-  "prompt": "请分析以下数据并返回 JSON...",
-  "allowed_tools": ["spawn_agent", "submit_step_result"],
-  "policy": { "timeout_ms": 60000, "max_attempts": 3, "retry_backoff_ms": 1000 }
-}
-
-// Executor step — 确定性非 LLM 步骤，调用注册的 executor
-{
-  "kind": "executor",
-  "id": "step_transform",
-  "name": "数据转换",
-  "executor_name": "json_transform",
-  "config": { "fields": { "result": "/output" } },
-  "policy": { "timeout_ms": 5000 }
-}
-```
-
-| 字段 | 类型 | 说明 | Llm | Executor |
-|------|------|------|:---:|:--------:|
-| `kind` | `"llm"` \| `"executor"` | 步骤类型标签 | ✅ | ✅ |
-| `id` | string | 步骤唯一标识 | ✅ | ✅ |
-| `name` | string | 人类可读名称 | ✅ | ✅ |
-| `prompt` | string | LLM 指令（Llm only） | ✅ | — |
-| `allowed_tools` | string[] | 本步允许的工具集（空 = 不允许任何工具） | ✅ | — |
-| `executor_name` | string | Executor 注册键（Executor only） | — | ✅ |
-| `config` | JSON | Executor 特定配置（Executor only） | — | ✅ |
-| `policy` | object | 执行策略（可选） | ✅ | ✅ |
-
-### StepExecutionPolicy
-
-```json
-{
-  "timeout_ms": 60000,
-  "max_attempts": 3,
-  "retry_backoff_ms": 1000
-}
-```
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `timeout_ms` | u64? | 单次尝试超时（毫秒），缺省 = 无超时 |
-| `max_attempts` | u32? | 最大执行尝试次数（含首次），与 judge Retry 独立 |
-| `retry_backoff_ms` | u64? | 重试前固定延迟（毫秒） |
-
-### Edge
-
-```json
-{
-  "from": "step_a",
-  "to": "step_b",
-  "condition": "pass"                    // string = 自定义 judge label
-  // 或
-  "condition": { "op": "eq", "pointer": "/status", "value": "ok" }  // 声明式条件
-}
-```
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `from` | string | 起始步骤 ID |
-| `to` | string | 目标步骤 ID |
-| `condition` | string \| object? | 跳转条件（缺省 = 无条件顺序） |
-
-### EdgeCondition（untagged union）
-
-**Label**（string）：自定义 judge 的路由标签，由 Python judge callback 解析。
-
-**Expr**（object，tag = `op`）：
-
-| op | 参数 | 语义 |
-|----|------|------|
-| `exists` | `pointer` | structured 中该 JSON Pointer 路径存在 |
-| `missing` | `pointer` | structured 中该路径不存在 |
-| `eq` | `pointer`, `value` | structured 中该路径的值 == value |
-| `ne` | `pointer`, `value` | structured 中该路径的值 != value |
-| `gt` | `pointer`, `value`(f64) | structured 中该路径的数值 > value |
-| `gte` | `pointer`, `value`(f64) | >= |
-| `lt` | `pointer`, `value`(f64) | < |
-| `lte` | `pointer`, `value`(f64) | <= |
-
-`pointer` 使用 RFC 6901 JSON Pointer 语法（如 `/status`、`/data/0/score`）。条件对 `StepResult.structured` 求值。
-
-**声明式条件自动启用**：如果 workflow 的 edges 中有任意 `EdgeCondition::Expr`，且 judge 是 NoopJudge，引擎自动替换为内置 `EdgeConditionJudge`（`engine.rs:62 default_declarative_judge`）。
-
-### Transition（judge 返回值，snake_case 序列化）
-
-```json
-{ "to": "step_b" }                    // 跳到指定步骤
-{ "retry": true }                     // 重跑当前步
-{ "fail": { "reason": "不合格" } }     // 标记流程失败
-{ "abort": { "reason": "正常结束" } }  // 终止流程（正常结束或 abort）
-```
-
-| 变体 | 字段 | 说明 |
-|------|------|------|
-| `to` | `step_id: string` | 跳到指定步骤（引擎校验合法性，非法跳转 = Failed） |
-| `retry` | — | 重跑当前步（新建 harness） |
-| `fail` | `reason: string` | 标记流程 Failed |
-| `abort` | `reason: string` | 终止流程（Succeeded） |
-
-### StepResult（executor callback 返回值）
-
-```json
-{
-  "output": "完整文本输出",
-  "structured": { "status": "ok", "score": 0.95 },
-  "tool_calls_count": 2,
-  "session_id": "sess_abc123",
-  "cost": { "total_input_tokens": 100, "total_output_tokens": 50, ... },
-  "started_at": "2026-07-13T10:00:00Z",
-  "ended_at": "2026-07-13T10:00:05Z"
-}
-```
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `output` | string | 完整文本输出 |
-| `structured` | JSON? | 结构化结果（judge 读此字段做路由决策） |
-| `tool_calls_count` | u32 | 工具调用次数 |
-| `session_id` | string | 本步 session ID |
-| `cost` | CostAggregate | 本步开销 |
-| `started_at` | DateTime? | 开始时间 |
-| `ended_at` | DateTime? | 结束时间 |
-
-**executor callback 写回 context**：Python executor 返回的 `structured._context_update`（JSON object）会被引擎写回 `WorkflowContext.variables`（全量替换）。
-
-### WorkflowState（`state()` 返回值的一部分）
-
-```json
-{
-  "status": "running",
-  "current_step": "step_b",
-  "step_history_len": 3
-}
-```
-
-`ffi_workflow_state` 返回的 JSON 包含以上三个字段。完整的 `WorkflowState`（Rust 内部）还含 `reason`、`result`、`error`、`started_at`、`ended_at`、`step_history`（完整列表）、`context`，但这些目前 FFI 未暴露。
-
-### WorkflowStatus（snake_case）
-
-`idle` | `running` | `paused` | `succeeded` | `failed` | `cancelled`
-
-### TaskResult（`run()` 返回值）
-
-```json
-{
-  "cost": { "total_input_tokens": 500, "total_output_tokens": 200, ... },
-  "turns": 5,
-  "final_message": "最终输出文本"
-}
-```
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `cost` | CostAggregate | 所有步骤的聚合开销 |
-| `turns` | u32 | 完成的步骤数（step_history 中 result: Some 的条目数） |
-| `final_message` | string? | 最后一步的 output |
-
-### CostAggregate
-
-```json
-{
-  "total_input_tokens": 500,
-  "total_output_tokens": 200,
-  "total_cache_read_tokens": 0,
-  "total_cache_write_tokens": 0,
-  "total_cost": 0.015,
-  "by_model": { "gpt-4": { ... } }
-}
-```
-
----
-
-## 12. LangGraph 类似编排能力总览
-
-> Runtime 的 WorkflowEngine 引入了与 LangGraph 类似的编排机制。以下对照 runtime 有 → FFI 暴露 → 设计文档提及。
-
-### 核心编排
-
-| 能力 | Rust 实现 | LangGraph 对应 | FFI 暴露 | 设计文档 |
-|------|-----------|---------------|---------|---------|
-| DAG workflow (steps+edges+entry) | `Workflow` struct | `StateGraph` | ✅ `ffi_workflow_new` | ✅ |
-| 两种 step 类型 (Llm/Executor) | `Step` enum | Node types | ✅ JSON 传入 | ✅ §11 |
-| 声明式条件边 (8 种 op) | `EdgeConditionJudge` | Conditional edges | ✅ 引擎内部自动 | ✅ §11 |
-| 自定义 judge 路由 | `StepTransitionJudge` trait | Edge routing | ✅ judge callback | ✅ §11 |
-| Transition: To/Retry/Fail/Abort | `Transition` enum | Edge transitions | ✅ judge 返回 | ✅ §11 |
-| 共享 context 黑板 (KV) | `WorkflowContext` | Shared state | ✅ `get_var` | ✅ |
-| 崩溃恢复 | `restore()` + `TaskStore` | Checkpointer | ✅ `ffi_workflow_restore` | ✅ |
-| StepExecutionPolicy (timeout/retry) | `StepExecutionPolicy` | Node retry policy | ✅ JSON 传入 | ✅ §11 |
-| max_steps / max_retries 安全阀 | engine 字段 | Recursion limit | ✅ config 传入 | ❌ 应补 |
-| Gate hook (工具收窄) | `WorkflowGateHook` | — | ✅ 引擎内部 | ❌ 应补 |
-| 动态 workflow 规划 | `PlanWorkflowTool` | — | ❌ 未暴露 | ❌ |
-| 内置 executor (json_transform) | `builtin_executors()` | — | ⚠️ 被 FFI 覆盖 (§14) | ❌ 应补 |
-| shell executor | `ShellExecutor` | — | ❌ 未自动注册 | ❌ |
-| http_call executor | `HttpCallExecutor` | — | ❌ 未自动注册 | ❌ |
-
-### 运行时控制（LangGraph 核心能力）
-
-| 能力 | Rust 实现 | LangGraph 对应 | FFI 暴露 | 设计文档 |
-|------|-----------|---------------|---------|---------|
-| 事件流 subscribe | `subscribe()` → broadcast | `astream_events` | ❌ | ✅ §13 |
-| Pause | `pause()` | `interrupt` | ❌ | ✅ §13 |
-| Resume | `resume()` | `Command(resume=)` | ❌ | ✅ §13 |
-| Cancel | `cancel()` | — | ❌ | ✅ §13 |
-| Checkpoint | `checkpoint()` | Checkpointer | ❌ | ✅ §13 |
-| Cost 追踪 | `total_cost()` | — | ❌ | ✅ §13 |
-| Step plugin (每步可注入 plugin) | `with_step_plugin()` | — | ❌ | ❌ |
-| Hooks (BeforeToolCall/AfterToolCall 等) | `with_hooks()` | — | ❌ | ❌ |
-| Extra tools (引擎级注入) | `with_tool()` | — | ❌ | ❌ |
-
-### Sub-agent
-
-| 能力 | Rust 实现 | LangGraph 对应 | FFI 暴露 | 设计文档 |
-|------|-----------|---------------|---------|---------|
-| spawn_agent (同步等待) | `SyncSpawnAgentTool` | Subgraph | ✅ LLM step 内部自动注册 | ✅ §5 |
-| spawn_agent (异步) | `SpawnAgentTool` (spawn_tool.rs) | — | ❌ 未在 FFI harness 注册 | ❌ |
-
-**spawn_agent 注册条件**（`engine.rs:1122`）：LLM step 的 `allowed_tools` 含 `"spawn_agent"` 时，引擎自动构造 `SyncSpawnAgentTool` 并注入 step harness。不需要额外 FFI 函数。但要求 step 类型为 `kind: "llm"`。
-
----
-
-## 13. FFI 编排能力暴露缺口 (F-20)
-
-以下 6 项能力在 Rust `WorkflowEngine` 中已实现，但 FFI 未暴露。这些是 LangGraph 的核心运行时控制能力。
-
-| # | Rust 方法 | 功能 | FFI 需新增 | 优先级 | Example |
-|---|-----------|------|-----------|--------|---------|
-| 1 | `subscribe()` | 返回 broadcast Receiver，推送 6 种 WorkflowEvent | `ffi_workflow_subscribe` | P1 | `08_event_streaming.py` |
-| 2 | `pause(reason)` | 非阻塞暂停，run() 在步边界消费 | `ffi_workflow_pause` | P1 | `09_pause_resume.py` |
-| 3 | `resume()` | 从 Paused/Failed 恢复，重置为 Paused | `ffi_workflow_resume` | P1 | `09_pause_resume.py` |
-| 4 | `cancel(reason)` | 立即 abort 当前 step | `ffi_workflow_cancel` | P1 | — |
-| 5 | `checkpoint(desc, payload)` | 保存检查点（append-only） | `ffi_workflow_checkpoint` | P2 | — |
-| 6 | `total_cost()` | 聚合所有步骤开销 | `ffi_workflow_total_cost` | P2 | — |
-
-### WorkflowEvent 类型（subscribe 推送）
-
-```rust
-pub enum WorkflowEvent {
-    StepStarted { step_id, step_name },
-    StepFinished { step_id, result: StepResult },
-    Paused { reason },
-    Resumed,
-    Cancelled { reason },
-    Failed { error },
-}
-```
-
-### 注意事项
-
-- `pause()` 是非阻塞的（设标志即返回），`run()` 在步边界检查并消费。这意味着 pause 不会中断当前正在执行的 step。
-- `resume()` 接受 `Paused` 和 `Failed` 两种状态。`Failed` 恢复时重置为 `Paused`，由 `run()` 驱动 `Paused → Running`。
-- `cancel()` 会 abort 当前 step 的 CancellationToken，并置 `Cancelled` 状态。
-- `subscribe()` 返回 `broadcast::Receiver`，溢出时丢弃旧事件。FFI 需设计轮询 API（类似 `ffi_harness_wait_event`）。
-
----
-
-## 14. 内置 executor 被 FFI 覆盖问题 (F-21)
-
-### 问题
-
-`WorkflowEngine::new()` 内部调 `from_parts()`，自动注册 `builtin_executors()`（当前只有 `json_transform`，`executor.rs:57`）。
-
-但 FFI 的 `ffi_workflow_new`（`lib.rs:1555`）会提取 workflow 中**所有** Executor step 的 `executor_name`，统一注册为 Python callback：
-
-```rust
-let executor_names: Vec<String> = workflow.steps.iter()
-    .filter_map(|s| s.executor_name().map(|n| n.to_string()))
-    .collect();
-for name in &executor_names {
-    engine = engine.with_executor(name.clone(), executor.clone()); // insert → 覆盖 builtin
-}
-```
-
-`with_executor` 用 `HashMap::insert`（`engine.rs:607`），会覆盖同名的内置 executor。所以如果 workflow 里有 `executor_name: "json_transform"` 的 step，Python callback 会覆盖 Rust 内置实现。
-
-### 影响
-
-- 用户无法通过 FFI 使用 Rust 内置的 `json_transform` executor
-- `shell` 和 `http_call` executor 本来就没在 `builtin_executors()` 中自动注册，FFI 更无法使用
-
-### 修复方向
-
-**方案 A**（Rust 侧）：FFI `ffi_workflow_new` 中跳过已知内置 executor name，不注册 Python callback：
-
-```rust
-const BUILTIN_EXECUTORS: &[&str] = &["json_transform"];
-for name in &executor_names {
-    if !BUILTIN_EXECUTORS.contains(&name.as_str()) {
-        engine = engine.with_executor(name.clone(), executor.clone());
-    }
-}
-```
-
-**方案 B**（Rust 侧）：`builtin_executors()` 注册 `shell` 和 `http_call`，FFI 同样跳过。
-
-**方案 C**（Python 侧）：Senza 高层 API 中，用户可选注册 builtin executor 的 Python 镜像（不经过 Rust）。
-
-建议方案 A + B：Rust 侧补全 builtin 注册 + FFI 跳过 builtin name。
-
----
-
-## 15. Harness Event 类型完整参考
-
-> 来源：`llm-harness-ffi/src/lib.rs` `forward_agent_event` + `forward_harness_event`
-
-Harness 的 `wait_event()` 返回 JSON dict，`type` 字段区分事件类型。
-
-### 终端事件（TERMINAL_EVENTS）
-
-收到这些事件后 `collect_until_settled` 会计数：
-
-| type | 来源 | 含义 |
-|------|------|------|
-| `settled` | `AgentHarnessEvent::Settled` | Agent loop 正常完成 |
-| `aborted` | `AgentHarnessEvent::Aborted` | 被 abort() 中断 |
-| `error` | `AgentEvent::Error` | 发生错误 |
-
-### 流式事件
-
-| type | 字段 | 含义 |
-|------|------|------|
-| `prompt_start` | `prompt: string` | prompt 发送开始 |
-| `text_delta` | `message_id: string`, `text: string` | LLM 流式文本增量 |
-| `message_end` | `message_id: string`, `message: object` | LLM 消息结束（含 usage） |
-| `tool_start` | `tool_call_id: string`, `tool_name: string`, `args: JSON` | 工具调用开始 |
-| `tool_end` | `tool_call_id: string`, `tool_name: string`, `result: object` | 工具调用结束 |
-| `tool_update` | `tool_call_id: string`, `partial: object` | 工具执行中间进度 |
-| `agent_end` | `new_messages: array` | Agent 一轮结束 |
-| `save_point` | `entries_flushed: int` | Session 持久化保存点 |
-| `phase_change` | `from: string`, `to: string` | Harness 阶段变更 |
-| `progress` | `text: string` | 进度文本 |
-| `final_answer` | `text: string` | 最终答案 |
-
-### Python 侧聚合
-
-`get_final_response()` / `aggregate_events()` 会把事件列表聚合为：
-
-```python
-{
-    "text": "...",           # final_answer 优先，否则 text_delta 拼接
-    "message": {...},        # 最后一个 message_end 的 message
-    "usage": {...},          # message 中的 usage
-    "tool_calls": [...],     # 所有 tool_start/tool_end 配对
-    "errors": [...],         # 所有 error 事件
-    "progress": [...],       # 所有 progress 事件
-}
+Senza 仓库的 CI 脚本：
+
+```bash
+# ci/build_wheel.sh
+RUNTIME_REV=<pinned commit>
+git clone --depth 1 https://github.com/oh-my-harness/llm-harness-runtime.git /tmp/runtime
+cd /tmp/runtime/crates/llm-harness-py
+export PYO3_PYTHON=python3.12
+maturin build --release
+cp target/wheels/*.whl $SEZA_REPO/dist/
 ```
