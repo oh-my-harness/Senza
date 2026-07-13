@@ -1,11 +1,31 @@
-# llm-harness-py-wheels
+# Senza (森座)
 
-Prebuilt wheels for [`llm-harness-py`](https://github.com/oh-my-harness/llm-harness-runtime) — a closed-source PyO3 extension (CPython 3.12).
+Python SDK for [`llm-harness-runtime`](https://github.com/oh-my-harness/llm-harness-runtime) — a cffi binding to the Rust `extern "C"` FFI library.
 
-This repo contains **compiled binaries only**, no source code.
+This repo contains **compiled wheels + high-level Python API + examples**.
 
 ## Install
 
 ```bash
-pip install llm_harness_py --find-links https://github.com/oh-my-harness/llm-harness-py-wheels/releases/expanded_assets/v0.2.0
+pip install senza
 ```
+
+## Quick Start
+
+```python
+from senza import Harness
+
+with Harness(provider="openai", model="gpt-4", api_key="...") as h:
+    h.prompt("Hello!")
+    response = h.get_final_response()
+    print(response["text"])
+```
+
+## Layers
+
+| Class | Layer | Use case |
+|-------|-------|----------|
+| `Harness` | Agent | Single LLM prompt → streaming response, tool calling |
+| `WorkflowEngine` | Runtime | Multi-step workflow orchestration, crash recovery |
+
+See `examples/` for detailed usage.
