@@ -1,44 +1,43 @@
-# Senza Examples
+# Senza 示例
 
-## Agent Layer (`agent/`)
+## Agent 层（`agent/`）
 
-Single-LLM-call patterns using `HarnessBuilder` and `AgentHarness`.
+使用 `HarnessBuilder` 和 `AgentHarness` 的单轮 LLM 对话模式。
 
-| File | What it demonstrates |
-|------|---------------------|
-| `01_basic_prompt.py` | Minimal prompt → collect events → extract text |
-| `02_tool_calling.py` | Register a tool, LLM discovers and calls it |
-| `03_streaming.py` | Token-by-token streaming via `events()` iterator |
-| `04_dynamic_config.py` | `set_model`, `set_system_prompt`, `set_temperature`, `set_thinking_level`, `usage` |
-| `05_multi_provider.py` | Route different models to different providers via glob patterns |
+| 文件 | 内容 |
+|------|------|
+| `01_basic_prompt.py` | 最小示例：发送提示 → 收集事件 → 提取文本 |
+| `02_tool_calling.py` | 注册工具，LLM 发现并调用 |
+| `03_streaming.py` | 通过 `events()` 逐 token 流式输出 |
+| `04_dynamic_config.py` | `set_model`、`set_system_prompt`、`set_temperature`、`set_thinking_level`、`usage` |
+| `05_multi_provider.py` | 通过 glob 模式将不同模型路由到不同 provider |
 
-## Runtime Layer (`runtime/`)
+## Runtime 层（`runtime/`）
 
-Multi-step workflow patterns using `WorkflowEngine`.
+使用 `WorkflowEngine` 的多步工作流模式。
 
-| File | What it demonstrates |
-|------|---------------------|
-| `01_linear_workflow.py` | Step A → step B, judge-based transitions, step history |
-| `02_conditional_routing.py` | Declarative edge conditions (`{"op": "contains", ...}`) |
-| `03_executor_steps.py` | Python executor steps, mixed with LLM steps, shared context |
-| `04_crash_recovery.py` | `with_task_store` + `restore()` for crash recovery |
-| `05_pause_cancel.py` | `pause()` / `cancel()` from another thread, state monitoring |
-| `06_human_in_the_loop.py` | `create_event_channel` for external event injection |
-| `07_shell_executor.py` | `create_shell_executor` with command allowlist |
-| `08_http_executor.py` | `create_http_executor` with host allowlist |
+| 文件 | 内容 |
+|------|------|
+| `01_linear_workflow.py` | 步骤 A → 步骤 B，judge 跳转，步骤历史 |
+| `02_conditional_routing.py` | 声明式条件边（`{"op": "contains", ...}`） |
+| `03_executor_steps.py` | Python executor 步骤，与 LLM 步骤混合，共享上下文 |
+| `04_crash_recovery.py` | `with_task_store` + `restore()` 崩溃恢复 |
+| `05_pause_cancel.py` | 从另一线程调用 `pause()` / `cancel()`，状态监控 |
+| `06_human_in_the_loop.py` | `create_event_channel` 外部事件注入 |
+| `07_shell_executor.py` | `create_shell_executor` 命令白名单 |
+| `08_http_executor.py` | `create_http_executor` host 白名单 |
 
-## Running
+## 运行
 
 ```bash
-# Set API key
+# 设置 API key
 export OPENAI_API_KEY=sk-...
 
-# From this directory
+# 从本目录运行
 python agent/01_basic_prompt.py
 python runtime/01_linear_workflow.py
 ```
 
-## Import
+## 导入
 
-Examples try `import senza` first, falling back to `import llm_harness_py`.
-Use whichever name your installed wheel provides.
+示例优先 `import senza`，失败则回退到 `import llm_harness_py`。
