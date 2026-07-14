@@ -232,3 +232,24 @@ engine.run()
 # for event in event_iter:
 #     print(event["type"], event.get("step_id", ""))
 ```
+
+
+## Builtin Executor Factories (newly exposed)
+
+| Function | Description |
+|----------|-------------|
+| `create_shell_executor(commands, default_timeout_ms=30000, max_output_bytes=1048576)` | ShellExecutor with command allowlist |
+| `create_http_executor(allowed_hosts, allowed_schemes=None, max_timeout_ms=30000, allow_private_ip_targets=False)` | HttpCallExecutor with host policy |
+
+Both are **NOT auto-registered** (security by design). Register explicitly:
+
+```python
+shell_exec = L.create_shell_executor(["echo", "cat", "python"])
+http_exec = L.create_http_executor(["api.example.com"], allowed_schemes=["https"])
+
+engine = (
+    L.WorkflowEngine(workflow, provider, "gpt-4o", judge)
+    .with_executor("shell", shell_exec)
+    .with_executor("http", http_exec)
+)
+```
