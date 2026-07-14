@@ -24,6 +24,8 @@ Multi-step workflow patterns using `WorkflowEngine`.
 | `04_crash_recovery.py` | `with_task_store` + `restore()` for crash recovery |
 | `05_pause_cancel.py` | `pause()` / `cancel()` from another thread, state monitoring |
 | `06_human_in_the_loop.py` | `create_event_channel` for external event injection |
+| `07_shell_executor.py` | `create_shell_executor` with command allowlist |
+| `08_http_executor.py` | `create_http_executor` with host allowlist |
 
 ## Running
 
