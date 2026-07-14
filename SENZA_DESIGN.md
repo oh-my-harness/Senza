@@ -117,14 +117,14 @@ PyO3 module 名：`llm_harness_py`（Senza 改名后 import 名为 `senza`）。
 | ID | 问题 | 严重度 | 状态 |
 |----|------|--------|------|
 | — | ~~`WorkflowEngine` 缺 `restore()` Python 包装~~ | ~~**P0**~~ | ✅ 已暴露 |
-| — | PyO3 crate 无 docstring（Rust 侧有 doc comments 但 PyO3 不自动导出为 `__doc__`） | **P0** | ❌ 待做 |
+| — | ~~PyO3 crate 无 docstring~~ PyO3 0.29 自动导出 doc comments 为 `__doc__`，全部已覆盖 | ~~**P0**~~ | ✅ 已验证 |
 | — | 无自动化 wheel 构建 CI | **P0** | ✅ `build-wheel.yml` 已建 |
 | — | ~~`WorkflowEngine` 缺 `state()`/`pause()`/`resume()`/`cancel()`/`checkpoint()`/`total_cost()`~~ | ~~P1~~ | ✅ 已暴露 |
 | — | ~~`WorkflowEngine` 缺 `current_step()`/`step_history()`/`with_task_store()`/`with_max_steps()`/`with_max_retries()`~~ | ~~P2~~ | ✅ 已暴露 |
 | — | ~~`AgentHarness` 缺动态配置方法（set_model/set_system_prompt/set_temperature/set_thinking_level/set_tools 等）~~ | ~~P1~~ | ✅ 已暴露 |
 | — | ~~`AgentHarness` 缺 steering 方法（steer/follow_up/next_turn/continue_run）~~ | ~~P1~~ | ✅ 已暴露 |
 | — | ~~`AgentHarness` 缺 usage/reset_usage/wait_for_idle/wait_for_settled~~ | ~~P1~~ | ✅ 已暴露 |
-| — | `AgentHarness` 缺 `close()` / context manager（`__enter__`/`__exit__`） | P1 | ❌ 待做 |
+| — | ~~`AgentHarness` 缺 context manager~~ `__enter__`/`__exit__` 已添加 | ~~P1~~ | ✅ 已实现 |
 | — | ~~eda-agent-py 仍引用旧 `llm_harness_sdk`~~ **已迁移到 PyO3**（commit efba9a1） | ✅ | ✅ |
 | — | `ShellExecutor` / `HttpCallExecutor` 未在 `builtin_executors()` 中注册 | P2 | ❌ 待做 |
 | — | `WorkflowEngine.run()` 是同步阻塞，无 async 版本 | P2 | ❌ 待做 |
