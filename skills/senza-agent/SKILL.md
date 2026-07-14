@@ -113,47 +113,6 @@ Terminal: `settled`, `aborted`, `error`.
 Streaming: `text_delta` (has `.text`), `message_end`, `tool_call_start`, `tool_call_end`, `tool_execution_start`, `tool_execution_end`, `thinking_delta`.
 Harness: `phase_change`, `compaction_start`, `compaction_end`, `tools_update`.
 
-
-## Dynamic Configuration (newly exposed)
-
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `set_model(model, context_window=None, max_tokens=None)` | `-> None` | Switch model at runtime |
-| `set_system_prompt(prompt=None)` | `-> None` | Set or clear system prompt |
-| `set_temperature(temp=None)` | `-> None` | Set sampling temperature |
-| `set_thinking_level(level)` | `-> None` | "off"/"minimal"/"low"/"medium"/"high"/"xhigh"/"budget:N" |
-| `set_max_tokens(n)` | `-> None` | Max output tokens per call |
-| `set_tools(tools)` | `(tools: list[Tool]) -> None` | Replace tool list |
-| `steer(text)` | `-> None` | Inject steering message for next turn |
-| `follow_up(text)` | `-> None` | Trigger a new turn immediately after current |
-| `next_turn(text)` | `-> None` | Send next user message and continue |
-| `continue_run()` | `-> None` | Continue without new message |
-| `usage()` | `-> dict` | Get accumulated cost stats |
-| `reset_usage()` | `-> None` | Reset cost tracking |
-| `wait_for_idle()` | `-> None` | Block until idle |
-| `wait_for_settled()` | `-> None` | Block until settled |
-
-### Pattern: dynamic reconfiguration
-
-```python
-harness = L.HarnessBuilder("gpt-4o").provider("gpt-*", provider).build()
-
-# First prompt with default config
-harness.prompt("Hello!")
-# ... collect events ...
-
-# Reconfigure for second prompt
-harness.set_model("gpt-4o-mini")
-harness.set_system_prompt("You are a pirate.")
-harness.set_temperature(0.9)
-harness.set_thinking_level("high")
-harness.prompt("Tell me a joke.")
-# ... collect events ...
-
-# Check cost
-cost = harness.usage()
-print(f"Tokens: {cost['total_input_tokens']} in / {cost['total_output_tokens']} out")
-```
 ## Common Patterns
 
 ### Streaming output token-by-token

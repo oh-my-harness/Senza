@@ -194,45 +194,16 @@ for event in event_iter:
         print(f"✗ {event['error']}")
 ```
 
-## WorkflowEngine Advanced Methods (now exposed)
+## Known Gaps (PyO3 SDK not yet exposed)
 
-All previously-missing methods are now available:
+| Capability | Rust method | Status |
+|-----------|-------------|--------|
+| Crash recovery | `WorkflowEngine::restore()` | ❌ Not exposed (P0) |
+| Pause | `engine.pause()` | ❌ Not exposed (P1) |
+| Resume | `engine.resume()` | ❌ Not exposed (P1) |
+| Cancel | `engine.cancel()` | ❌ Not exposed (P1) |
+| Checkpoint | `engine.checkpoint()` | ❌ Not exposed (P2) |
+| Total cost | `engine.total_cost()` | ❌ Not exposed (P2) |
+| State query | `engine.state()` | ❌ Not exposed (P1) |
 
-| Method | Description |
-|--------|-------------|
-| `WorkflowEngine.restore(store_dir, task_id, provider, model, judge)` | Classmethod — restore from TaskStore |
-| `engine.state()` | Returns workflow status string |
-| `engine.current_step()` | Returns current step ID |
-| `engine.step_history()` | Returns list of step records |
-| `engine.pause(reason)` | Non-blocking pause request |
-| `engine.resume()` | Resume paused/failed task |
-| `engine.cancel(reason)` | Cancel running workflow |
-| `engine.checkpoint(desc, payload)` | Save checkpoint |
-| `engine.total_cost()` | Get aggregated cost dict |
-| `engine.with_task_store(dir)` | Enable JSONL persistence |
-| `engine.with_max_steps(n)` | Set step limit |
-| `engine.with_max_retries(n)` | Set retry limit |
-
-See `examples/runtime/04_crash_recovery.py` and `examples/runtime/05_pause_cancel.py` for usage.
-
-
-## AgentHarness Dynamic Configuration (now exposed)
-
-| Method | Description |
-|--------|-------------|
-| `harness.set_model(model, context_window=None, max_tokens=None)` | Switch model |
-| `harness.set_system_prompt(prompt=None)` | Set/clear system prompt |
-| `harness.set_temperature(temp=None)` | Set sampling temperature |
-| `harness.set_thinking_level(level)` | "off"/"minimal"/"low"/"medium"/"high"/"xhigh"/"budget:N" |
-| `harness.set_max_tokens(n)` | Max output tokens |
-| `harness.set_tools(tools)` | Replace tool list |
-| `harness.steer(text)` | Inject steering message |
-| `harness.follow_up(text)` | Trigger new turn |
-| `harness.next_turn(text)` | Send next user message |
-| `harness.continue_run()` | Continue without new message |
-| `harness.usage()` | Get cost dict |
-| `harness.reset_usage()` | Reset cost tracking |
-| `harness.wait_for_idle()` | Block until idle |
-| `harness.wait_for_settled()` | Block until settled |
-
-See `examples/agent/04_dynamic_config.py` for usage.
+When the user asks for these capabilities, note they are not yet available in the PyO3 SDK and must be added to `pyworkflow.rs` first.

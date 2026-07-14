@@ -5,6 +5,10 @@
 
 ---
 
+> **spawn 机制更新**（2026-07-14）
+>
+> runtime commit `2baeda7` 重构了 spawn 模块。旧 `SyncSpawnAgentTool`（同步阻塞）+ peer.rs + async_spawn.rs 多模块设计已删除，替换为 MessageBus 统一架构 + 7 个异步通信 tool。本文档 §5/§7/§9 已同步更新。
+>
 > **架构变更说明**（2026-07-13）
 >
 > **CFFI 已全删，替换为 PyO3。** 旧 `llm-harness-ffi` crate（`extern "C"` + cffi `binding.py`）已从 runtime 仓库移除，替换为 `llm-harness-py` crate（PyO3 0.29，`#[pyclass]` + `#[pyfunction]`）。本文档已据此完全重写。
@@ -117,7 +121,7 @@ PyO3 module 名：`llm_harness_py`（Senza 改名后 import 名为 `senza`）。
 | — | 无自动化 wheel 构建 CI（旧 `ffi-sdk-wheels.yml` 已删，新的未建） | **P0** |
 | — | `WorkflowEngine` 缺 `state()` / `get_var()` / `pause()` / `resume()` / `cancel()` / `checkpoint()` / `total_cost()` Python 方法 | P1 |
 | — | `AgentHarness` 缺 `close()` / context manager（`__enter__`/`__exit__`） | P1 |
-| — | eda-agent-py 仍引用旧 `llm_harness_sdk`（cffi），需迁移到 PyO3 | P1 |
+| — | ~~eda-agent-py 仍引用旧 `llm_harness_sdk`~~ **已迁移到 PyO3**（commit efba9a1） | ✅ |
 | — | `ShellExecutor` / `HttpCallExecutor` 未在 `builtin_executors()` 中注册 | P2 |
 | — | `WorkflowEngine.run()` 是同步阻塞，无 async 版本 | P2 |
 
@@ -135,6 +139,10 @@ senza/                           # 本仓库 (github.com/oh-my-harness/llm-harne
 ├── .github/
 │   └── workflows/
 │       └── build.yml            # tag push → maturin build → wheel → publish
+├── skills/                     # ← AI 助手过程性知识包（3 个 SKILL.md）
+│   ├── senza-agent/
+│   ├── senza-workflow/
+│   └── senza-advanced/
 └── examples/
     ├── agent/                   # ← agent 层示例（用 HarnessBuilder + AgentHarness）
     │   ├── 01_basic_prompt.py
@@ -451,9 +459,28 @@ handle.submit("审核通过", {"approved": True, "reviewer": "alice"})
 
 声明式条件自动启用：如果 edges 中有 `Expr` 条件且 judge 是 NoopJudge，引擎自动替换为 `EdgeConditionJudge`。
 
-### spawn_agent
+### spawn_agent + sub-agent 通信（7 个 tool）
 
-LLM step 的 `allowed_tools` 含 `"spawn_agent"` 时，引擎自动注册 `SyncSpawnAgentTool`（`engine.rs:1122`）。LLM 可调用它派发 sub-agent 处理子任务，同步等待结果。
+LLM step 的 `allowed_tools` 含 `"spawn_agent"` 时，引擎自动注册 **7 个 LLM tool**（`engine.rs:1075`）+ MessageBus + AsyncSpawnHook + IdleWatcher + AbortCascadeHook。
+
+**架构**：MessageBus 统一事件通道，main↔sub 双向异步通信。spawn 是异步的（不阻塞），sub-agent 完成后结果自动注入 main agent 对话。
+
+| tool | 方向 | 参数 | 说明 |
+|------|------|------|------|
+| `spawn_agent` | main→sub | `prompt`(必填), `context`?, `provider`? | 异步派发 sub-agent，立即返回 agent_id |
+| `message_subagent` | main→sub | `to`(必填), `message`(必填) | fire-and-forget 消息 |
+| `await_subagent_reply` | main waits | `from`?, `timeout`?(默认120s) | 阻塞等待 sub-agent 消息/完成 |
+| `query_subagent` | main→bus | `agent_id`? | 查询状态（running/done/aborted），省略则列全部 |
+| `abort_subagent` | main→sub | `agent_id`(必填) | 取消 sub-agent |
+| `message_main` | sub→main | `message`(必填) | sub-agent 主动汇报 |
+| `await_main_message` | sub waits | `timeout`?(默认120s) | sub-agent 等待 main 指示 |
+
+**关键机制**：
+- `MessageBus` — `register`/`send`/`wait`/`query_status`/`abort_agent`/`take_event_rx`
+- `AsyncSpawnHook`（ShouldStop hook）— sub-agent 完成事件注入 main agent 对话
+- `IdleWatcher` — bus 无在途事件时触发 `harness.continue_run()`
+- `AbortCascadeHook` — 级联取消所有 sub-agent（step abort 时）
+- `SubAgentMessageConverter` — 把 sub-agent 消息转为 LLM CustomMessage
 
 ---
 
@@ -535,7 +562,7 @@ LLM step 的 `allowed_tools` 含 `"spawn_agent"` 时，引擎自动注册 `SyncS
 | Step plugin | `with_step_plugin()` | ✅ `engine.with_step_plugin()` | 每步可注入 plugin |
 | Hooks (11 种) | `with_hooks()` | ✅ `engine.with_hooks()` + 11 个 `create_*_hook()` | 全部暴露 |
 | Extra tools | `with_tool()` | ✅ `engine.with_tool()` | 引擎级注入 |
-| spawn_agent | `SyncSpawnAgentTool` | ✅ LLM step 内部自动注册 | `allowed_tools` 含 `"spawn_agent"` |
+| spawn_agent + 6 communication tools | `SpawnAgentTool` + 6 tools + MessageBus | ✅ LLM step 内部自动注册（7 个 tool 一组） | `allowed_tools` 含 `"spawn_agent"` |
 | Human-in-the-loop | `WaitForExternalEventTool` | ✅ `create_event_channel()` | 外部事件注入 |
 | 内置 executor (json_transform) | `builtin_executors()` | ✅ 自动注册 | 不再被 Python callback 覆盖 |
 | max_tokens | `with_max_tokens()` | ✅ `engine.with_max_tokens()` | 每步最大输出 |
@@ -595,22 +622,20 @@ PyO3 的 Rust doc comments 不自动导出为 Python `__doc__`。需要：
 
 当前无 `__enter__` / `__exit__` / `close()`。需要补充以支持 `with` 语法。
 
-#### 8.6 eda-agent-py 迁移
+#### 8.6 ~~eda-agent-py 迁移~~ 已完成
 
-eda-agent-py 中以下文件仍引用旧 `llm_harness_sdk`：
+eda-agent-py 已完成从 cffi `llm_harness_sdk` 到 PyO3 `llm_harness_py` 的迁移（commit `efba9a1`, 2026-07-13）。
 
-| 文件 | 当前导入 | 迁移后 |
-|------|---------|--------|
-| `eda_agent_py/cli.py:23` | `from llm_harness_sdk import WorkflowEngine` | `from senza import WorkflowEngine` |
-| `eda_agent_py/cli.py:24` | `from llm_harness_sdk import HarnessError` | `from senza import ...` |
-| `eda_agent_py/agent_call.py:33` | `from llm_harness_sdk import Harness` | `from senza import HarnessBuilder` |
-| `eda_agent_py/agent_call.py:91` | `from llm_harness_sdk import Harness, HarnessError` | 同上 |
+迁移内容：
+- `agent_call.py`：`Harness(**kwargs)` → `HarnessBuilder(model).provider(model, provider).max_tokens(n).system_prompt(sp).build()` + `collect_until_settled()`
+- `config.py`：新增 `create_py_provider()` → `create_openai_provider()` / `create_anthropic_provider()`
+- `ffi_bridge.py`：重写为 PyO3 路径，新增 `run_workflow()` 入口，用 `WorkflowEngine(workflow, provider, model, judge).with_executor(name, executor)` + `set_context_variable()` + `run()`
+- `cli.py`：简化为 `run_workflow(pipeline, eda_config, llm_config, on_step=...)`
+- `test_ffi_gaps.py`：从 cffi gap 测试重写为 PyO3 能力测试（12 个测试）
+- 43/43 测试通过，33-stage E2E --no-llm pipeline 成功
+- `llm_harness_sdk` 引用零残留
 
-迁移后 API 变化：
-- `Harness(**kwargs)` → `HarnessBuilder(model).provider(pattern, provider).system_prompt(sp).build()`
-- `harness.prompt(text)` → 不变（但不再返回 `__exit__` 自动 close）
-- `harness.get_final_response()` → `harness.collect_until_settled()` + 手动聚合
-- `WorkflowEngine(workflow, config, executor_fn, judge_fn)` → `WorkflowEngine(workflow, provider, model, judge).with_executor(name, executor)`
+改名为 `senza` 后，eda-agent-py 的 `import llm_harness_py` 需改为 `import senza`（机械替换）。
 
 ### P2：可选
 
@@ -650,21 +675,67 @@ eda-agent-py 中以下文件仍引用旧 `llm_harness_sdk`：
 
 ---
 
-## 10. 执行顺序
+## 10. Skills（AI 助手过程性知识包）
 
-1. **建 Senza 仓库结构** — pyproject.toml、目录骨架
-2. **补 `restore()` PyO3 包装** — P0 缺口，examples 依赖
-3. **补 docstrings** — `#[pyo3(text_signature = "...")]` + `__doc__`
-4. **写 examples** — agent 01 → runtime 01 → 逐步到 06
-5. **CI wheel 构建** — maturin build → GitHub Release → PyPI
-6. **补 WorkflowEngine 缺失方法** — state/get_var/pause/resume/cancel
-7. **eda-agent-py 迁移** — 从 `llm_harness_sdk` 改为 `senza`
-8. **补 examples** — 08-11
-9. **发布 v0.1.0** — PyPI `pip install senza`
+> 除了静态 examples，Senza 还提供 3 个 Codex skill，帮助 AI 编码助手理解如何使用 SDK。
+> Skills 安装到 `~/.codex/skills/` 后，Codex 在相关任务中自动触发。
+
+### skill 清单
+
+| Skill | 触发场景 | 覆盖内容 |
+|-------|---------|---------|
+| `senza-agent` | 单轮 LLM 调用、tool 注册、streaming、provider 创建 | HarnessBuilder 链式 API、create_tool、AgentHarness 方法、event 类型 |
+| `senza-workflow` | 多步 workflow、条件路由、judge/executor、共享 context | workflow dict schema、edge condition、Transition 编码、WorkflowEngine 方法 |
+| `senza-advanced` | sub-agent、hooks、human-in-the-loop、event streaming | 7 个 spawn tool + MessageBus、11 种 hook、create_event_channel、plugin |
+
+### 目录结构
+
+```
+skills/
+├── senza-agent/
+│   └── SKILL.md          # Agent 层使用指南
+├── senza-workflow/
+│   └── SKILL.md          # Runtime 层编排指南
+└── senza-advanced/
+    └── SKILL.md          # 高级模式（spawn/hooks/human-in-loop）
+```
+
+### 与 examples 的关系
+
+| | Examples | Skills |
+|--|---------|--------|
+| 形式 | `.py` 可执行文件 | `SKILL.md` 过程性知识 |
+| 触发 | 用户手动运行 | AI 助手自动匹配触发 |
+| 内容 | 完整可运行代码 | API 参考 + 决策树 + 常见模式 |
+| 受众 | 人类开发者 | AI 编码助手（Codex / Claude Code 等） |
+
+### 安装
+
+```bash
+# 从 Senza 仓库安装到 ~/.codex/skills/
+cp -r skills/senza-* ~/.codex/skills/
+# 或用 skill-installer
+# codex skill install --repo oh-my-harness/senza --path skills/senza-agent
+```
 
 ---
 
-## 11. 仓库改名
+## 11. 执行顺序
+
+1. **建 Senza 仓库结构** — pyproject.toml、目录骨架、skills/
+2. **补 `restore()` PyO3 包装** — P0 缺口，examples 依赖
+3. **补 docstrings** — `#[pyo3(text_signature = "...")]` + `__doc__`
+4. **写 examples** — agent 01 → runtime 01 → 逐步到 06
+5. **写 skills** — senza-agent → senza-workflow → senza-advanced
+6. **CI wheel 构建** — maturin build → GitHub Release → PyPI
+7. **补 WorkflowEngine 缺失方法** — state/get_var/pause/resume/cancel
+8. **eda-agent-py 迁移** — 从 `llm_harness_sdk` 改为 `senza`
+9. **补 examples** — 08-11
+10. **发布 v0.1.0** — PyPI `pip install senza`
+
+---
+
+## 12. 仓库改名
 
 ```
 github.com/oh-my-harness/llm-harness-py-wheels  →  github.com/oh-my-harness/senza
@@ -674,7 +745,7 @@ PyPI 包名同步注册为 `senza`。
 
 ---
 
-## 12. Python 版本矩阵
+## 13. Python 版本矩阵
 
 `pyproject.toml` 配置 `abi3-py39`（`pyo3/abi3-py39` feature），一个 wheel 覆盖：
 
@@ -691,7 +762,7 @@ abi3 wheel 不依赖特定 CPython 版本，只需构建一次。
 
 ---
 
-## 13. 构建方式
+## 14. 构建方式
 
 ```bash
 # 前提：安装 maturin + 指定 Python
