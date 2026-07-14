@@ -1,0 +1,84 @@
+name: Build Wheel
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      runtime_rev:
+        description: "llm-harness-runtime git rev (commit SHA or tag)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12"]
+
+    steps:
+      - name: Checkout Senza repo
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install maturin
+        run: pip install maturin
+
+      - name: Determine runtime rev
+        id: rev
+        run: |
+          if [ -n "${{ github.event.inputs.runtime_rev }}" ]; then
+            echo "rev=${{ github.event.inputs.runtime_rev }}" >> $GITHUB_OUTPUT
+          else
+            # Default: latest main HEAD
+            echo "rev=main" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Clone llm-harness-runtime
+        run: |
+          git clone --depth 1 https://github.com/oh-my-harness/llm-harness-runtime.git /tmp/runtime
+          cd /tmp/runtime
+          git fetch --depth 1 origin ${{ steps.rev.outputs.rev }}
+          git checkout ${{ steps.rev.outputs.rev }}
+
+      - name: Build wheel
+        working-directory: /tmp/runtime/crates/llm-harness-py
+        run: |
+          maturin build --release
+          echo "WHEEL=$(ls target/wheels/*.whl)" >> $GITHUB_ENV
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: senza-wheel
+          path: /tmp/runtime/crates/llm-harness-py/target/wheels/*.whl
+
+      - name: Install wheel and run tests
+        run: |
+          pip install ${{ env.WHEEL }}
+          cd /tmp/runtime/crates/llm-harness-py
+          python -m pytest tests/ -x -q --ignore=tests/test_agent.py --ignore=tests/test_sync_tool.py --ignore=tests/test_async_tool.py --ignore=tests/test_event_stream.py --tb=short
+
+      - name: Copy wheel to dist
+        run: |
+          mkdir -p dist
+          cp ${{ env.WHEEL }} dist/
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.whl
+          generate_release_notes: true
