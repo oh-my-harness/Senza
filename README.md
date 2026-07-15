@@ -185,6 +185,7 @@ lh.create_anthropic_provider(api_key, base_url=None)
 ### Executor
 
 ```python
+lh.create_composite_judge()           # CompositeJudge（按节点注册独立路由）
 lh.create_executor(callback)           # Python 回调执行器
 lh.create_shell_executor(commands)     # Shell 命令执行器（命令白名单）
 lh.create_http_executor(allowed_hosts) # HTTP 调用执行器（host 白名单）
@@ -208,7 +209,7 @@ lh.create_after_tool_call_hook(cb)     # cb(ctx: dict) -> str | dict
 见 [`examples/`](examples/) 目录：
 
 - `examples/agent/` — 5 个示例（基础对话、工具调用、流式输出、动态配置、多 provider）
-- `examples/runtime/` — 8 个示例（线性工作流、条件路由、执行器、崩溃恢复、暂停/取消、人工介入、Shell、HTTP）
+- `examples/runtime/` — 9 个示例（线性工作流、条件路由、执行器、崩溃恢复、暂停/取消、人工介入、Shell、HTTP、CompositeJudge）
 
 ```bash
 export OPENAI_API_KEY=sk-...

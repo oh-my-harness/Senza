@@ -26,6 +26,7 @@
 | `06_human_in_the_loop.py` | `create_event_channel` 外部事件注入 |
 | `07_shell_executor.py` | Python callback executor + 命令白名单 |
 | `08_http_executor.py` | `create_http_executor` + httpbin.org 测试 |
+| `09_composite_judge.py` | `create_composite_judge` 按节点路由 + 声明式边 fallback |
 
 ## 运行
 
