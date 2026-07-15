@@ -19,13 +19,13 @@
 | 文件 | 内容 |
 |------|------|
 | `01_linear_workflow.py` | 步骤 A → 步骤 B，judge 跳转，步骤历史 |
-| `02_conditional_routing.py` | 声明式条件边（`{"op": "contains", ...}`） |
+| `02_conditional_routing.py` | 自定义 judge 条件路由 |
 | `03_executor_steps.py` | Python executor 步骤，与 LLM 步骤混合，共享上下文 |
 | `04_crash_recovery.py` | `with_task_store` + `restore()` 崩溃恢复 |
 | `05_pause_cancel.py` | 从另一线程调用 `pause()` / `cancel()`，状态监控 |
 | `06_human_in_the_loop.py` | `create_event_channel` 外部事件注入 |
-| `07_shell_executor.py` | `create_shell_executor` 命令白名单 |
-| `08_http_executor.py` | `create_http_executor` host 白名单 |
+| `07_shell_executor.py` | Python callback executor + 命令白名单 |
+| `08_http_executor.py` | `create_http_executor` + httpbin.org 测试 |
 
 ## 运行
 

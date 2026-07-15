@@ -149,6 +149,7 @@ lh.create_anthropic_provider(api_key, base_url=None)
 | `.provider(pattern, provider)` | 注册 LLM provider（glob 匹配） |
 | `.system_prompt(text)` | 设置系统提示 |
 | `.max_tokens(n)` / `.temperature(t)` | LLM 参数 |
+| `.thinking_level(level)` | 设置 thinking level |
 | `.tool(tool)` / `.plugin(plugin)` | 注册工具/插件 |
 | `.build()` | 返回 `AgentHarness` |
 | `harness.prompt_and_collect(text, timeout_ms=30000)` | 发送提示并收集事件（推荐） |
@@ -160,6 +161,8 @@ lh.create_anthropic_provider(api_key, base_url=None)
 | `harness.set_thinking_level("high")` | "off"/"minimal"/"low"/"medium"/"high"/"xhigh"/"budget:N" |
 | `harness.steer(text)` / `harness.follow_up(text)` | 运行中注入消息 |
 | `harness.usage()` | 查询成本统计 |
+| `harness.get_messages()` | 获取完整对话历史 |
+| `harness.last_response()` | 获取最近一条 assistant 回复文本 |
 | `harness.abort()` | 取消当前提示 |
 
 ### Runtime 层
