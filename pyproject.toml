@@ -3,7 +3,7 @@ requires = ["maturin>=1.7,<2"]
 build-backend = "maturin"
 
 [project]
-name = "senza"
+name = "senza-sdk"
 dynamic = ["version"]
 requires-python = ">=3.9"
 license = { text = "MIT" }

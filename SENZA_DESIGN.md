@@ -130,7 +130,7 @@ PyO3 module 名：`senza`（已从 `llm_harness_py` 改名）。
 | — | `WorkflowEngine.run()` 是同步阻塞，无 async 版本 | P2 | ❌ 待做 |
 | — | ~~compaction 配置、active_tools、queue 清除、session/branch 管理~~ | ~~P2~~ | ✅ 已完成 |
 | — | ~~PyO3 module 名为 `llm_harness_py`，需改名为 `senza`~~ | ~~P0~~ | ✅ 已完成 |
-| — | ~~Senza 仓库缺 `pyproject.toml`，无法 `pip install senza`~~ | ~~P0~~ | ✅ 已完成 |
+| — | ~~Senza 仓库缺 `pyproject.toml`，无法 `pip install senza-sdk`~~ | ~~P0~~ | ✅ 已完成 |
 | — | ~~wheel 从未成功构建~~ | ~~P0~~ | ✅ 已完成 |
 
 ---
@@ -139,7 +139,7 @@ PyO3 module 名：`senza`（已从 `llm_harness_py` 改名）。
 
 ```
 senza/                           # 本仓库 (github.com/oh-my-harness/llm-harness-py-wheels → 改名)
-├── README.md                    # 面向用户：pip install senza + 快速上手
+├── README.md                    # 面向用户：pip install senza-sdk + 快速上手
 ├── SENZA_DESIGN.md              # 本文档
 ├── pyproject.toml               # package name = "senza"
 ├── ci/
@@ -186,7 +186,7 @@ senza/                           # 本仓库 (github.com/oh-my-harness/llm-harne
 
 ### 包名
 
-- PyPI 包名：`senza`
+- PyPI 包名：`senza-sdk`（import 名 `senza`）
 - import 名：`senza`（PEP 8 小写）
 - 用户代码：`from senza import HarnessBuilder, AgentHarness, WorkflowEngine, ...`
 
@@ -739,7 +739,7 @@ cp -r skills/senza-* ~/.codex/skills/
 7. **补 WorkflowEngine 缺失方法** — state/get_var/pause/resume/cancel
 8. **eda-agent-py 迁移** — 从 `llm_harness_sdk` 改为 `senza`
 9. **补 examples** — 08-11
-10. **发布 v0.1.0** — PyPI `pip install senza`
+10. **发布 v0.1.0** — PyPI `pip install senza-sdk`
 
 ---
 

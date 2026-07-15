@@ -14,7 +14,7 @@ Senza 向 Python 暴露 runtime 的两层能力：
 ## 安装
 
 ```bash
-pip install senza
+pip install senza-sdk
 ```
 
 验证：
