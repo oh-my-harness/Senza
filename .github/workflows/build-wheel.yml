@@ -45,13 +45,17 @@ jobs:
             echo "rev=main" >> $GITHUB_OUTPUT
           fi
 
-      - name: Clone llm-harness-runtime (private repo)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Checkout llm-harness-runtime
+        uses: actions/checkout@v4
+        with:
+          repository: oh-my-harness/llm-harness-runtime
+          token: ${{ secrets.RUNTIME_PAT }}
+          path: /tmp/runtime
+          fetch-depth: 0
+
+      - name: Checkout specific rev
         run: |
-          gh repo clone oh-my-harness/llm-harness-runtime /tmp/runtime -- --depth 1
           cd /tmp/runtime
-          git fetch --depth 1 origin ${{ steps.rev.outputs.rev }}
           git checkout ${{ steps.rev.outputs.rev }}
 
       - name: Copy Senza pyproject.toml into runtime crate
