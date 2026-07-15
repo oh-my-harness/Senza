@@ -128,6 +128,7 @@ PyO3 module 名：`senza`（已从 `llm_harness_py` 改名）。
 | — | ~~eda-agent-py 仍引用旧 `llm_harness_sdk`~~ **已迁移到 PyO3**（commit efba9a1） | ✅ | ✅ |
 | — | ~~`ShellExecutor` / `HttpCallExecutor` 未暴露~~ `create_shell_executor()` / `create_http_executor()` 已添加（不自动注册，安全设计） | ~~P2~~ | ✅ 已实现 |
 | — | `WorkflowEngine.run()` 是同步阻塞，无 async 版本 | P2 | ❌ 待做 |
+| — | ~~compaction 配置、active_tools、queue 清除、session/branch 管理~~ | ~~P2~~ | ✅ 已完成 |
 | — | ~~PyO3 module 名为 `llm_harness_py`，需改名为 `senza`~~ | ~~P0~~ | ✅ 已完成 |
 | — | ~~Senza 仓库缺 `pyproject.toml`，无法 `pip install senza`~~ | ~~P0~~ | ✅ 已完成 |
 | — | ~~wheel 从未成功构建~~ | ~~P0~~ | ✅ 已完成 |

@@ -149,6 +149,7 @@ lh.create_anthropic_provider(api_key, base_url=None)
 | `.provider(pattern, provider)` | 注册 LLM provider（glob 匹配） |
 | `.system_prompt(text)` | 设置系统提示 |
 | `.max_tokens(n)` / `.temperature(t)` | LLM 参数 |
+| `.auto_compact(b)` / `.compaction_reserve_tokens(n)` / `.compaction_keep_recent_tokens(n)` | Compaction 配置 |
 | `.thinking_level(level)` | 设置 thinking level |
 | `.tool(tool)` / `.plugin(plugin)` | 注册工具/插件 |
 | `.build()` | 返回 `AgentHarness` |
@@ -164,6 +165,11 @@ lh.create_anthropic_provider(api_key, base_url=None)
 | `harness.get_messages()` | 获取完整对话历史 |
 | `harness.last_response()` | 获取最近一条 assistant 回复文本 |
 | `harness.abort()` | 取消当前提示 |
+| `harness.clear_all_queues()` / `harness.has_queued_messages()` | 队列管理 |
+| `harness.set_active_tools(tools)` | 限定下一轮工具子集 |
+| `harness.fork_branch()` / `harness.list_branches()` / `harness.navigate_tree()` | 会话分支管理 |
+| `harness.read_active_path()` / `harness.read_all_entries()` | 读取会话历史 |
+| `harness.delete_branch()` / `harness.generate_branch_summary()` | 分支删除与摘要 |
 
 ### Runtime 层
 
