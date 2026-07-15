@@ -76,7 +76,7 @@ jobs:
         working-directory: runtime-src/crates/llm-harness-py
         run: |
           maturin build --release
-          echo "WHEEL=$(find runtime-src/target/wheels -name 'senza*.whl' | head -1)" >> $GITHUB_ENV
+          echo "WHEEL=$(find $GITHUB_WORKSPACE/runtime-src/target/wheels -name 'senza*.whl' | head -1)" >> $GITHUB_ENV
 
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4
