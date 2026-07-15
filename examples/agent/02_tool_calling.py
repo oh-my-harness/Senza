@@ -50,18 +50,19 @@ def main():
     )
 
     print("Asking about weather...")
-    harness.prompt("What's the weather in Tokyo?")
+    events = harness.prompt_and_collect("What's the weather in Tokyo?", timeout_ms=30000)
 
     text = ""
     tool_calls = []
-    for event in harness.collect_until_settled(timeout_ms=30000):
+    for event in events:
         t = event["type"]
         if t == "text_delta":
             text += event.get("text", "")
         elif t == "tool_call_start":
             tool_calls.append(event.get("tool_name", "?"))
-        elif t == "settled":
-            break
+        elif t == "error":
+            print(f"\n[error] {event.get('message', event)}", file=sys.stderr)
+            sys.exit(1)
 
     print(f"Tool calls: {tool_calls}")
     print(f"Response:\n{text}")

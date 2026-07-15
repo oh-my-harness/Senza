@@ -43,10 +43,10 @@ harness = (
     .build()
 )
 
-harness.prompt("用一句话解释闭包。")
+events = harness.prompt_and_collect("用一句话解释闭包。")
 
 text = ""
-for event in harness.collect_until_settled():
+for event in events:
     if event["type"] == "text_delta":
         text += event.get("text", "")
 print(text)
@@ -151,7 +151,8 @@ lh.create_anthropic_provider(api_key, base_url=None)
 | `.max_tokens(n)` / `.temperature(t)` | LLM 参数 |
 | `.tool(tool)` / `.plugin(plugin)` | 注册工具/插件 |
 | `.build()` | 返回 `AgentHarness` |
-| `harness.prompt(text)` | 发送提示（阻塞） |
+| `harness.prompt_and_collect(text, timeout_ms=30000)` | 发送提示并收集事件（推荐） |
+| `harness.prompt(text)` | 发送提示（阻塞，需配合线程收集事件） |
 | `harness.collect_until_settled(timeout_ms=30000)` | 收集事件直到完成 |
 | `harness.events(timeout_ms=5000)` | 流式事件迭代器 |
 | `harness.set_model(model)` | 运行时切换模型 |

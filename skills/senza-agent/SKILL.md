@@ -32,9 +32,8 @@ harness = (
     .build()
 )
 
-# 3. Prompt + collect events
-harness.prompt("Hello!")
-events = harness.collect_until_settled(timeout_ms=30000)
+# 3. Prompt + collect events (one call)
+events = harness.prompt_and_collect("Hello!", timeout_ms=30000)
 
 # 4. Extract text
 text = ""
@@ -100,7 +99,8 @@ tool = L.create_tool(
 
 | Method | Returns | Description |
 |--------|---------|-------------|
-| `.prompt(text)` | `None` | Synchronous, blocks until done |
+| `.prompt_and_collect(text, timeout_ms=30000)` | `list[dict]` | Prompt + collect events in one call (recommended) |
+| `.prompt(text)` | `None` | Synchronous, blocks until done (use threading to collect events) |
 | `.events(timeout_ms=5000)` | Iterator[dict] | Event stream, `None` on timeout |
 | `.collect_until_settled(timeout_ms=30000)` | list[dict] | Collect until settled/aborted |
 | `.message_count()` | `int` | Current message count |

@@ -2,11 +2,14 @@
 
 Demonstrates:
   - pause() to request a pause at the next step boundary
+  - resume() to continue from a paused state
   - cancel() to abort execution
   - state() / current_step() for monitoring
 
-Note: pause/cancel are designed to be called from a different thread
-while run() is blocking. This example uses threading.
+Note: pause/resume works at step boundaries. When paused, run() raises
+RuntimeError. Call resume() then run() again to continue.
+cancel() sets the state to "cancelled" but may not interrupt an
+in-progress LLM call — it takes effect at the next step boundary.
 
 Run:
   python 05_pause_cancel.py
@@ -29,43 +32,52 @@ def main():
     workflow = {
         "entry_step": "step1",
         "steps": [
-            {"id": "step1", "name": "Step 1", "prompt": "Write a long essay about AI.", "allowed_tools": []},
-            {"id": "step2", "name": "Step 2", "prompt": "Summarize the previous essay.", "allowed_tools": []},
+            {"id": "step1", "name": "Step 1", "prompt": "Write a short paragraph about cats.", "allowed_tools": []},
+            {"id": "step2", "name": "Step 2", "prompt": "Write a short paragraph about dogs.", "allowed_tools": []},
         ],
         "edges": [{"from": "step1", "to": "step2"}],
     }
 
-    judge = lh.create_judge(lambda ctx: "abort:done")
+    judge = lh.create_judge(lambda ctx: "to:step2" if ctx.get("step_id") == "step1" else "abort:done")
     engine = lh.WorkflowEngine(workflow, provider, "gpt-4o", judge)
 
     print(f"Task ID: {engine.task_id()}")
     print(f"Initial state: {engine.state()}")
 
-    # Cancel from a separate thread after 2 seconds
-    def cancel_after_delay():
-        time.sleep(2)
-        print("\n[Cancelling workflow...]")
-        engine.cancel("user requested cancel")
-        print(f"[State after cancel: {engine.state()}]")
+    # Pause from a separate thread after a short delay
+    def pause_after_delay():
+        time.sleep(0.3)
+        print("\n[Pausing workflow...]")
+        engine.pause("demonstration")
+        print(f"[State after pause: {engine.state()}]")
 
-    cancel_thread = threading.Thread(target=cancel_after_delay)
-    cancel_thread.start()
+    pause_thread = threading.Thread(target=pause_after_delay)
+    pause_thread.start()
 
-    print("Running workflow (will be cancelled)...")
+    print("Running workflow (will pause)...")
     try:
         engine.run()
+        print(f"Completed without pause. State: {engine.state()}")
     except RuntimeError as e:
-        print(f"Run ended: {e}")
+        print(f"Workflow paused: {e}")
+        print(f"  State: {engine.state()}")
+        print(f"  Current step: {engine.current_step()}")
 
-    cancel_thread.join()
+        # Resume and continue
+        time.sleep(0.5)
+        print("\n[Resuming workflow...]")
+        engine.resume()
+        print(f"  State after resume: {engine.state()}")
+        engine.run()
+        print(f"Completed after resume. State: {engine.state()}")
 
-    print(f"\nFinal state: {engine.state()}")
+    pause_thread.join()
 
     history = engine.step_history()
-    print(f"Steps recorded: {len(history)}")
+    print(f"\nSteps recorded: {len(history)}")
     for r in history:
         result = r.get("result")
-        status = "completed" if result else "cancelled"
+        status = "completed" if result else "skipped"
         print(f"  {r['step_id']}: {status}")
 
 

@@ -3,9 +3,8 @@
 Demonstrates the minimal Senza flow:
   1. Create an OpenAI-compatible provider
   2. Build a harness via the fluent HarnessBuilder chain
-  3. Prompt the LLM
-  4. Collect events until settled
-  5. Extract text from text_delta events
+  3. Prompt the LLM and collect events in one call
+  4. Extract text from text_delta events
 
 Prerequisites:
   - Set OPENAI_API_KEY env var (or change the provider config below)
@@ -38,17 +37,13 @@ def main():
     )
 
     print("Sending prompt...")
-    harness.prompt("Explain what a closure is in one sentence.")
-
-    events = harness.collect_until_settled(timeout_ms=30000)
+    events = harness.prompt_and_collect("Explain what a closure is in one sentence.", timeout_ms=30000)
 
     text = ""
     for event in events:
         t = event["type"]
         if t == "text_delta":
             text += event.get("text", "")
-        elif t == "settled":
-            break
         elif t == "error":
             print(f"\n[error] {event.get('message', event)}", file=sys.stderr)
             sys.exit(1)

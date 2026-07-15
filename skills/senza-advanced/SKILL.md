@@ -194,16 +194,3 @@ for event in event_iter:
         print(f"✗ {event['error']}")
 ```
 
-## Known Gaps (PyO3 SDK not yet exposed)
-
-| Capability | Rust method | Status |
-|-----------|-------------|--------|
-| Crash recovery | `WorkflowEngine::restore()` | ❌ Not exposed (P0) |
-| Pause | `engine.pause()` | ❌ Not exposed (P1) |
-| Resume | `engine.resume()` | ❌ Not exposed (P1) |
-| Cancel | `engine.cancel()` | ❌ Not exposed (P1) |
-| Checkpoint | `engine.checkpoint()` | ❌ Not exposed (P2) |
-| Total cost | `engine.total_cost()` | ❌ Not exposed (P2) |
-| State query | `engine.state()` | ❌ Not exposed (P1) |
-
-When the user asks for these capabilities, note they are not yet available in the PyO3 SDK and must be added to `pyworkflow.rs` first.

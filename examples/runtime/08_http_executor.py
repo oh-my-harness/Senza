@@ -5,6 +5,10 @@ Demonstrates:
   - HTTP step config: method, url, headers, body
   - Security: only allowlisted hosts can be called
 
+Note: The HTTP executor uses the built-in HttpCallExecutor which makes
+real HTTP requests. If the target host is unreachable or returns an error
+status, the step will fail. This example uses httpbin.org for testing.
+
 Run:
   python 08_http_executor.py
 """
@@ -21,11 +25,9 @@ def main():
     api_key = os.environ.get("OPENAI_API_KEY", "sk-demo-key")
     provider = lh.create_openai_provider(api_key=api_key)
 
-    # Create an HttpCallExecutor — only api.github.com is allowed
     http_exec = lh.create_http_executor(
-        allowed_hosts=["api.github.com"],
+        allowed_hosts=["httpbin.org"],
         allowed_schemes=["https"],
-        max_timeout_ms=15000,
     )
 
     workflow = {
@@ -33,12 +35,12 @@ def main():
         "steps": [
             {
                 "id": "fetch",
-                "name": "Fetch API",
+                "name": "Fetch Data",
                 "executor": "http",
                 "executor_config": {
                     "method": "GET",
-                    "url": "https://api.github.com/repos/octocat/Hello-World",
-                    "headers": {"Accept": "application/vnd.github.v3+json"},
+                    "url": "https://httpbin.org/get",
+                    "headers": {"Accept": "application/json"},
                 },
             },
         ],
@@ -52,14 +54,19 @@ def main():
     )
 
     print("Running HTTP executor workflow...")
-    engine.run()
+    try:
+        engine.run()
+    except RuntimeError as e:
+        print(f"  Step failed (expected if network is restricted): {e}")
+        print("  This is normal — the HTTP executor requires network access.")
+        return
 
     history = engine.step_history()
     for record in history:
         result = record.get("result")
         if result:
             output = result["output"][:200]
-            print(f"  {record['step_id']}: {output}...")
+            print(f"  {record['step_id']}: {output}")
 
 
 if __name__ == "__main__":

@@ -35,8 +35,8 @@ def main():
 
     # Prompt with GPT-4o (routes to OpenAI)
     print("=== GPT-4o ===")
-    harness.prompt("Say hello in one word.")
-    for event in harness.collect_until_settled(timeout_ms=15000):
+    events = harness.prompt_and_collect("Say hello in one word.", timeout_ms=15000)
+    for event in events:
         if event["type"] == "text_delta":
             print(event.get("text", ""), end="")
         elif event["type"] == "settled":
@@ -46,8 +46,8 @@ def main():
     # Switch to Claude (routes to Anthropic)
     print("\n=== Claude ===")
     harness.set_model("claude-sonnet-4-20250514")
-    harness.prompt("Say hello in one word.")
-    for event in harness.collect_until_settled(timeout_ms=15000):
+    events = harness.prompt_and_collect("Say hello in one word.", timeout_ms=15000)
+    for event in events:
         if event["type"] == "text_delta":
             print(event.get("text", ""), end="")
         elif event["type"] == "settled":

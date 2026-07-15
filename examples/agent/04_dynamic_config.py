@@ -38,8 +38,8 @@ def main():
     harness.set_max_tokens(128)
 
     print("Prompt 1 (pirate mode)...")
-    harness.prompt("Hello, how are you?")
-    for event in harness.collect_until_settled(timeout_ms=15000):
+    events = harness.prompt_and_collect("Hello, how are you?", timeout_ms=15000)
+    for event in events:
         if event["type"] == "text_delta":
             print(event.get("text", ""), end="")
         elif event["type"] == "settled":
@@ -53,8 +53,8 @@ def main():
     harness.set_thinking_level("medium")
 
     print("\nPrompt 2 (academic mode)...")
-    harness.prompt("What is the capital of France?")
-    for event in harness.collect_until_settled(timeout_ms=15000):
+    events = harness.prompt_and_collect("What is the capital of France?", timeout_ms=15000)
+    for event in events:
         if event["type"] == "text_delta":
             print(event.get("text", ""), end="")
         elif event["type"] == "settled":
