@@ -40,4 +40,4 @@ python runtime/01_linear_workflow.py
 
 ## 导入
 
-示例优先 `import senza`，失败则回退到 `import llm_harness_py`。
+所有示例使用 `import senza as lh`。
