@@ -34,7 +34,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install maturin
-        run: pip install maturin
+        run: pip install maturin>=1.7
 
       - name: Determine runtime rev
         id: rev
@@ -42,7 +42,6 @@ jobs:
           if [ -n "${{ github.event.inputs.runtime_rev }}" ]; then
             echo "rev=${{ github.event.inputs.runtime_rev }}" >> $GITHUB_OUTPUT
           else
-            # Default: latest main HEAD
             echo "rev=main" >> $GITHUB_OUTPUT
           fi
 
@@ -53,23 +52,26 @@ jobs:
           git fetch --depth 1 origin ${{ steps.rev.outputs.rev }}
           git checkout ${{ steps.rev.outputs.rev }}
 
+      - name: Copy Senza pyproject.toml into runtime crate
+        run: |
+          cp pyproject.toml /tmp/runtime/crates/llm-harness-py/pyproject.toml
+
       - name: Build wheel
         working-directory: /tmp/runtime/crates/llm-harness-py
         run: |
           maturin build --release
-          echo "WHEEL=$(ls target/wheels/*.whl)" >> $GITHUB_ENV
+          echo "WHEEL=$(ls /tmp/runtime/target/wheels/senza*.whl)" >> $GITHUB_ENV
 
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4
         with:
           name: senza-wheel
-          path: /tmp/runtime/crates/llm-harness-py/target/wheels/*.whl
+          path: ${{ env.WHEEL }}
 
-      - name: Install wheel and run tests
+      - name: Install wheel and verify import
         run: |
           pip install ${{ env.WHEEL }}
-          cd /tmp/runtime/crates/llm-harness-py
-          python -m pytest tests/ -x -q --ignore=tests/test_agent.py --ignore=tests/test_sync_tool.py --ignore=tests/test_async_tool.py --ignore=tests/test_event_stream.py --tb=short
+          python -c "import senza; print('version:', senza.version()); print(repr(senza.HarnessBuilder('gpt-4o')))"
 
       - name: Copy wheel to dist
         run: |

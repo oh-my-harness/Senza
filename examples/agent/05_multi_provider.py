@@ -10,10 +10,7 @@ Run:
 import os
 import sys
 
-try:
-    import senza as lh
-except ImportError:
-    import llm_harness_py as lh
+import senza as lh
 
 
 def main():

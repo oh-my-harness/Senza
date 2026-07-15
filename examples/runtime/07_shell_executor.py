@@ -18,10 +18,7 @@ import os
 import subprocess
 import sys
 
-try:
-    import senza as lh
-except ImportError:
-    import llm_harness_py as lh
+import senza as lh
 
 
 # Command allowlist — only these commands can be executed.

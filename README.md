@@ -20,7 +20,7 @@ pip install senza
 验证：
 
 ```python
-import llm_harness_py as lh
+import senza as lh
 print(lh.version())  # e.g. "0.3.0"
 ```
 
@@ -31,7 +31,7 @@ print(lh.version())  # e.g. "0.3.0"
 ### Agent：单轮 LLM 对话
 
 ```python
-import llm_harness_py as lh
+import senza as lh
 
 provider = lh.create_openai_provider(api_key="sk-...")
 
@@ -81,7 +81,7 @@ harness.prompt("东京天气怎么样？")
 ### Runtime：多步工作流
 
 ```python
-import llm_harness_py as lh
+import senza as lh
 
 provider = lh.create_openai_provider(api_key="sk-...")
 

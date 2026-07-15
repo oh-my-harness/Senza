@@ -1,0 +1,25 @@
+[build-system]
+requires = ["maturin>=1.7,<2"]
+build-backend = "maturin"
+
+[project]
+name = "senza"
+dynamic = ["version"]
+requires-python = ">=3.9"
+license = { text = "MIT" }
+description = "oh-my-harness Rust runtime Python SDK — Agent + Workflow engine"
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+[tool.maturin]
+features = ["pyo3/extension-module", "pyo3/abi3-py39", "pyo3/experimental-inspect"]
