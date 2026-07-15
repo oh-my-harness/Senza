@@ -62,6 +62,16 @@ jobs:
         run: |
           cp pyproject.toml runtime-src/crates/llm-harness-py/pyproject.toml
 
+      - name: Configure git credentials for private crate deps
+        run: |
+          git config --global credential.helper store
+          echo "https://x-access-token:${{ secrets.RUNTIME_PAT }}@github.com" > ~/.git-credentials
+          mkdir -p ~/.cargo
+          cat > ~/.cargo/config.toml << CARGO_EOF
+          [net]
+          git-fetch-with-cli = true
+          CARGO_EOF
+
       - name: Build wheel
         working-directory: runtime-src/crates/llm-harness-py
         run: |
