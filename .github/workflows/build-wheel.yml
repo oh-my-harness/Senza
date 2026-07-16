@@ -58,9 +58,10 @@ jobs:
           cd runtime-src
           git checkout ${{ steps.rev.outputs.rev }}
 
-      - name: Copy Senza pyproject.toml into runtime crate
+      - name: Copy Senza packaging files into runtime crate
         run: |
           cp pyproject.toml runtime-src/crates/llm-harness-py/pyproject.toml
+          cp -r senza-pkg runtime-src/crates/llm-harness-py/senza-pkg
 
       - name: Configure git credentials for private crate deps
         run: |
@@ -75,7 +76,7 @@ jobs:
       - name: Build wheel
         working-directory: runtime-src/crates/llm-harness-py
         run: |
-          maturin build --release
+          maturin build --release --generate-stubs
           echo "WHEEL=$(find $GITHUB_WORKSPACE/runtime-src/target/wheels -name 'senza*.whl' | head -1)" >> $GITHUB_ENV
 
       - name: Upload wheel artifact
