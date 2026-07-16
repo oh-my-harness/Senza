@@ -47,19 +47,21 @@ echo "==> Runtime:     $RUNTIME_DIR"
 echo "==> Py crate:    $PY_CRATE_DIR"
 echo "==> Python:      $PYTHON ($($PYTHON --version 2>&1))"
 
-# Copy Senza pyproject.toml (package metadata + maturin features) into the
-# runtime crate directory. maturin reads pyproject.toml from there.
-echo "==> Copying Senza pyproject.toml into runtime crate..."
+# Copy Senza pyproject.toml + senza-pkg/ (Python package with .pyi stubs)
+# into the runtime crate directory. maturin reads pyproject.toml from there.
+echo "==> Copying Senza packaging files into runtime crate..."
 cp "$REPO_ROOT/pyproject.toml" "$PY_CRATE_DIR/pyproject.toml"
+rm -rf "$PY_CRATE_DIR/senza-pkg"
+cp -r "$REPO_ROOT/senza-pkg" "$PY_CRATE_DIR/senza-pkg"
 
 export PYO3_PYTHON="$(command -v $PYTHON)"
 
 cd "$PY_CRATE_DIR"
 
 echo "==> Building wheel..."
-maturin build --release
+maturin build --release --generate-stubs
 
-WHEEL=$(ls "$RUNTIME_DIR/target/wheels/senza"*.whl)
+WHEEL=$(ls "$RUNTIME_DIR/target/wheels/senza_sdk"*.whl "$RUNTIME_DIR/target/wheels/senza"*.whl 2>/dev/null | tail -1)
 echo "==> Built: $WHEEL"
 
 cp "$WHEEL" "$DEST/"
@@ -67,6 +69,7 @@ echo "==> Copied to: $DEST/$(basename $WHEEL)"
 
 # Clean up: restore runtime crate's original pyproject.toml
 git -C "$RUNTIME_DIR" checkout -- "$PY_CRATE_DIR/pyproject.toml" 2>/dev/null || true
+rm -rf "$PY_CRATE_DIR/senza-pkg"
 
 echo ""
 echo "==> Install with:"
