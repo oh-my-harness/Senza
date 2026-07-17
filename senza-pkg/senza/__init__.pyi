@@ -18,6 +18,8 @@ class Provider:
 def create_openai_provider(
     api_key: str,
     base_url: Optional[str] = ...,
+    chat_path: Optional[str] = ...,
+    thinking_scheme: Optional[str] = ...,
     parse_reasoning_content: bool = ...,
     tolerant_keepalive: bool = ...,
 ) -> Provider: ...

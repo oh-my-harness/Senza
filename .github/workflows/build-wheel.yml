@@ -76,7 +76,7 @@ jobs:
       - name: Build wheel
         working-directory: runtime-src/crates/llm-harness-py
         run: |
-          maturin build --release --generate-stubs
+          maturin build --release
           echo "WHEEL=$(find $GITHUB_WORKSPACE/runtime-src/target/wheels -name 'senza*.whl' | head -1)" >> $GITHUB_ENV
 
       - name: Upload wheel artifact

@@ -59,7 +59,7 @@ export PYO3_PYTHON="$(command -v $PYTHON)"
 cd "$PY_CRATE_DIR"
 
 echo "==> Building wheel..."
-maturin build --release --generate-stubs
+maturin build --release
 
 WHEEL=$(ls "$RUNTIME_DIR/target/wheels/senza_sdk"*.whl "$RUNTIME_DIR/target/wheels/senza"*.whl 2>/dev/null | tail -1)
 echo "==> Built: $WHEEL"
