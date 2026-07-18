@@ -49,7 +49,7 @@ jobs:
 
       - name: Inject rev into Cargo.toml
         shell: bash
-        run: sed -i "s/PLACEHOLDER/${{ steps.rev.outputs.rev }}/g" Cargo.toml
+        run: perl -pi -e "s/PLACEHOLDER/${{ steps.rev.outputs.rev }}/g" Cargo.toml
 
       - name: Configure git credentials for private crate deps
         shell: bash
