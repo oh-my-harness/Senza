@@ -132,6 +132,12 @@ PyO3 module 名：`senza`（已从 `llm_harness_py` 改名）。
 | — | ~~PyO3 module 名为 `llm_harness_py`，需改名为 `senza`~~ | ~~P0~~ | ✅ 已完成 |
 | — | ~~Senza 仓库缺 `pyproject.toml`，无法 `pip install senza-sdk`~~ | ~~P0~~ | ✅ 已完成 |
 | — | ~~wheel 从未成功构建~~ | ~~P0~~ | ✅ 已完成 |
+| — | ~~HarnessBuilder 缺 budget/pricing/skills/compaction_model/should_stop_hook/hooks/retry/model_info/final_answer_mode/stream_options/queue_capacity/disable_skill_read_tool~~ | ~~P1~~ | ✅ 已暴露 |
+| — | ~~PricingProvider 未暴露~~ `create_pricing_provider(dict)` / `create_pricing_provider_callback(cb)` 已添加 | ~~P1~~ | ✅ 已实现 |
+| — | ~~BudgetExceededHook 未暴露~~ `create_budget_exceeded_hook(cb)` + `builder.budget()` 已添加 | ~~P1~~ | ✅ 已实现 |
+| — | ~~Rules 审批系统未暴露~~ `create_*_predicate` + `RuleChainBuilder` + `create_rule_approval_hook()` 已添加 | ~~P1~~ | ✅ 已实现 |
+| — | ~~Skills 加载未暴露~~ `load_skills(path)` + `builder.skill()/skills()` 已添加 | ~~P2~~ | ✅ 已实现 |
+| — | stub 数从 112 增至 138 | — | ✅ 已验证 |
 
 ---
 

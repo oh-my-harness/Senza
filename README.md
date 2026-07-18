@@ -149,8 +149,19 @@ lh.create_anthropic_provider(api_key, base_url=None)
 | `.provider(pattern, provider)` | 注册 LLM provider（glob 匹配） |
 | `.system_prompt(text)` | 设置系统提示 |
 | `.max_tokens(n)` / `.temperature(t)` | LLM 参数 |
-| `.auto_compact(b)` / `.compaction_reserve_tokens(n)` / `.compaction_keep_recent_tokens(n)` | Compaction 配置 |
 | `.thinking_level(level)` | 设置 thinking level |
+| `.auto_compact(b)` / `.compaction_reserve_tokens(n)` / `.compaction_keep_recent_tokens(n)` | Compaction 配置 |
+| `.compaction_model(model, context_window, max_tokens)` | 独立 compaction 模型 |
+| `.should_stop_hook(hook)` / `.hooks([hook, ...])` | 注册 ShouldStopHook / 批量 hooks |
+| `.retry(max_retries, base_delay_ms)` | 瞬时错误重试配置 |
+| `.model_info(context_window, max_tokens)` | 模型元数据 |
+| `.final_answer_mode("heuristic"\|"tool")` | 最终回答判定模式 |
+| `.stream_options(timeout_ms, max_retries)` | 流式请求选项 |
+| `.queue_capacity(n)` | steer/follow-up 队列容量 |
+| `.budget(limit, exceeded_hook=None)` | 预算上限 + 超限回调 |
+| `.pricing(provider)` | 定价 provider（成本计算） |
+| `.skill(skill)` / `.skills([skill, ...])` | 注册 skill(s) |
+| `.disable_skill_read_tool()` | 关闭 SkillReadTool 自动注册 |
 | `.tool(tool)` / `.plugin(plugin)` | 注册工具/插件 |
 | `.build()` | 返回 `AgentHarness` |
 | `harness.prompt_and_collect(text, timeout_ms=30000)` | 发送提示并收集事件（推荐） |
@@ -206,6 +217,37 @@ lh.create_should_stop_hook(cb)         # cb(ctx: dict) -> bool
 lh.create_before_tool_call_hook(cb)    # cb(ctx: dict) -> str | None
 lh.create_after_tool_call_hook(cb)     # cb(ctx: dict) -> str | dict
 # ... 还有 6 种（见 examples/ 和 skills/）
+```
+
+### Pricing
+
+```python
+lh.create_pricing_provider(table)              # 静态定价表 dict
+lh.create_pricing_provider_callback(cb)        # cb(model, provider) -> dict | None
+```
+
+### Budget
+
+```python
+lh.create_budget_exceeded_hook(cb)  # cb(cost: dict, limit: float) -> bool
+```
+
+### Rules 审批
+
+```python
+lh.create_contains_predicate(allowed)              # tool_name ∈ allowed
+lh.create_regex_field_predicate(arg_path, pattern) # args[arg_path] 匹配正则
+lh.create_number_range_predicate(arg_path, min, max) # 数值区间
+lh.create_rate_limit_predicate(max, window_seconds)  # 限流
+
+chain = lh.create_rule_chain().rule("search", pred, "allow").fallback("deny").build()
+hook = lh.create_rule_approval_hook(chain)  # → BeforeToolCallHook
+```
+
+### Skills
+
+```python
+lh.load_skills(path)  # 扫描目录下的 SKILL.md，返回 list[Skill]
 ```
 
 ---

@@ -15,7 +15,9 @@ llm-harness-types   = { git = "https://github.com/oh-my-harness/llm-harness-runt
 llm-harness-loop    = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "PLACEHOLDER" }
 llm-harness-agent   = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "PLACEHOLDER" }
 llm-harness-runtime = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "PLACEHOLDER" }
+chrono = "0.4"
 serde_json = "1"
+regex = "1"
 anyhow = "1"
 tokio = { version = "1", features = ["sync", "rt-multi-thread", "time"] }
 futures = "0.3"

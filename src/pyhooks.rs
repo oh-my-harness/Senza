@@ -1137,7 +1137,7 @@ impl PrepareNextTurnHook for PyPrepareNextTurnHook {
 // ── 共享 callback 调用工具函数 ───────────────────────────────────────────────
 
 /// 检测 Python callable 是否为 coroutine function（`async def`）。
-fn detect_async(callback: &Py<PyAny>) -> bool {
+pub(crate) fn detect_async(callback: &Py<PyAny>) -> bool {
     Python::attach(|py| {
         let inspect = pyo3::types::PyModule::import(py, "inspect")?;
         let is_coro: bool = inspect
@@ -1150,7 +1150,7 @@ fn detect_async(callback: &Py<PyAny>) -> bool {
 
 /// 与 `call_callback` 相同，但使用预先检测的 `is_async` 标志，避免每次调用
 /// 都执行 `inspect.iscoroutinefunction`。
-fn call_callback_with_mode<'py>(
+pub(crate) fn call_callback_with_mode<'py>(
     py: Python<'py>,
     cb: &Py<PyAny>,
     args: impl pyo3::call::PyCallArgs<'py>,
@@ -1188,4 +1188,56 @@ pub enum HookKind {
 #[pyclass(name = "Hook")]
 pub struct PyHookWrapper {
     pub kind: HookKind,
+}
+
+impl PyHookWrapper {
+    /// 若包装的是 `ShouldStopHook`，返回其 `Arc`；否则返回 `PyTypeError`。
+    ///
+    /// 调用方（`HarnessBuilder::should_stop_hook`）应仅在 `ShouldStop` variant 上调用，
+    /// 但若用户误传其他 kind 的 hook，这里返回 Python 异常而非 panic，避免无 traceback 的进程崩溃。
+    pub fn as_should_stop_hook(&self) -> PyResult<Arc<dyn ShouldStopHook>> {
+        match &self.kind {
+            HookKind::ShouldStop(h) => Ok(h.clone()),
+            other => Err(pyo3::exceptions::PyTypeError::new_err(format!(
+                "expected a ShouldStop hook, got {}",
+                other.kind_name()
+            ))),
+        }
+    }
+
+    /// 将内部 hook 按 kind 推入对应的 `HarnessHooks` 向量。
+    pub fn push_into(&self, hooks: &mut llm_harness_agent::HarnessHooks) {
+        match &self.kind {
+            HookKind::BeforeTurn(h) => hooks.before_turn.push(h.clone()),
+            HookKind::AfterTurn(h) => hooks.after_turn.push(h.clone()),
+            HookKind::BeforeRun(h) => hooks.before_run.push(h.clone()),
+            HookKind::AfterProviderResponse(h) => hooks.after_provider_response.push(h.clone()),
+            HookKind::BeforeProviderRequest(h) => hooks.before_provider_request.push(h.clone()),
+            HookKind::BeforeToolCall(h) => hooks.before_tool_call.push(h.clone()),
+            HookKind::AfterToolCall(h) => hooks.after_tool_call.push(h.clone()),
+            HookKind::ShouldStop(h) => hooks.should_stop.push(h.clone()),
+            HookKind::BeforeCompact(h) => hooks.before_compact.push(h.clone()),
+            HookKind::TransformContext(h) => hooks.transform_context.push(h.clone()),
+            HookKind::PrepareNextTurn(h) => hooks.prepare_next_turn.push(h.clone()),
+        }
+    }
+}
+
+impl HookKind {
+    /// 返回 hook kind 的可读名称，用于诊断信息。
+    pub fn kind_name(&self) -> &'static str {
+        match self {
+            HookKind::BeforeTurn(_) => "BeforeTurn",
+            HookKind::AfterTurn(_) => "AfterTurn",
+            HookKind::BeforeRun(_) => "BeforeRun",
+            HookKind::AfterProviderResponse(_) => "AfterProviderResponse",
+            HookKind::BeforeProviderRequest(_) => "BeforeProviderRequest",
+            HookKind::BeforeToolCall(_) => "BeforeToolCall",
+            HookKind::AfterToolCall(_) => "AfterToolCall",
+            HookKind::ShouldStop(_) => "ShouldStop",
+            HookKind::BeforeCompact(_) => "BeforeCompact",
+            HookKind::TransformContext(_) => "TransformContext",
+            HookKind::PrepareNextTurn(_) => "PrepareNextTurn",
+        }
+    }
 }

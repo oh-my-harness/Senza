@@ -9,15 +9,23 @@
 
 use std::sync::Arc;
 
+use llm_harness_agent::{Plugin, Skill};
+use llm_harness_agent::ModelInfo;
+use llm_harness_loop::config::RetryConfig;
+use llm_harness_loop::final_answer::FinalAnswerMode;
 use llm_harness_runtime::builder::HarnessBuilder;
-use llm_harness_types::{ExecutionEnv, Tool, UnsupportedEnv};
+use llm_harness_types::{ExecutionEnv, StreamOptions, Tool, UnsupportedEnv};
 use pyo3::prelude::*;
 
 use crate::pyagent::runtime;
+use crate::pybudget::PyBudgetExceededHook;
+use crate::pyhooks::PyHookWrapper;
 use crate::pyharness::PyAgentHarness;
 use crate::pyharness::parse_thinking_level;
 use crate::pyplugin::PyPluginWrapper;
+use crate::pypricing::PyPricingProvider;
 use crate::pyprovider::PyProvider;
+use crate::pyskills::PySkill;
 use crate::pytool::PyToolWrapper;
 
 /// Python 侧的 `HarnessBuilder`。
@@ -143,6 +151,230 @@ impl PyHarnessBuilder {
         slf
     }
 
+    /// 注册一个 `ShouldStopHook`（无需包装在 Plugin 中）。
+    ///
+    /// 多次调用累积多个 hook——`CompositeShouldStopHook` 为全执行语义，
+    /// 注册顺序不影响正确性（每个 hook 都会运行）。
+    #[pyo3(text_signature = "($self, hook)")]
+    fn should_stop_hook<'a>(
+        mut slf: PyRefMut<'a, Self>,
+        hook: &Bound<'_, PyHookWrapper>,
+    ) -> PyResult<PyRefMut<'a, Self>> {
+        if let Some(b) = slf.builder.take() {
+            let h = hook.borrow().as_should_stop_hook()?;
+            slf.builder = Some(b.should_stop_hook(h));
+        }
+        Ok(slf)
+    }
+
+    /// 直接设置 hook 集合。push 语义：hooks 追加到 builder 现有 hooks。
+    ///
+    /// 列表中每个 `Hook` 按其 kind 分发到对应的 hook 向量。多次调用可
+    /// 组合来自不同来源的 hooks。
+    #[pyo3(text_signature = "($self, hooks_list)")]
+    fn hooks<'a>(
+        mut slf: PyRefMut<'a, Self>,
+        hooks_list: Vec<Bound<'_, PyHookWrapper>>,
+    ) -> PyRefMut<'a, Self> {
+        if let Some(b) = slf.builder.take() {
+            let mut harness_hooks = llm_harness_agent::HarnessHooks::none();
+            for h in &hooks_list {
+                h.borrow().push_into(&mut harness_hooks);
+            }
+            slf.builder = Some(b.hooks(harness_hooks));
+        }
+        slf
+    }
+
+    /// 设置 transient provider 错误的重试配置。
+    #[pyo3(text_signature = "($self, max_retries, base_delay_ms)")]
+    fn retry<'a>(
+        mut slf: PyRefMut<'a, Self>,
+        max_retries: u32,
+        base_delay_ms: u64,
+    ) -> PyRefMut<'a, Self> {
+        if let Some(b) = slf.builder.take() {
+            slf.builder = Some(b.retry(Some(RetryConfig::new(max_retries, base_delay_ms))));
+        }
+        slf
+    }
+
+    /// 设置模型元数据（context_window, max_tokens）。
+    #[pyo3(text_signature = "($self, context_window, max_tokens)")]
+    fn model_info<'a>(
+        mut slf: PyRefMut<'a, Self>,
+        context_window: u32,
+        max_tokens: u32,
+    ) -> PyRefMut<'a, Self> {
+        if let Some(b) = slf.builder.take() {
+            slf.builder = Some(b.model_info(Some(ModelInfo {
+                context_window,
+                max_tokens,
+            })));
+        }
+        slf
+    }
+
+    /// 设置 final-answer 分类模式。
+    ///
+    /// 接受: `"heuristic"`（默认，非工具终止消息视为最终答案）或
+    /// `"tool"`（要求模型调用 `final_answer` 工具）。
+    #[pyo3(text_signature = "($self, mode)")]
+    fn final_answer_mode<'a>(
+        mut slf: PyRefMut<'a, Self>,
+        mode: &str,
+    ) -> PyResult<PyRefMut<'a, Self>> {
+        let m = match mode {
+            "heuristic" => FinalAnswerMode::Heuristic,
+            "tool" => FinalAnswerMode::required_tool(),
+            other => {
+                return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                    "final_answer_mode must be 'heuristic' or 'tool', got '{other}'"
+                )));
+            }
+        };
+        if let Some(b) = slf.builder.take() {
+            slf.builder = Some(b.final_answer_mode(m));
+        }
+        Ok(slf)
+    }
+
+    /// 设置 LLM 请求的 stream options。
+    #[pyo3(text_signature = "($self, timeout_ms=None, max_retries=None)")]
+    #[pyo3(signature = (timeout_ms=None, max_retries=None))]
+    fn stream_options<'a>(
+        mut slf: PyRefMut<'a, Self>,
+        timeout_ms: Option<u64>,
+        max_retries: Option<u32>,
+    ) -> PyRefMut<'a, Self> {
+        if let Some(b) = slf.builder.take() {
+            slf.builder = Some(b.stream_options(Some(StreamOptions {
+                timeout_ms,
+                max_retries,
+                ..Default::default()
+            })));
+        }
+        slf
+    }
+
+    /// 设置 steer/follow-up 队列容量。`None` 重置为默认值（32）。
+    #[pyo3(text_signature = "($self, capacity=None)")]
+    #[pyo3(signature = (capacity=None))]
+    fn queue_capacity<'a>(
+        mut slf: PyRefMut<'a, Self>,
+        capacity: Option<usize>,
+    ) -> PyRefMut<'a, Self> {
+        if let Some(b) = slf.builder.take() {
+            slf.builder = Some(b.queue_capacity(capacity));
+        }
+        slf
+    }
+
+    /// 禁用 `SkillReadTool` 的自动注册。
+    ///
+    /// 默认情况下，当 skills 存在时 `build()` 会自动注册 `SkillReadTool`。
+    /// 调用此方法可选择退出。
+    #[pyo3(text_signature = "($self)")]
+    fn disable_skill_read_tool<'a>(mut slf: PyRefMut<'a, Self>) -> PyRefMut<'a, Self> {
+        if let Some(b) = slf.builder.take() {
+            slf.builder = Some(b.disable_skill_read_tool());
+        }
+        slf
+    }
+
+    /// 追加单个 skill。
+    ///
+    /// skill 须由 `load_skills()` 创建。多次调用累积多个 skill。
+    #[pyo3(text_signature = "($self, skill)")]
+    fn skill<'a>(
+        mut slf: PyRefMut<'a, Self>,
+        skill: &Bound<'_, PySkill>,
+    ) -> PyRefMut<'a, Self> {
+        if let Some(b) = slf.builder.take() {
+            let plugin = SingleSkillPlugin {
+                skill: skill.borrow().skill.clone(),
+            };
+            slf.builder = Some(b.install(&plugin));
+        }
+        slf
+    }
+
+    /// 追加多个 skill。
+    ///
+    /// `skills` 须由 `load_skills()` 创建。多次调用累积。
+    #[pyo3(text_signature = "($self, skills)")]
+    fn skills<'a>(
+        mut slf: PyRefMut<'a, Self>,
+        skills: Vec<Bound<'_, PySkill>>,
+    ) -> PyRefMut<'a, Self> {
+        if let Some(b) = slf.builder.take() {
+            let collected: Vec<Skill> = skills
+                .iter()
+                .map(|s| s.borrow().skill.clone())
+                .collect();
+            let plugin = MultiSkillPlugin { skills: collected };
+            slf.builder = Some(b.install(&plugin));
+        }
+        slf
+    }
+    /// 配置独立的 compaction 模型。
+    ///
+    /// 设置后，compaction 摘要使用独立 provider/model，
+    /// 而非主对话 client。`context_window` 和 `max_tokens`
+    /// 应反映 compaction 模型的真实参数。
+    #[pyo3(text_signature = "($self, model, context_window, max_tokens)")]
+    fn compaction_model<'a>(
+        mut slf: PyRefMut<'a, Self>,
+        model: &str,
+        context_window: u32,
+        max_tokens: u32,
+    ) -> PyRefMut<'a, Self> {
+        if let Some(b) = slf.builder.take() {
+            slf.builder = Some(b.compaction_model(
+                model,
+                ModelInfo {
+                    context_window,
+                    max_tokens,
+                },
+            ));
+        }
+        slf
+    }
+
+    /// 设置 pricing provider，用于成本计算。
+    ///
+    /// 设置后 builder 自动注入 `CostAccumulatorHook`，
+    /// `harness.usage()["total_cost"]` 才有 USD 值。
+    #[pyo3(text_signature = "($self, provider)")]
+    fn pricing<'a>(
+        mut slf: PyRefMut<'a, Self>,
+        provider: &Bound<'_, PyPricingProvider>,
+    ) -> PyRefMut<'a, Self> {
+        if let Some(b) = slf.builder.take() {
+            let p = provider.borrow().provider.clone();
+            slf.builder = Some(b.pricing(p));
+        }
+        slf
+    }
+    /// 配置预算上限和可选的超限 hook。
+    ///
+    /// - `limit` — 预算上限（USD）。
+    /// - `exceeded_hook=None` → surveillance 模式：只统计成本，不停。
+    /// - `exceeded_hook=Some(h)` → 超限时由 `h` 决定继续/停止。
+    #[pyo3(text_signature = "($self, limit, exceeded_hook=None)")]
+    #[pyo3(signature = (limit, exceeded_hook=None))]
+    fn budget<'a>(
+        mut slf: PyRefMut<'a, Self>,
+        limit: f64,
+        exceeded_hook: Option<&Bound<'_, PyBudgetExceededHook>>,
+    ) -> PyRefMut<'a, Self> {
+        if let Some(b) = slf.builder.take() {
+            let hook = exceeded_hook.map(|h| h.borrow().hook.clone());
+            slf.builder = Some(b.budget(limit, hook));
+        }
+        slf
+    }
+
     /// 返回 builder 状态摘要。
     fn __repr__(&self) -> String {
         match &self.builder {
@@ -169,5 +401,37 @@ impl PyHarnessBuilder {
             Ok(harness) => Py::new(py, PyAgentHarness::new(Arc::new(harness))),
             Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e.to_string())),
         }
+    }
+}
+
+// ── Skill plugin helpers ────────────────────────────────────────────────────
+
+/// 单 skill 插件——通过 `Plugin::register_skills` 注入一个 skill。
+struct SingleSkillPlugin {
+    skill: Skill,
+}
+
+impl Plugin for SingleSkillPlugin {
+    fn name(&self) -> &str {
+        "senza-single-skill"
+    }
+
+    fn register_skills(&self, skills: &mut Vec<Skill>) {
+        skills.push(self.skill.clone());
+    }
+}
+
+/// 多 skill 插件——通过 `Plugin::register_skills` 注入一组 skill。
+struct MultiSkillPlugin {
+    skills: Vec<Skill>,
+}
+
+impl Plugin for MultiSkillPlugin {
+    fn name(&self) -> &str {
+        "senza-multi-skill"
+    }
+
+    fn register_skills(&self, skills: &mut Vec<Skill>) {
+        skills.extend(self.skills.iter().cloned());
     }
 }
