@@ -1,77 +1,56 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Build the Senza wheel from the runtime repo.
+# Build the Senza wheel from this repo.
 #
-# The runtime crate's #[pymodule] is named `senza`, so the native extension
-# is directly importable as `import senza`. maturin reads pyproject.toml
-# from the Cargo.toml's directory, so we copy the Senza pyproject.toml
-# (with package name, metadata, and maturin features) into the runtime
-# crate directory before building.
+# Reads the runtime commit SHA from senza-pkg/runtime.lock, injects it
+# into Cargo.toml (replacing PLACEHOLDER), builds with maturin, then
+# restores Cargo.toml.
 #
 # Usage:
-#   ./scripts/build_wheel.sh                    # use local runtime checkout
-#   ./scripts/build_wheel.sh /path/to/runtime   # specify runtime path
-#   ./scripts/build_wheel.sh <git-rev>          # clone + checkout rev
+#   ./scripts/build_wheel.sh                  # production wheel (no test-utils)
+#   ./scripts/build_wheel.sh --test-utils     # dev wheel with test-utils feature
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-RUNTIME_DIR="${RUNTIME_DIR:-/data/leiqiaojie2/oh-my-harness/llm-harness-runtime}"
-PYTHON="${PYTHON:-python3.14}"
+PYTHON="${PYTHON:-python3}"
+EXTRA_FEATURES=""
+if [ "${1:-}" = "--test-utils" ]; then
+    EXTRA_FEATURES="test-utils"
+fi
 DEST="$REPO_ROOT/dist"
+LOCK_FILE="$REPO_ROOT/senza-pkg/runtime.lock"
+CARGO_TOML="$REPO_ROOT/Cargo.toml"
 
-mkdir -p "$DEST"
+SHA=$(cat "$LOCK_FILE")
+echo "==> Runtime pin: $SHA"
 
-# If arg is a directory, use it as runtime path
-if [ -n "${1:-}" ] && [ -d "$1" ]; then
-    RUNTIME_DIR="$1"
-elif [ -n "${1:-}" ]; then
-    # Arg is a git rev — clone fresh
-    RUNTIME_DIR="/tmp/runtime-build"
-    rm -rf "$RUNTIME_DIR"
-    git clone --depth 1 https://github.com/oh-my-harness/llm-harness-runtime.git "$RUNTIME_DIR"
-    cd "$RUNTIME_DIR"
-    git fetch --depth 1 origin "$1"
-    git checkout "$1"
-fi
-
-PY_CRATE_DIR="$RUNTIME_DIR/crates/llm-harness-py"
-
-if [ ! -f "$PY_CRATE_DIR/Cargo.toml" ]; then
-    echo "ERROR: Cargo.toml not found at $PY_CRATE_DIR/Cargo.toml"
-    exit 1
-fi
-
-echo "==> Senza repo:  $REPO_ROOT"
-echo "==> Runtime:     $RUNTIME_DIR"
-echo "==> Py crate:    $PY_CRATE_DIR"
-echo "==> Python:      $PYTHON ($($PYTHON --version 2>&1))"
-
-# Copy Senza pyproject.toml + senza-pkg/ (Python package with .pyi stubs)
-# into the runtime crate directory. maturin reads pyproject.toml from there.
-echo "==> Copying Senza packaging files into runtime crate..."
-cp "$REPO_ROOT/pyproject.toml" "$PY_CRATE_DIR/pyproject.toml"
-rm -rf "$PY_CRATE_DIR/senza-pkg"
-cp -r "$REPO_ROOT/senza-pkg" "$PY_CRATE_DIR/senza-pkg"
+# Inject SHA into Cargo.toml (cp backup, perl for cross-platform in-place edit)
+cp "$CARGO_TOML" "$CARGO_TOML.bak"
+trap 'mv "$CARGO_TOML.bak" "$CARGO_TOML" 2>/dev/null || true' EXIT
+perl -pi -e "s/PLACEHOLDER/$SHA/g" "$CARGO_TOML"
 
 export PYO3_PYTHON="$(command -v $PYTHON)"
 
-cd "$PY_CRATE_DIR"
-
+cd "$REPO_ROOT"
 echo "==> Building wheel..."
-maturin build --release
+if [ -n "$EXTRA_FEATURES" ]; then
+    "$PYTHON" -m maturin build --release --features "$EXTRA_FEATURES"
+else
+    "$PYTHON" -m maturin build --release
+fi
 
-WHEEL=$(ls "$RUNTIME_DIR/target/wheels/senza_sdk"*.whl "$RUNTIME_DIR/target/wheels/senza"*.whl 2>/dev/null | tail -1)
-echo "==> Built: $WHEEL"
 
+WHEEL=$(ls "$REPO_ROOT/target/wheels/senza_sdk"*.whl "$REPO_ROOT/target/wheels/senza"*.whl 2>/dev/null | tail -1)
+if [ -z "$WHEEL" ]; then
+    echo "ERROR: No wheel found in $REPO_ROOT/target/wheels/"
+    exit 1
+fi
+
+mkdir -p "$DEST"
 cp "$WHEEL" "$DEST/"
+echo "==> Built: $WHEEL"
 echo "==> Copied to: $DEST/$(basename $WHEEL)"
-
-# Clean up: restore runtime crate's original pyproject.toml
-git -C "$RUNTIME_DIR" checkout -- "$PY_CRATE_DIR/pyproject.toml" 2>/dev/null || true
-rm -rf "$PY_CRATE_DIR/senza-pkg"
-
 echo ""
 echo "==> Install with:"
 echo "    pip install $DEST/$(basename $WHEEL)"
-echo "    python -c 'import senza; print(senza.version())'"

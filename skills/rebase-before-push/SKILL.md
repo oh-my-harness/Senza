@@ -3,7 +3,7 @@ name: rebase-before-push
 description: |
   推送代码前先 rebase 到最新远端主线，避免 push 被 reject。
   当即将执行 git push、或刚执行完 git commit 准备推送时调用。
-  适用于 llm-harness-py-wheels（即 Senza）仓库。
+  适用于 Senza 仓库。
   触发词："推上去"、"push"、"提交并推送"、或 codex 即将运行 git push。
 ---
 
@@ -48,6 +48,6 @@ git push
 
 ## 仓库信息
 
-- 仓库：`llm-harness-py-wheels`（即将改名 `senza`）
-- 远端：`origin` → `https://github.com/oh-my-harness/llm-harness-py-wheels.git`
+- 仓库：`Senza`
+- 远端：`origin` → `https://github.com/oh-my-harness/Senza.git`
 - 主线分支：`main`

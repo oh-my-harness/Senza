@@ -18,7 +18,7 @@ description: >-
 
 # Senza Advanced — Sub-Agents, Hooks, Human-in-the-Loop
 
-> SDK: `import llm_harness_py as L`
+> SDK: `import senza as L`
 > Prerequisites: read `senza-agent` and `senza-workflow` skills first.
 
 ## Sub-Agent Spawning (7 LLM Tools)

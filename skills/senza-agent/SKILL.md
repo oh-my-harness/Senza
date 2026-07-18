@@ -1,7 +1,7 @@
 ---
 name: senza-agent
 description: >-
-  Build single-agent LLM applications with Senza (llm_harness_py PyO3 SDK).
+  Build single-agent LLM applications with Senza (senza PyO3 SDK).
   Use when the user wants to: (1) send a prompt to an LLM and get a response,
   (2) register tools for the LLM to call, (3) stream LLM output token-by-token,
   (4) set system prompts, (5) use OpenAI or Anthropic providers,
@@ -12,13 +12,13 @@ description: >-
 
 # Senza Agent — Single-Agent LLM Calls
 
-> SDK: `llm_harness_py` (PyO3, built from `llm-harness-runtime/crates/llm-harness-py`)
-> Import as: `import llm_harness_py as L` (or `import senza as L` after rename)
+> SDK: `senza` (PyO3, built from this repo's `src/`)
+> Import as: `import senza as L`
 
 ## Core Pattern
 
 ```python
-import llm_harness_py as L
+import senza as L
 
 # 1. Create provider
 provider = L.create_openai_provider(api_key="sk-...")
@@ -46,7 +46,7 @@ for e in events:
 
 | Function | Use case |
 |----------|----------|
-| `L.create_openai_provider(api_key, base_url=None, parse_reasoning_content=True, tolerant_keepalive=True)` | OpenAI, DeepSeek, local models |
+| `L.create_openai_provider(api_key, base_url=None, chat_path=None, thinking_scheme=None, parse_reasoning_content=True, tolerant_keepalive=True)` | OpenAI, DeepSeek, local models |
 | `L.create_anthropic_provider(api_key, base_url=None)` | Anthropic Claude |
 
 - `base_url`: omit or pass empty string for default endpoint.

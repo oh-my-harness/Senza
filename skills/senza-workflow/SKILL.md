@@ -13,12 +13,12 @@ description: >-
 
 # Senza Workflow — Multi-Step Orchestration
 
-> SDK: `import llm_harness_py as L`
+> SDK: `import senza as L`
 
 ## Core Pattern
 
 ```python
-import llm_harness_py as L
+import senza as L
 
 # 1. Define workflow as a dict
 workflow = {
