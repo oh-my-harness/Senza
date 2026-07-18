@@ -137,7 +137,7 @@ with tempfile.TemporaryDirectory() as store_dir:
 ### Provider
 
 ```python
-lh.create_openai_provider(api_key, base_url=None, parse_reasoning_content=True, tolerant_keepalive=True)
+lh.create_openai_provider(api_key, base_url=None, chat_path=None, thinking_scheme=None, parse_reasoning_content=True, tolerant_keepalive=True)
 lh.create_anthropic_provider(api_key, base_url=None)
 ```
 

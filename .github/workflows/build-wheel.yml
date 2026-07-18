@@ -5,11 +5,6 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
-    inputs:
-      runtime_rev:
-        description: "llm-harness-runtime git rev (commit SHA or tag)"
-        required: false
-        default: ""
 
 permissions:
   contents: write
@@ -36,32 +31,15 @@ jobs:
       - name: Install maturin
         run: pip install "maturin>=1.7"
 
-      - name: Determine runtime rev
+      - name: Read runtime pin
         id: rev
         run: |
-          if [ -n "${{ github.event.inputs.runtime_rev }}" ]; then
-            echo "rev=${{ github.event.inputs.runtime_rev }}" >> $GITHUB_OUTPUT
-          else
-            echo "rev=main" >> $GITHUB_OUTPUT
-          fi
+          SHA=$(cat senza-pkg/runtime.lock)
+          echo "rev=$SHA" >> $GITHUB_OUTPUT
+          echo "Pinned runtime SHA: $SHA"
 
-      - name: Checkout llm-harness-runtime
-        uses: actions/checkout@v4
-        with:
-          repository: oh-my-harness/llm-harness-runtime
-          token: ${{ secrets.RUNTIME_PAT }}
-          path: runtime-src
-          fetch-depth: 0
-
-      - name: Checkout specific rev
-        run: |
-          cd runtime-src
-          git checkout ${{ steps.rev.outputs.rev }}
-
-      - name: Copy Senza packaging files into runtime crate
-        run: |
-          cp pyproject.toml runtime-src/crates/llm-harness-py/pyproject.toml
-          cp -r senza-pkg runtime-src/crates/llm-harness-py/senza-pkg
+      - name: Inject rev into Cargo.toml
+        run: sed -i "s/PLACEHOLDER/${{ steps.rev.outputs.rev }}/g" Cargo.toml
 
       - name: Configure git credentials for private crate deps
         run: |
@@ -74,10 +52,9 @@ jobs:
           CARGO_EOF
 
       - name: Build wheel
-        working-directory: runtime-src/crates/llm-harness-py
         run: |
           maturin build --release
-          echo "WHEEL=$(find $GITHUB_WORKSPACE/runtime-src/target/wheels -name 'senza*.whl' | head -1)" >> $GITHUB_ENV
+          echo "WHEEL=$(find $GITHUB_WORKSPACE/target/wheels -name 'senza*.whl' | head -1)" >> $GITHUB_ENV
 
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4
@@ -89,6 +66,9 @@ jobs:
         run: |
           pip install ${{ env.WHEEL }}
           python -c "import senza; print('version:', senza.version()); print(repr(senza.HarnessBuilder('gpt-4o')))"
+
+      - name: Check stubs
+        run: python scripts/check_stubs.py
 
       - name: Copy wheel to dist
         run: |

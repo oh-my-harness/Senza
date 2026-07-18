@@ -2,3 +2,8 @@ sessions/
 dist/
 __pycache__/
 *.pyc
+docs/superpowers
+.cargo/config.toml
+target
+.venv/
+Cargo.lock

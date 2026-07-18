@@ -1,0 +1,502 @@
+//! PyO3 SDK 验证 crate。
+
+use std::sync::Arc;
+
+use llm_harness_runtime::workflow::executor::{HttpCallExecutor, HttpCallPolicy, ShellExecutor};
+use pyo3::prelude::*;
+
+pub mod event_stream;
+pub mod pyagent;
+pub mod pybuilder;
+pub mod pyeventstream;
+pub mod pyharness;
+pub mod pyhooks;
+pub mod pyplugin;
+pub mod pyprovider;
+pub mod pytool;
+pub mod pyworkflow;
+pub mod value_conv;
+
+/// PyO3 module entry point.
+#[pymodule]
+fn senza(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    let _ = tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::builder()
+                .with_default_directive(tracing::level_filters::LevelFilter::WARN.into())
+                .from_env_lossy(),
+        )
+        .try_init();
+    m.add_function(wrap_pyfunction!(version, m)?)?;
+    m.add_function(wrap_pyfunction!(to_json, m)?)?;
+    m.add_function(wrap_pyfunction!(from_json, m)?)?;
+    m.add_class::<pyagent::PyAgent>()?;
+    m.add_class::<event_stream::PyEventIterator>()?;
+    m.add_class::<pyworkflow::PyJudgeWrapper>()?;
+    m.add_class::<pyworkflow::PyCompositeJudge>()?;
+    m.add_class::<pyworkflow::PyExecutorWrapper>()?;
+    m.add_class::<pyhooks::PyHookWrapper>()?;
+    m.add_class::<pytool::PyToolWrapper>()?;
+    m.add_class::<pytool::PyToolContext>()?;
+    m.add_function(wrap_pyfunction!(create_sync_tool, m)?)?;
+    m.add_function(wrap_pyfunction!(create_tool, m)?)?;
+    m.add_function(wrap_pyfunction!(create_judge, m)?)?;
+    m.add_function(wrap_pyfunction!(create_composite_judge, m)?)?;
+    m.add_function(wrap_pyfunction!(create_executor, m)?)?;
+    m.add_function(wrap_pyfunction!(create_shell_executor, m)?)?;
+    m.add_function(wrap_pyfunction!(create_http_executor, m)?)?;
+    m.add_function(wrap_pyfunction!(create_before_turn_hook, m)?)?;
+    m.add_class::<pyeventstream::PyEventStreamHandle>()?;
+    m.add_class::<pyeventstream::PyWaitForExternalEventTool>()?;
+    m.add_function(wrap_pyfunction!(pyeventstream::create_event_channel, m)?)?;
+    m.add_function(wrap_pyfunction!(create_after_turn_hook, m)?)?;
+    m.add_function(wrap_pyfunction!(create_before_run_hook, m)?)?;
+    m.add_function(wrap_pyfunction!(create_after_provider_response_hook, m)?)?;
+    m.add_function(wrap_pyfunction!(create_before_provider_request_hook, m)?)?;
+    m.add_function(wrap_pyfunction!(create_before_tool_call_hook, m)?)?;
+    m.add_function(wrap_pyfunction!(create_after_tool_call_hook, m)?)?;
+    m.add_function(wrap_pyfunction!(create_should_stop_hook, m)?)?;
+    m.add_function(wrap_pyfunction!(create_before_compact_hook, m)?)?;
+    m.add_function(wrap_pyfunction!(create_transform_context_hook, m)?)?;
+    m.add_function(wrap_pyfunction!(create_prepare_next_turn_hook, m)?)?;
+    m.add_class::<pybuilder::PyHarnessBuilder>()?;
+    m.add_class::<pyplugin::PyPluginWrapper>()?;
+    m.add_function(wrap_pyfunction!(create_plugin, m)?)?;
+    m.add_class::<pyprovider::PyProvider>()?;
+    m.add_function(wrap_pyfunction!(pyprovider::create_openai_provider, m)?)?;
+    m.add_function(wrap_pyfunction!(pyprovider::create_anthropic_provider, m)?)?;
+    m.add_class::<pyharness::PyAgentHarness>()?;
+    m.add_class::<pyharness::PyHarnessEventIterator>()?;
+    m.add_class::<pyworkflow::PyWorkflowEngine>()?;
+    m.add_class::<pyworkflow::PyWorkflowEventIterator>()?;
+    Ok(())
+}
+
+/// Return the SDK version string.
+#[pyfunction]
+fn version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
+}
+
+/// Convert a Python object to a JSON string.
+#[pyfunction]
+fn to_json(obj: &Bound<'_, PyAny>) -> PyResult<String> {
+    let value = crate::value_conv::pyobject_to_value(obj)?;
+    Ok(value.to_string())
+}
+
+/// Parse a JSON string into a Python object.
+#[pyfunction]
+fn from_json(py: Python<'_>, json_str: &str) -> PyResult<Py<PyAny>> {
+    let value: serde_json::Value = serde_json::from_str(json_str)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+    crate::value_conv::value_to_pyobject(py, &value)
+}
+
+/// 从 Python callable 创建一个同步 `Tool`。
+///
+/// 此函数是 `create_tool` 的别名——`create_tool` 已自动检测 `async def`
+/// 回调并正确处理。保留此名称以简化从旧 API 的迁移。
+#[pyfunction]
+fn create_sync_tool<'py>(
+    py: Python<'py>,
+    name: &str,
+    description: &str,
+    parameters_schema: &str,
+    callback: Py<PyAny>,
+) -> PyResult<Bound<'py, pytool::PyToolWrapper>> {
+    create_tool(py, name, description, parameters_schema, callback)
+}
+
+/// 从 Python callable 创建一个 `Tool`（统一入口，支持 sync 与 async 回调）。
+///
+/// 若 `callback` 是 `async def`，其 coroutine 将在 `spawn_blocking` 线程上
+/// 通过 `asyncio.run()` 执行——`select()` 内部释放 GIL，无需独立事件循环线程。
+#[pyfunction]
+#[pyo3(text_signature = "(name, description, parameters_schema, callback)")]
+fn create_tool<'py>(
+    py: Python<'py>,
+    name: &str,
+    description: &str,
+    parameters_schema: &str,
+    callback: Py<PyAny>,
+) -> PyResult<Bound<'py, pytool::PyToolWrapper>> {
+    let schema: serde_json::Value = serde_json::from_str(parameters_schema)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+    let tool = pytool::PyTool::new(name.to_string(), description.to_string(), schema, callback);
+    let wrapper = pytool::PyToolWrapper {
+        tool: Arc::new(tool),
+    };
+    Py::new(py, wrapper).map(|p| p.into_bound(py))
+}
+
+/// 从 Python callable 创建一个 `StepTransitionJudge`。
+///
+/// callback 签名：`callback(ctx: dict) -> str`
+/// 返回值编码：`"to:<step_id>"`, `"retry"`, `"fail:<reason>"`, `"abort:<reason>"`
+#[pyfunction]
+fn create_judge<'py>(
+    py: Python<'py>,
+    callback: Py<PyAny>,
+) -> PyResult<Bound<'py, pyworkflow::PyJudgeWrapper>> {
+    let judge = pyworkflow::PyJudge::new(callback);
+    let wrapper = pyworkflow::PyJudgeWrapper {
+        judge: Arc::new(judge)
+            as Arc<dyn llm_harness_runtime::workflow::judge::StepTransitionJudge>,
+    };
+    Py::new(py, wrapper).map(|p| p.into_bound(py))
+}
+
+/// 创建一个 CompositeJudge，支持按节点注册独立路由函数。
+///
+/// 用法：
+/// ```python
+/// judge = senza.create_composite_judge()
+/// judge.on("step1", lambda ctx: "to:step2")
+/// judge.on("step2", lambda ctx: "abort:done" if ctx["output"] else "retry")
+/// judge.fallback(lambda ctx: "abort:done")  # 可选
+/// engine = senza.WorkflowEngine(workflow, provider, model, judge)
+/// ```
+///
+/// 未注册 `.on()` 的 step 会依次尝试：用户 fallback → 声明式 Expr 边 → Abort。
+/// 如果 workflow 有 Expr 条件边，引擎会自动注入 EdgeConditionJudge 作为 fallback。
+#[pyfunction]
+fn create_composite_judge<'py>(
+    py: Python<'py>,
+) -> PyResult<Bound<'py, pyworkflow::PyCompositeJudge>> {
+    Py::new(py, pyworkflow::PyCompositeJudge::new()).map(|p| p.into_bound(py))
+}
+
+/// 从 Python callable 创建一个 `StepExecutor`。
+///
+/// callback 签名：`callback(ctx: dict) -> dict`
+/// 返回 dict 须含 `"output"` (str)，可选 `"structured"` (dict)。
+#[pyfunction]
+fn create_executor<'py>(
+    py: Python<'py>,
+    callback: Py<PyAny>,
+) -> PyResult<Bound<'py, pyworkflow::PyExecutorWrapper>> {
+    let executor = pyworkflow::PyExecutor::new(callback);
+    let wrapper = pyworkflow::PyExecutorWrapper {
+        executor: Arc::new(executor),
+    };
+    Py::new(py, wrapper).map(|p| p.into_bound(py))
+}
+
+/// Create a ShellExecutor with a command allowlist.
+///
+/// `commands` is a list of allowed command names (e.g. ["echo", "python"]).
+/// `default_timeout_ms` overrides the default timeout per shell call (default 30000).
+/// `max_output_bytes` caps stdout/stderr capture (default 1 MiB).
+///
+/// The executor is NOT registered by default — register with
+/// `engine.with_executor("shell", shell_executor)`.
+#[pyfunction]
+#[pyo3(signature = (commands, default_timeout_ms=30000, max_output_bytes=1048576))]
+fn create_shell_executor<'py>(
+    py: Python<'py>,
+    commands: Vec<String>,
+    default_timeout_ms: u64,
+    max_output_bytes: usize,
+) -> PyResult<Bound<'py, pyworkflow::PyExecutorWrapper>> {
+    let exec = ShellExecutor::new(commands)
+        .with_default_timeout(std::time::Duration::from_millis(default_timeout_ms))
+        .with_max_output_bytes(max_output_bytes);
+    let wrapper = pyworkflow::PyExecutorWrapper {
+        executor: Arc::new(exec),
+    };
+    Py::new(py, wrapper).map(|p| p.into_bound(py))
+}
+
+/// Create an HttpCallExecutor with a host allowlist policy.
+///
+/// `allowed_hosts` is a list of allowed hostnames (e.g. ["api.example.com"]).
+/// `allowed_schemes` defaults to ["https"]; pass ["http", "https"] to allow HTTP.
+/// `max_timeout_ms` caps request duration (default 30000).
+/// `allow_private_ip_targets` defaults to False (blocks localhost/10.x/172.16.x/192.168.x).
+#[pyfunction]
+#[pyo3(signature = (allowed_hosts, allowed_schemes=None, max_timeout_ms=30000, allow_private_ip_targets=false))]
+fn create_http_executor<'py>(
+    py: Python<'py>,
+    allowed_hosts: Vec<String>,
+    allowed_schemes: Option<Vec<String>>,
+    max_timeout_ms: u64,
+    allow_private_ip_targets: bool,
+) -> PyResult<Bound<'py, pyworkflow::PyExecutorWrapper>> {
+    let mut policy = HttpCallPolicy::new(allowed_hosts)
+        .with_max_timeout(std::time::Duration::from_millis(max_timeout_ms));
+    if let Some(schemes) = allowed_schemes {
+        policy = policy.with_allowed_schemes(schemes);
+    }
+    policy = policy.allow_private_ip_targets(allow_private_ip_targets);
+    let exec = HttpCallExecutor::new(policy);
+    let wrapper = pyworkflow::PyExecutorWrapper {
+        executor: Arc::new(exec),
+    };
+    Py::new(py, wrapper).map(|p| p.into_bound(py))
+}
+
+/// 从 Python callable 创建一个 `BeforeTurnHook`。
+///
+/// callback 签名：`callback(ctx: dict) -> None`
+/// 若 callback 为 `async def`，其 coroutine 将在 `spawn_blocking` 线程上
+/// 通过 `asyncio.run()` 执行。
+#[pyfunction]
+fn create_before_turn_hook<'py>(
+    py: Python<'py>,
+    callback: Py<PyAny>,
+) -> PyResult<Bound<'py, pyhooks::PyHookWrapper>> {
+    let hook = pyhooks::PyBeforeTurnHook::new(callback);
+    Py::new(
+        py,
+        pyhooks::PyHookWrapper {
+            kind: pyhooks::HookKind::BeforeTurn(Arc::new(hook)),
+        },
+    )
+    .map(|p| p.into_bound(py))
+}
+
+/// 从 Python callable 创建一个 `AfterTurnHook`。
+///
+/// callback 签名：`callback(ctx: dict) -> None`
+/// 若 callback 为 `async def`，其 coroutine 将在 `spawn_blocking` 线程上
+/// 通过 `asyncio.run()` 执行。
+#[pyfunction]
+fn create_after_turn_hook<'py>(
+    py: Python<'py>,
+    callback: Py<PyAny>,
+) -> PyResult<Bound<'py, pyhooks::PyHookWrapper>> {
+    let hook = pyhooks::PyAfterTurnHook::new(callback);
+    Py::new(
+        py,
+        pyhooks::PyHookWrapper {
+            kind: pyhooks::HookKind::AfterTurn(Arc::new(hook)),
+        },
+    )
+    .map(|p| p.into_bound(py))
+}
+
+/// 从 Python callable 创建一个 `BeforeRunHook`。
+///
+/// callback 签名：`callback(ctx: dict) -> dict | None`
+/// 返回 dict 可含 `additional_messages`（list[dict]）和 `system_prompt`（str | None）。
+/// 若 callback 为 `async def`，其 coroutine 将在 `spawn_blocking` 线程上
+/// 通过 `asyncio.run()` 执行。
+#[pyfunction]
+fn create_before_run_hook<'py>(
+    py: Python<'py>,
+    callback: Py<PyAny>,
+) -> PyResult<Bound<'py, pyhooks::PyHookWrapper>> {
+    let hook = pyhooks::PyBeforeRunHook::new(callback);
+    Py::new(
+        py,
+        pyhooks::PyHookWrapper {
+            kind: pyhooks::HookKind::BeforeRun(Arc::new(hook)),
+        },
+    )
+    .map(|p| p.into_bound(py))
+}
+
+/// 从 Python callable 创建一个 `AfterProviderResponseHook`。
+///
+/// callback 签名：`callback(info: dict) -> None`
+/// 若 callback 为 `async def`，其 coroutine 将在 `spawn_blocking` 线程上
+/// 通过 `asyncio.run()` 执行。
+#[pyfunction]
+fn create_after_provider_response_hook<'py>(
+    py: Python<'py>,
+    callback: Py<PyAny>,
+) -> PyResult<Bound<'py, pyhooks::PyHookWrapper>> {
+    let hook = pyhooks::PyAfterProviderResponseHook::new(callback);
+    Py::new(
+        py,
+        pyhooks::PyHookWrapper {
+            kind: pyhooks::HookKind::AfterProviderResponse(Arc::new(hook)),
+        },
+    )
+    .map(|p| p.into_bound(py))
+}
+
+/// 从 Python callable 创建一个 `BeforeProviderRequestHook`。
+///
+/// callback 签名：`callback(opts: dict) -> None`
+/// 若 callback 为 `async def`，其 coroutine 将在 `spawn_blocking` 线程上
+/// 通过 `asyncio.run()` 执行。
+#[pyfunction]
+fn create_before_provider_request_hook<'py>(
+    py: Python<'py>,
+    callback: Py<PyAny>,
+) -> PyResult<Bound<'py, pyhooks::PyHookWrapper>> {
+    let hook = pyhooks::PyBeforeProviderRequestHook::new(callback);
+    Py::new(
+        py,
+        pyhooks::PyHookWrapper {
+            kind: pyhooks::HookKind::BeforeProviderRequest(Arc::new(hook)),
+        },
+    )
+    .map(|p| p.into_bound(py))
+}
+
+/// 从 Python callable 创建一个 `BeforeToolCallHook`。
+///
+/// callback 签名：`callback(ctx: dict) -> str | dict`
+/// 返回 `"allow"` 或 `{"action": "modify", "args": ...}` 或 `{"action": "deny", "result": ...}`。
+/// 若 callback 为 `async def`，其 coroutine 将在 `spawn_blocking` 线程上
+/// 通过 `asyncio.run()` 执行。
+#[pyfunction]
+fn create_before_tool_call_hook<'py>(
+    py: Python<'py>,
+    callback: Py<PyAny>,
+) -> PyResult<Bound<'py, pyhooks::PyHookWrapper>> {
+    let hook = pyhooks::PyBeforeToolCallHook::new(callback);
+    Py::new(
+        py,
+        pyhooks::PyHookWrapper {
+            kind: pyhooks::HookKind::BeforeToolCall(Arc::new(hook)),
+        },
+    )
+    .map(|p| p.into_bound(py))
+}
+
+/// 从 Python callable 创建一个 `AfterToolCallHook`。
+///
+/// callback 签名：`callback(ctx: dict) -> str | dict`
+/// 返回 `"passthrough"` 或 `{"action": "patch", "content": ...}`。
+/// 若 callback 为 `async def`，其 coroutine 将在 `spawn_blocking` 线程上
+/// 通过 `asyncio.run()` 执行。
+#[pyfunction]
+fn create_after_tool_call_hook<'py>(
+    py: Python<'py>,
+    callback: Py<PyAny>,
+) -> PyResult<Bound<'py, pyhooks::PyHookWrapper>> {
+    let hook = pyhooks::PyAfterToolCallHook::new(callback);
+    Py::new(
+        py,
+        pyhooks::PyHookWrapper {
+            kind: pyhooks::HookKind::AfterToolCall(Arc::new(hook)),
+        },
+    )
+    .map(|p| p.into_bound(py))
+}
+
+/// 从 Python callable 创建一个 `ShouldStopHook`。
+///
+/// callback 签名：`callback(ctx: dict) -> bool`
+/// 返回 `True` 停止 loop，`False` 强制再跑一轮。
+/// 若 callback 为 `async def`，其 coroutine 将在 `spawn_blocking` 线程上
+/// 通过 `asyncio.run()` 执行。
+#[pyfunction]
+fn create_should_stop_hook<'py>(
+    py: Python<'py>,
+    callback: Py<PyAny>,
+) -> PyResult<Bound<'py, pyhooks::PyHookWrapper>> {
+    let hook = pyhooks::PyShouldStopHook::new(callback);
+    Py::new(
+        py,
+        pyhooks::PyHookWrapper {
+            kind: pyhooks::HookKind::ShouldStop(Arc::new(hook)),
+        },
+    )
+    .map(|p| p.into_bound(py))
+}
+
+/// 从 Python callable 创建一个 `BeforeCompactHook`。
+///
+/// callback 签名：`callback(ctx: dict) -> str | dict`
+/// 返回 `"proceed"` / `"skip"` / `"compact"` 或 `{"action": "override", "summary": <msg_dict>, "first_kept_entry": <str>}`。
+/// `first_kept_entry` 必须是 `ctx["entry_ids"]` 中的一个值。
+/// 可选字段 `tokens_before` (默认 `ctx["estimated_tokens"]`) 和 `tokens_after` (默认 0)。
+/// 若 callback 为 `async def`，其 coroutine 将在 `spawn_blocking` 线程上
+/// 通过 `asyncio.run()` 执行。
+#[pyfunction]
+fn create_before_compact_hook<'py>(
+    py: Python<'py>,
+    callback: Py<PyAny>,
+) -> PyResult<Bound<'py, pyhooks::PyHookWrapper>> {
+    let hook = pyhooks::PyBeforeCompactHook::new(callback);
+    Py::new(
+        py,
+        pyhooks::PyHookWrapper {
+            kind: pyhooks::HookKind::BeforeCompact(Arc::new(hook)),
+        },
+    )
+    .map(|p| p.into_bound(py))
+}
+
+/// 从 Python callable 创建一个 `TransformContextHook`。
+///
+/// callback 签名：`callback(ctx: dict) -> dict`
+/// 返回 dict 须含 `system_prompt`（str | None）和 `messages`（list[dict]）。
+/// 若 callback 为 `async def`，其 coroutine 将在 `spawn_blocking` 线程上
+/// 通过 `asyncio.run()` 执行。
+#[pyfunction]
+fn create_transform_context_hook<'py>(
+    py: Python<'py>,
+    callback: Py<PyAny>,
+) -> PyResult<Bound<'py, pyhooks::PyHookWrapper>> {
+    let hook = pyhooks::PyTransformContextHook::new(callback);
+    Py::new(
+        py,
+        pyhooks::PyHookWrapper {
+            kind: pyhooks::HookKind::TransformContext(Arc::new(hook)),
+        },
+    )
+    .map(|p| p.into_bound(py))
+}
+
+/// 从 Python callable 创建一个 `PrepareNextTurnHook`。
+///
+/// callback 签名：`callback(ctx: dict) -> dict | None`
+/// 返回 dict 可含 `model`（str）、`thinking_level`（str）、`temperature`（float | None）、
+/// `active_tools`（list[str]）。返回 `None` 表示沿用当前值。
+/// 若 callback 为 `async def`，其 coroutine 将在 `spawn_blocking` 线程上
+/// 通过 `asyncio.run()` 执行。
+#[pyfunction]
+fn create_prepare_next_turn_hook<'py>(
+    py: Python<'py>,
+    callback: Py<PyAny>,
+) -> PyResult<Bound<'py, pyhooks::PyHookWrapper>> {
+    let hook = pyhooks::PyPrepareNextTurnHook::new(callback);
+    Py::new(
+        py,
+        pyhooks::PyHookWrapper {
+            kind: pyhooks::HookKind::PrepareNextTurn(Arc::new(hook)),
+        },
+    )
+    .map(|p| p.into_bound(py))
+}
+
+/// 从 Python 侧配置创建一个 `Plugin`。
+///
+/// `tools` 为 `create_tool` 创建的 Tool 列表；
+/// `hooks` 为 `create_*_hook` 创建的 Hook 列表。
+#[pyfunction]
+#[pyo3(signature = (name, tools=None, hooks=None))]
+fn create_plugin<'py>(
+    py: Python<'py>,
+    name: &str,
+    tools: Option<Vec<Bound<'py, pytool::PyToolWrapper>>>,
+    hooks: Option<Vec<Bound<'py, pyhooks::PyHookWrapper>>>,
+) -> PyResult<Bound<'py, pyplugin::PyPluginWrapper>> {
+    let mut tool_vec: Vec<Arc<dyn llm_harness_types::Tool>> = vec![];
+    if let Some(tools) = tools {
+        for t in tools {
+            let borrowed = t.try_borrow()?;
+            tool_vec.push(borrowed.tool.clone());
+        }
+    }
+    let mut hook_vec: Vec<pyhooks::HookKind> = vec![];
+    if let Some(hooks) = hooks {
+        for h in hooks {
+            let borrowed = h.try_borrow()?;
+            hook_vec.push(borrowed.kind.clone());
+        }
+    }
+    let plugin = Arc::new(pyplugin::PyPlugin::new(
+        name.to_string(),
+        tool_vec,
+        hook_vec,
+    ));
+    Py::new(py, pyplugin::PyPluginWrapper { plugin }).map(|p| p.into_bound(py))
+}

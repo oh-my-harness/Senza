@@ -95,7 +95,7 @@ PyO3 module 名：`senza`（已从 `llm_harness_py` 改名）。
 
 ### 已有
 
-- **PyO3 crate** (`crates/llm-harness-py/`)：11 个源文件，~1300 行 Rust 代码
+- **PyO3 crate** (`src/`)：11 个源文件，~1300 行 Rust 代码
   - `lib.rs` — module 入口，注册所有 class + function
   - `pyharness.rs` — `AgentHarness` Python 类
   - `pyworkflow.rs` — `WorkflowEngine` Python 类 + judge/executor wrapper
@@ -109,8 +109,8 @@ PyO3 module 名：`senza`（已从 `llm_harness_py` 改名）。
   - `event_stream.rs` — Agent 事件转 Python dict
   - `value_conv.rs` — Python ↔ serde_json::Value 转换
 - **maturin 构建**：`pyproject.toml` 配置 `abi3-py39`，一个 wheel 覆盖 Python 3.9–3.14+
-- **测试**：16 个测试文件（Rust 集成测试 + Python 测试）
-- eda-agent-py 仍引用旧的 `llm_harness_sdk`（cffi），**需要迁移到 PyO3 SDK**
+- **测试**：22 个测试文件（3 个 Rust 集成测试 + 19 个 Python 测试）
+- **stub 验证**：`scripts/check_stubs.py` 对比 `.pyi` 与运行时 `__text_signature__`，112 个签名零偏差
 
 ### 缺口（2026-07-14 更新）
 
@@ -138,38 +138,59 @@ PyO3 module 名：`senza`（已从 `llm_harness_py` 改名）。
 ## 3. Senza 仓库结构
 
 ```
-senza/                           # 本仓库 (github.com/oh-my-harness/llm-harness-py-wheels → 改名)
+senza/                           # 本仓库 (github.com/oh-my-harness/Senza)
+├── Cargo.toml                   # 独立 crate，git 依赖 runtime（rev=PLACEHOLDER）
+├── build.rs                     # PyO3 build script
+├── pyproject.toml               # package name = "senza-sdk"，maturin 后端
 ├── README.md                    # 面向用户：pip install senza-sdk + 快速上手
+├── DEVELOPMENT.md               # 面向贡献者：dev_setup.sh + 本地测试
 ├── SENZA_DESIGN.md              # 本文档
-├── pyproject.toml               # package name = "senza"
-├── ci/
-│   └── build_wheel.sh           # clone runtime → maturin build → publish
+├── src/                         # ← PyO3 crate 源码（从 runtime 仓库迁入）
+│   ├── lib.rs                   # module 入口
+│   ├── pyharness.rs             # AgentHarness
+│   ├── pyworkflow.rs            # WorkflowEngine
+│   ├── pybuilder.rs             # HarnessBuilder
+│   ├── pytool.rs                # create_tool / Tool trait
+│   ├── pyprovider.rs            # provider 创建
+│   ├── pyhooks.rs               # 11 种 hook
+│   ├── pyplugin.rs              # create_plugin
+│   ├── pyeventstream.rs         # 事件通道
+│   ├── pyagent.rs               # Agent 类（test-utils only）
+│   ├── event_stream.rs          # 事件转 dict
+│   └── value_conv.rs            # Python ↔ Value 转换
+├── senza-pkg/
+│   ├── runtime.lock             # runtime crate 固定 SHA（唯一真实来源）
+│   └── senza/
+│       └── __init__.pyi         # 手写 .pyi type stubs（112 签名）
+├── tests/                       # 3 个 .rs 集成测试 + 19 个 .py 测试
+├── scripts/
+│   ├── build_wheel.sh           # 注入 SHA → maturin build → 恢复 Cargo.toml
+│   ├── dev_setup.sh             # 建 venv → 安装 maturin/pytest → 构建+安装 wheel
+│   └── check_stubs.py           # .pyi vs 运行时 __text_signature__ 验证
 ├── .github/
 │   └── workflows/
-│       └── build.yml            # tag push → maturin build → wheel → publish
-├── skills/                     # ← AI 助手过程性知识包（3 个 SKILL.md）
+│       └── build-wheel.yml      # CI：注入 rev → maturin build → stub 检查 → PyPI
+├── skills/                      # AI 助手过程性知识包（3 个 SKILL.md）
 │   ├── senza-agent/
 │   ├── senza-workflow/
 │   └── senza-advanced/
 └── examples/
-    ├── agent/                   # ← agent 层示例（用 HarnessBuilder + AgentHarness）
+    ├── agent/                   # agent 层示例（HarnessBuilder + AgentHarness）
     │   ├── 01_basic_prompt.py
     │   ├── 02_tool_calling.py
-    │   ├── 03_system_prompt.py
-    │   ├── 04_streaming.py
-    │   └── 05_multi_harness.py
-    └── runtime/                 # ← runtime 层示例（用 WorkflowEngine）
+    │   ├── 03_streaming.py
+    │   ├── 04_dynamic_config.py
+    │   └── 05_multi_provider.py
+    └── runtime/                 # runtime 层示例（WorkflowEngine）
         ├── 01_linear_workflow.py
         ├── 02_conditional_routing.py
         ├── 03_executor_steps.py
-        ├── 04_shared_context.py
-        ├── 05_crash_recovery.py
-        ├── 06_sub_agent.py
-        ├── 07_mixed_llm_executor.py
-        ├── 08_event_streaming.py
-        ├── 09_pause_resume.py
-        ├── 10_llm_step.py
-        └── 11_human_in_the_loop.py
+        ├── 04_crash_recovery.py
+        ├── 05_pause_cancel.py
+        ├── 06_human_in_the_loop.py
+        ├── 07_shell_executor.py
+        ├── 08_http_executor.py
+        └── 09_composite_judge.py
 ```
 
 ### 与旧 cffi 架构的区别
@@ -182,7 +203,7 @@ senza/                           # 本仓库 (github.com/oh-my-harness/llm-harne
 | Wheel | 平台特定 + Python 版本特定 | `abi3-py39` 一个 wheel 覆盖 3.9–3.14+ |
 | 异步 | 不支持 async callback | 支持 `async def` tool/hook/judge/executor |
 | Type safety | cdef 手动维护，易错 | 编译时 Rust trait 约束 |
-| Senza 仓库职责 | 打包 `.so` + `binding.py` + 高层封装 | 仅打包 wheel + examples（SDK 源码在 runtime 仓库） |
+| Senza 仓库职责 | 打包 `.so` + `binding.py` + 高层封装 | PyO3 crate 源码 + wheel 构建 + examples + skills |
 
 ### 包名
 
@@ -601,18 +622,18 @@ engine.with_executor("transform", executor)  # 需重新注册 executor
 engine.run()  # 从断点续跑
 ```
 
-#### 8.2 Docstrings
+#### 8.2 ~~Docstrings~~ 已完成
 
-PyO3 的 Rust doc comments 不自动导出为 Python `__doc__`。需要：
-- 在 `#[pymethods]` 上加 `#[pyo3(text_signature = "...")]`（部分已有）
-- 手动设置 `__doc__` 或用 `#[doc = "..."]` 属性
+PyO3 0.29 自动导出 Rust doc comments 为 Python `__doc__`，全部 `#[pymethods]` 已覆盖。`#[pyo3(text_signature = "...")]` 已用于所有公开方法，`.pyi` stubs 与运行时 `__text_signature__` 通过 `check_stubs.py` 自动验证（112 签名零偏差）。
 
-#### 8.3 自动化 wheel 构建 CI
+#### 8.3 ~~自动化 wheel 构建 CI~~ 已完成
 
-需要新建 `.github/workflows/build.yml`：
+`.github/workflows/build-wheel.yml` 已建：
 1. push tag `v*` → trigger
-2. `maturin build --release`（指定 `PYO3_PYTHON`）
-3. 上传 wheel 到 GitHub Release + PyPI
+2. 从 `senza-pkg/runtime.lock` 读取 SHA，注入 `Cargo.toml`
+3. `maturin build --release`（用 `RUNTIME_PAT` 拉私有 runtime git 依赖）
+4. 运行 `check_stubs.py` 验证
+5. 上传 wheel 到 GitHub Release + PyPI
 
 ### P1：应做
 
@@ -730,16 +751,16 @@ cp -r skills/senza-* ~/.codex/skills/
 
 ## 11. 执行顺序
 
-1. **建 Senza 仓库结构** — pyproject.toml、目录骨架、skills/
-2. **补 `restore()` PyO3 包装** — P0 缺口，examples 依赖
-3. **补 docstrings** — `#[pyo3(text_signature = "...")]` + `__doc__`
-4. **写 examples** — agent 01 → runtime 01 → 逐步到 06
-5. **写 skills** — senza-agent → senza-workflow → senza-advanced
-6. **CI wheel 构建** — maturin build → GitHub Release → PyPI
-7. **补 WorkflowEngine 缺失方法** — state/get_var/pause/resume/cancel
-8. **eda-agent-py 迁移** — 从 `llm_harness_sdk` 改为 `senza`
-9. **补 examples** — 08-11
-10. **发布 v0.1.0** — PyPI `pip install senza-sdk`
+1. ✅ **建 Senza 仓库结构** — pyproject.toml、目录骨架、skills/
+2. ✅ **补 `restore()` PyO3 包装** — P0 缺口已补
+3. ✅ **补 docstrings** — PyO3 0.29 自动导出 + `check_stubs.py` 验证
+4. ✅ **写 examples** — agent 01-05 + runtime 01-09
+5. ✅ **写 skills** — senza-agent / senza-workflow / senza-advanced
+6. ✅ **CI wheel 构建** — `.github/workflows/build-wheel.yml`
+7. ✅ **补 WorkflowEngine 缺失方法** — state/get_var/pause/resume/cancel/checkpoint/total_cost
+8. ✅ **eda-agent-py 迁移** — 已改为 `import senza`
+9. ✅ **Py crate 迁入 Senza 仓库** — 从 runtime 仓库 `crates/llm-harness-py/` 迁入，git 依赖 + rev pin
+10. ⬜ **发布 v0.1.0** — PyPI `pip install senza-sdk`
 
 ---
 
@@ -749,7 +770,7 @@ cp -r skills/senza-* ~/.codex/skills/
 github.com/oh-my-harness/llm-harness-py-wheels  →  github.com/oh-my-harness/senza
 ```
 
-PyPI 包名同步注册为 `senza`。
+PyPI 包名同步注册为 `senza-sdk`（import 名 `senza`）。
 
 ---
 
@@ -773,30 +794,22 @@ abi3 wheel 不依赖特定 CPython 版本，只需构建一次。
 ## 14. 构建方式
 
 ```bash
-# 前提：安装 maturin + 指定 Python
-export PYO3_PYTHON=/usr/local/bin/python3.14
+# 本地开发（一键搞定：建 venv → 安装依赖 → 注入 SHA → 构建 → 安装）
+./scripts/dev_setup.sh
 
-# 在 runtime 仓库的 llm-harness-py crate 目录下
-cd crates/llm-harness-py
-maturin build --release
-
-# 产物：target/wheels/senza-<version>-cp39-abi3-<platform>.whl
-
-# 本地开发安装
-maturin develop --release
-
-# 发布到 PyPI
-maturin publish --release
+# 手动构建 wheel
+./scripts/build_wheel.sh
+# 产物：dist/senza_sdk-<version>-cp39-abi3-<platform>.whl
 ```
 
-Senza 仓库的 CI 脚本：
+构建流程（`scripts/build_wheel.sh`）：
+1. 从 `senza-pkg/runtime.lock` 读取固定 SHA
+2. `perl` 原地替换 `Cargo.toml` 中的 `PLACEHOLDER` → SHA（备份 `.bak`）
+3. `maturin build --release`（cargo 从 GitHub 拉取 runtime git 依赖）
+4. `trap ... EXIT` 恢复 `Cargo.toml`（即使构建失败也恢复）
 
-```bash
-# ci/build_wheel.sh
-RUNTIME_REV=<pinned commit>
-git clone --depth 1 https://github.com/oh-my-harness/llm-harness-runtime.git /tmp/runtime
-cd /tmp/runtime/crates/llm-harness-py
-export PYO3_PYTHON=python3.12
-maturin build --release
-cp target/wheels/*.whl $SEZA_REPO/dist/
-```
+CI（`.github/workflows/build-wheel.yml`）：
+- 从 `senza-pkg/runtime.lock` 读取 SHA，`sed` 注入 `Cargo.toml`
+- 用 `RUNTIME_PAT` secret 配置 git 认证（拉私有 runtime 仓库）
+- `maturin build --release` → `check_stubs.py` 验证 → twine 发布到 PyPI
+- runner 是临时的，无需恢复 `Cargo.toml`
