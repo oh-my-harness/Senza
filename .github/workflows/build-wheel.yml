@@ -11,10 +11,18 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ["3.12"]
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-14
+            target: aarch64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout Senza repo
@@ -23,25 +31,28 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.12"
 
       - name: Install maturin
         run: pip install "maturin>=1.7"
 
       - name: Read runtime pin
         id: rev
+        shell: bash
         run: |
           SHA=$(cat senza-pkg/runtime.lock)
           echo "rev=$SHA" >> $GITHUB_OUTPUT
           echo "Pinned runtime SHA: $SHA"
 
       - name: Inject rev into Cargo.toml
+        shell: bash
         run: sed -i "s/PLACEHOLDER/${{ steps.rev.outputs.rev }}/g" Cargo.toml
 
       - name: Configure git credentials for private crate deps
+        shell: bash
         run: |
           git config --global credential.helper store
           echo "https://x-access-token:${{ secrets.RUNTIME_PAT }}@github.com" > ~/.git-credentials
@@ -52,6 +63,7 @@ jobs:
           CARGO_EOF
 
       - name: Build wheel
+        shell: bash
         run: |
           maturin build --release
           echo "WHEEL=$(find $GITHUB_WORKSPACE/target/wheels -name 'senza*.whl' | head -1)" >> $GITHUB_ENV
@@ -59,31 +71,54 @@ jobs:
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4
         with:
-          name: senza-wheel
+          name: senza-wheel-${{ matrix.target }}
           path: ${{ env.WHEEL }}
 
       - name: Install wheel and verify import
+        shell: bash
         run: |
           pip install ${{ env.WHEEL }}
           python -c "import senza; print('version:', senza.version()); print(repr(senza.HarnessBuilder('gpt-4o')))"
 
       - name: Check stubs
+        shell: bash
         run: python scripts/check_stubs.py
 
       - name: Copy wheel to dist
+        shell: bash
         run: |
           mkdir -p dist
           cp ${{ env.WHEEL }} dist/
 
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.target }}
+          path: dist/*.whl
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Download all wheels
+        uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*
+          merge-multiple: true
+          path: dist
+
+      - name: List wheels
+        run: ls -la dist/
+
       - name: Release
-        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*.whl
           generate_release_notes: true
 
       - name: Publish to PyPI
-        if: startsWith(github.ref, 'refs/tags/v')
         run: |
           pip install twine
           twine upload dist/*.whl
