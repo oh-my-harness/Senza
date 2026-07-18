@@ -328,6 +328,18 @@ class WorkflowEngine:
         session_base_dir: str = ...,
     ) -> WorkflowEngine: ...
 
+    @classmethod
+    def restore_from_step(
+        cls,
+        task_store_dir: str,
+        task_id: str,
+        step: str,
+        provider: Provider,
+        model: str,
+        judge: Judge | CompositeJudge,
+        session_base_dir: str = ...,
+    ) -> WorkflowEngine: ...
+
     # ── Registration (chainable) ──
     def with_tool(self, tool: Tool) -> WorkflowEngine: ...
     def with_external_tool(self, tool: WaitForExternalEventTool) -> WorkflowEngine: ...

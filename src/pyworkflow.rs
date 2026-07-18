@@ -912,6 +912,61 @@ impl PyWorkflowEngine {
         })
     }
 
+    /// 从指定 step 恢复并重跑（`--restart-from` 场景）。classmethod。
+    ///
+    /// 加载 task store 中 task_id 的完整上下文，截断 step_history 中目标 step
+    /// 及其下游所有 record，将 current_step 指向 step，status 置 Paused。
+    /// 调用方随后调 `run()` 从 step 重新执行。
+    ///
+    /// `step` 必须在 step_history 中（该步曾执行过），否则返回错误。
+    /// context 黑板不回滚，保留当前累积值。
+    #[allow(clippy::too_many_arguments)]
+    #[classmethod]
+    #[pyo3(signature = (task_store_dir, task_id, step, provider, model, judge, session_base_dir="sessions"))]
+    fn restore_from_step(
+        _cls: &Bound<'_, pyo3::types::PyType>,
+        py: Python<'_>,
+        task_store_dir: &str,
+        task_id: &str,
+        step: &str,
+        provider: &Bound<'_, PyProvider>,
+        model: &str,
+        judge: &Bound<'_, PyAny>,
+        session_base_dir: &str,
+    ) -> PyResult<Self> {
+        let store = Arc::new(JsonlTaskStore::new(PathBuf::from(task_store_dir)));
+        let task_id = TaskId(task_id.to_string());
+        let client = provider.borrow().client.clone();
+        let empty_workflow = Workflow {
+            entry_step: String::new(),
+            steps: vec![],
+            edges: vec![],
+        };
+        let judge_arc: Arc<dyn StepTransitionJudge> = extract_judge(py, judge, &empty_workflow)?;
+
+        let config = WorkflowEngineConfig {
+            client,
+            model: model.to_string(),
+            env_factory: Arc::new(UnsupportedEnvFactory),
+            session_factory: Arc::new(JsonlSessionFactory),
+            session_base_dir: std::path::PathBuf::from(session_base_dir),
+            customize_builder: None,
+        };
+
+        let rt = runtime(py);
+        let engine = py
+            .detach(move || {
+                rt.block_on(async move {
+                    WorkflowEngine::restore_from_step(store, task_id, step.to_string(), config, judge_arc).await
+                })
+            })
+            .map_err(workflow_error_to_pyerr)?;
+
+        Ok(Self {
+            engine: Some(Arc::new(engine)),
+        })
+    }
+
     /// 注册一个额外 `Tool`。返回 self 以支持链式调用。
     fn with_tool<'a>(
         mut slf: PyRefMut<'a, Self>,

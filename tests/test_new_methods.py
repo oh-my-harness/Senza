@@ -94,6 +94,16 @@ def test_workflow_engine_restore_classmethod():
             lh.WorkflowEngine.restore(d, "task-nonexistent", _make_provider(), "gpt-4o", _make_judge())
 
 
+def test_workflow_engine_restore_from_step_classmethod():
+    """restore_from_step() is accessible as a classmethod."""
+    assert hasattr(lh.WorkflowEngine, "restore_from_step")
+    # Calling restore_from_step on a non-existent task should raise
+    with tempfile.TemporaryDirectory() as d:
+        with pytest.raises((KeyError, RuntimeError)):
+            lh.WorkflowEngine.restore_from_step(
+                d, "task-nonexistent", "step1", _make_provider(), "gpt-4o", _make_judge()
+            )
+
 def test_workflow_engine_chained_build():
     """Full builder chain with all new methods."""
     with tempfile.TemporaryDirectory() as d:
