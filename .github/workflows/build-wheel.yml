@@ -30,14 +30,14 @@ jobs:
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Install maturin
-        run: pip install "maturin>=1.7"
       - name: Install Rust components
         run: rustup component add rustfmt clippy
 
@@ -70,10 +70,28 @@ jobs:
         run: cargo clippy --all-targets -- -D warnings
 
       - name: Build wheel
+        id: build
+        uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          args: --release
+          target: ${{ matrix.target }}
+          manylinux: 2_28
+          # The manylinux container is a clean environment, so cargo
+          # cannot reuse the host git credentials configured above.
+          # before-script-linux re-creates them inside the container so
+          # cargo can fetch the private runtime crate.
+          before-script-linux: |
+            git config --global credential.helper store
+            printf 'https://x-access-token:%s@github.com\n' "${{ secrets.RUNTIME_PAT }}" > ~/.git-credentials
+            mkdir -p ~/.cargo
+            printf '[net]\ngit-fetch-with-cli = true\n' > ~/.cargo/config.toml
+
+      - name: Locate wheel
         shell: bash
         run: |
-          maturin build --release
-          echo "WHEEL=target/wheels/$(ls target/wheels/ | grep '^senza.*\.whl$' | head -1)" >> $GITHUB_ENV
+          echo "WHEEL=$(ls target/wheels/senza*.whl | head -1)" >> $GITHUB_ENV
+          test -n "$WHEEL"
 
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4
