@@ -35,9 +35,9 @@ export PYO3_PYTHON="$(command -v $PYTHON)"
 cd "$REPO_ROOT"
 echo "==> Building wheel..."
 if [ -n "$EXTRA_FEATURES" ]; then
-    "$PYTHON" -m maturin build --release --features "$EXTRA_FEATURES"
+    "$PYTHON" -m maturin build --release --features "extension-module,$EXTRA_FEATURES"
 else
-    "$PYTHON" -m maturin build --release
+    "$PYTHON" -m maturin build --release --features extension-module
 fi
 
 

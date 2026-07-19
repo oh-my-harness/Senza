@@ -19,6 +19,15 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 LOCK_FILE="$REPO_ROOT/senza-pkg/runtime.lock"
 CARGO_TOML="$REPO_ROOT/Cargo.toml"
 
+# PyO3 needs PYO3_PYTHON to locate libpython for linking test binaries
+# (cargo test links against libpython; without this, symbols like
+# _PyBaseObject_Type are undefined). Prefer the venv python if present.
+if [ -x "$REPO_ROOT/.venv/bin/python" ]; then
+    export PYO3_PYTHON="$REPO_ROOT/.venv/bin/python"
+elif [ -z "${PYO3_PYTHON:-}" ]; then
+    export PYO3_PYTHON="$(command -v python3)"
+fi
+
 if [ ! -f "$LOCK_FILE" ]; then
     echo "ERROR: $LOCK_FILE not found" >&2
     exit 1
@@ -56,7 +65,27 @@ for stage in "${STAGES[@]}"; do
         test)
             echo ""
             echo "==> cargo test ..."
-            cargo test --all
+            # PyO3 extension-module tests need a Python with a linkable
+            # libpython (framework or shared). The default feature set
+            # keeps `extension-module` off so the test binary links
+            # against libpython; `auto-initialize` (dev-dep) boots the
+            # interpreter. If the venv Python lacks a linkable library
+            # (e.g. Xcode-bundled Python3.framework with no lib), cargo
+            # test fails at link time with "library 'python3.x' not
+            # found". That is an environment issue, not a code defect;
+            # install python.org or Homebrew Python and recreate the
+            # venv to fix. Capture output to keep the failure concise.
+            if ! cargo test --all 2>&1 | tee /tmp/senza_cargo_test.log; then
+                if grep -q "library 'python" /tmp/senza_cargo_test.log; then
+                    echo "" >&2
+                    echo "ERROR: cargo test failed to link libpython." >&2
+                    echo "       The venv Python ($PYO3_PYTHON) lacks a linkable shared library." >&2
+                    echo "       Install python.org or Homebrew Python, recreate .venv, and retry." >&2
+                    echo "       (pytest tests/ covers functional verification in the meantime.)" >&2
+                    exit 1
+                fi
+                exit 1
+            fi
             ;;
         *)
             echo "ERROR: unknown stage '$stage' (use: fmt, clippy, test)" >&2
