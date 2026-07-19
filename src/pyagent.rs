@@ -7,8 +7,10 @@
 //!   `runtime.block_on()` 运行 agent loop。
 //! - 事件流从 Rust broadcast 到 Python 消费者的链路（通过 `subscribe`）。
 
+#[cfg(feature = "test-utils")]
 use std::sync::Arc;
 
+#[cfg(feature = "test-utils")]
 use llm_harness_agent::Agent;
 #[cfg(feature = "test-utils")]
 use llm_harness_agent::AgentOptions;
@@ -35,10 +37,17 @@ pub(crate) fn runtime(py: Python<'_>) -> &'static tokio::runtime::Runtime {
 }
 
 /// Python 侧的 `Agent` 包装类。
+///
+/// 整个类（struct + impl + pymethods）门控在 `test-utils` 后：
+/// `#[new]` 用 `MockLlmClient`（test-only），生产 wheel 不应暴露。
+/// 门控 `#[pyclass]` 本身（而非仅 `add_class`）确保 stub 生成器
+/// 在生产构建中看不到 `Agent` 类，避免 .pyi 与运行时漂移。
+#[cfg(feature = "test-utils")]
 #[pyclass(name = "Agent")]
 pub struct PyAgent {
     agent: Arc<Agent>,
 }
+#[cfg(feature = "test-utils")]
 impl PyAgent {
     /// 从已有 `Arc<Agent>` 构造 `PyAgent`（供 builder 等内部路径使用）。
     pub fn from_agent(agent: Arc<Agent>) -> Self {
@@ -46,6 +55,7 @@ impl PyAgent {
     }
 }
 
+#[cfg(feature = "test-utils")]
 #[pymethods]
 impl PyAgent {
     /// 创建一个使用 `MockLlmClient` 的 Agent（仅供测试）。

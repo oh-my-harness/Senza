@@ -41,7 +41,14 @@ SKIP_DUNDER = {"__init__", "__enter__", "__exit__"}
 
 # Methods that only exist when built with --features test-utils.
 # The .pyi (production stubs) correctly omits them.
-SKIP_RUNTIME_ONLY = {"Tool.drive"}
+SKIP_RUNTIME_ONLY = {
+    "Tool.drive",
+    "Agent.prompt",
+    "Agent.events",
+    "Agent.abort",
+    "Agent.message_count",
+    "Agent.phase",
+}
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PYI_PATH = REPO_ROOT / "senza-pkg" / "senza" / "__init__.pyi"
