@@ -38,6 +38,8 @@ jobs:
 
       - name: Install maturin
         run: pip install "maturin>=1.7"
+      - name: Install Rust components
+        run: rustup component add rustfmt clippy
 
       - name: Read runtime pin
         id: rev
@@ -50,6 +52,12 @@ jobs:
       - name: Inject rev into Cargo.toml
         shell: bash
         run: perl -pi -e "s/PLACEHOLDER/${{ steps.rev.outputs.rev }}/g" Cargo.toml
+
+      - name: cargo fmt --check
+        run: cargo fmt --check
+
+      - name: cargo clippy
+        run: cargo clippy --all-targets -- -D warnings
 
       - name: Configure git credentials for private crate deps
         shell: bash

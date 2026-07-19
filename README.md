@@ -272,7 +272,6 @@ lh.load_skills(path)  # 扫描目录下的 SKILL.md，返回 list[Skill]
 ```
 
 ---
-
 ## 示例
 
 见 [`examples/`](examples/) 目录：
@@ -297,3 +296,7 @@ python examples/runtime/01_linear_workflow.py
 ## 设计文档
 
 见 [`SENZA_DESIGN.md`](SENZA_DESIGN.md) — 完整架构、缺口分析、路线图。
+
+## 开发
+
+开发 Senza 本身见 [DEVELOPMENT.md](DEVELOPMENT.md)——涵盖本地搭建、测试（`./scripts/cargo_checks.sh` 一键跑 fmt+clippy+cargo test+pytest）、发布流程、CI 行为。下游项目想本地改 Senza 源码：用下游项目的 `scripts/install-senza-dev.sh`（editable 安装 `../Senza`）。
