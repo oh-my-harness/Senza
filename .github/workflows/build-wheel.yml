@@ -90,8 +90,10 @@ jobs:
       - name: Locate wheel
         shell: bash
         run: |
-          echo "WHEEL=$(ls target/wheels/senza*.whl | head -1)" >> $GITHUB_ENV
-          test -n "$WHEEL"
+          # Use a bash array to avoid pipefail + `ls | head` SIGPIPE trap
+          wheels=(target/wheels/senza*.whl)
+          [ -e "${wheels[0]}" ] || { echo "No wheel found in target/wheels/"; ls -la target/wheels/; exit 1; }
+          echo "WHEEL=${wheels[0]}" >> $GITHUB_ENV
 
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4
