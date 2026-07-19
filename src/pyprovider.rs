@@ -78,18 +78,26 @@ pub fn create_openai_provider(
 /// 创建 Anthropic provider。
 ///
 /// `base_url` 为空时使用默认 `https://api.anthropic.com`。
+/// `messages_path` 指定 messages API 路径（默认 `/v1/messages`），
+/// 用于 Anthropic 兼容代理（Azure、AWS Bedrock、自建网关等）。
 #[pyfunction]
-#[pyo3(signature = (api_key, base_url=None))]
+#[pyo3(signature = (api_key, base_url=None, messages_path=None))]
 pub fn create_anthropic_provider(
     py: Python<'_>,
     api_key: &str,
     base_url: Option<&str>,
+    messages_path: Option<&str>,
 ) -> PyResult<Py<PyProvider>> {
     let mut builder = AnthropicProvider::builder(api_key);
     if let Some(url) = base_url
         && !url.is_empty()
     {
         builder = builder.base_url(url);
+    }
+    if let Some(path) = messages_path
+        && !path.is_empty()
+    {
+        builder = builder.messages_path(path);
     }
     let client: Arc<dyn LlmClient> = Arc::new(builder.build());
     Py::new(py, PyProvider { client })

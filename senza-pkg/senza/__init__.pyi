@@ -27,6 +27,7 @@ def create_openai_provider(
 def create_anthropic_provider(
     api_key: str,
     base_url: Optional[str] = ...,
+    messages_path: Optional[str] = ...,
 ) -> Provider: ...
 
 # ── Pricing ─────────────────────────────────────────────────────────────────
