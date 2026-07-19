@@ -53,12 +53,6 @@ jobs:
         shell: bash
         run: perl -pi -e "s/PLACEHOLDER/${{ steps.rev.outputs.rev }}/g" Cargo.toml
 
-      - name: cargo fmt --check
-        run: cargo fmt --check
-
-      - name: cargo clippy
-        run: cargo clippy --all-targets -- -D warnings
-
       - name: Configure git credentials for private crate deps
         shell: bash
         run: |
@@ -69,6 +63,11 @@ jobs:
           [net]
           git-fetch-with-cli = true
           CARGO_EOF
+      - name: cargo fmt --check
+        run: cargo fmt --check
+
+      - name: cargo clippy
+        run: cargo clippy --all-targets -- -D warnings
 
       - name: Build wheel
         shell: bash
