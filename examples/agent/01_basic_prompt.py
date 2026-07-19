@@ -21,12 +21,12 @@ import senza as lh
 
 def main():
     api_key = os.environ.get("OPENAI_API_KEY", "sk-demo-key")
-    base_url = os.environ.get("OPENAI_BASE_URL") or None
+    base_url = os.environ.get("OPENAI_API_BASE") or None
 
     provider = lh.create_openai_provider(api_key=api_key, base_url=base_url)
 
     harness = (
-        lh.HarnessBuilder("gpt-4o")
+        lh.HarnessBuilder(os.environ.get("SENZA_MODEL", "gpt-4o"))
         .provider("gpt-*", provider)
         .system_prompt("You are a concise, helpful assistant.")
         .max_tokens(512)

@@ -37,7 +37,7 @@ def main():
         return "abort:done"
 
     judge_obj = lh.create_judge(judge)
-    engine = lh.WorkflowEngine(workflow, provider, "gpt-4o", judge_obj)
+    engine = lh.WorkflowEngine(workflow, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), judge_obj)
 
     print(f"Task ID: {engine.task_id()}")
     print(f"Initial state: {engine.state()}")

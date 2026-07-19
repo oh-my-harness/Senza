@@ -22,7 +22,7 @@ def main():
 
     # Register both providers — model name determines routing
     harness = (
-        lh.HarnessBuilder("gpt-4o")
+        lh.HarnessBuilder(os.environ.get("SENZA_MODEL", "gpt-4o"))
         .provider("gpt-*", openai_provider)
         .provider("claude-*", anthropic_provider)
         .system_prompt("You are a helpful assistant.")

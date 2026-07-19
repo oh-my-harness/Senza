@@ -34,6 +34,9 @@
 # 设置 API key
 export OPENAI_API_KEY=sk-...
 
+# 可选：覆盖默认模型（默认 gpt-4o）
+# export SENZA_MODEL=gpt-4o-mini
+
 # 从本目录运行
 python agent/01_basic_prompt.py
 python runtime/01_linear_workflow.py

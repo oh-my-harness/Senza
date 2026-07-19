@@ -36,7 +36,7 @@ def main():
     }
 
     judge = lh.create_judge(lambda ctx: "to:step2" if ctx.get("step_id") == "step1" else "abort:done")
-    engine = lh.WorkflowEngine(workflow, provider, "gpt-4o", judge)
+    engine = lh.WorkflowEngine(workflow, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), judge)
 
     print(f"Task ID: {engine.task_id()}")
     print(f"Initial state: {engine.state()}")

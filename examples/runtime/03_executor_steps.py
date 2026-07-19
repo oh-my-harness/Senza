@@ -6,9 +6,8 @@ Demonstrates:
   - Shared context variables between steps
 
 Run:
-  python 03_executor_steps.py
+  OPENAI_API_KEY=sk-... python 03_executor_steps.py
 """
-import json
 import os
 import sys
 
@@ -31,17 +30,25 @@ def main():
     }
 
     def double_executor(ctx):
-        output = ctx.get("output", "0")
+        # Executor callbacks receive the previous step's output under
+        # the "prev_output" key (see PyExecutor::execute in pyworkflow.rs),
+        # NOT "output".
+        output = ctx.get("prev_output") or "0"
         try:
             num = int(output.strip())
-        except ValueError:
+        except (ValueError, AttributeError):
             num = 0
         result = num * 2
         return {"output": str(result), "structured": {"original": num, "doubled": result}}
 
-    judge = lh.create_judge(lambda ctx: "abort:done")
+    def judge(ctx):
+        # Route generate -> process, then finish after process runs.
+        if ctx["step_id"] == "generate":
+            return "to:process"
+        return "abort:done"
+
     engine = (
-        lh.WorkflowEngine(workflow, provider, "gpt-4o", judge)
+        lh.WorkflowEngine(workflow, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), lh.create_judge(judge))
         .with_executor("double_it", lh.create_executor(double_executor))
     )
 

@@ -56,7 +56,7 @@ def main():
     env = lh.create_os_env(working_dir=".")
 
     engine = (
-        lh.WorkflowEngine(workflow, provider, "gpt-4o", judge, env=env)
+        lh.WorkflowEngine(workflow, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), judge, env=env)
         .with_executor("shell", lh.create_shell_executor(ALLOWED_COMMANDS))
     )
 

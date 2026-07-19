@@ -23,7 +23,7 @@ def main():
     provider = lh.create_openai_provider(api_key=api_key)
 
     harness = (
-        lh.HarnessBuilder("gpt-4o")
+        lh.HarnessBuilder(os.environ.get("SENZA_MODEL", "gpt-4o"))
         .provider("gpt-*", provider)
         .system_prompt("You are a creative writer.")
         .max_tokens(256)

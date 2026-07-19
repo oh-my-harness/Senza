@@ -38,7 +38,7 @@ def main():
     )
 
     harness = (
-        lh.HarnessBuilder("gpt-4o")
+        lh.HarnessBuilder(os.environ.get("SENZA_MODEL", "gpt-4o"))
         .provider("gpt-*", provider)
         .system_prompt("You are a weather assistant. Use the get_weather tool to answer.")
         .tool(weather_tool)

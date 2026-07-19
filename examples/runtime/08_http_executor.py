@@ -46,7 +46,7 @@ def main():
 
     judge = lh.create_judge(lambda ctx: "abort:done")
     engine = (
-        lh.WorkflowEngine(workflow, provider, "gpt-4o", judge)
+        lh.WorkflowEngine(workflow, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), judge)
         .with_executor("http", http_exec)
     )
 
