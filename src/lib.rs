@@ -36,6 +36,12 @@ fn senza(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(version, m)?)?;
     m.add_function(wrap_pyfunction!(to_json, m)?)?;
     m.add_function(wrap_pyfunction!(from_json, m)?)?;
+    // `PyAgent`'s `#[new]` uses `MockLlmClient` (test-only). Gating the
+    // class registration behind `test-utils` keeps it out of production
+    // wheels, where it would be visible via `dir(senza)` yet raise
+    // `TypeError: cannot create 'Agent' instances`. Production callers
+    // use `HarnessBuilder` → `AgentHarness` instead.
+    #[cfg(feature = "test-utils")]
     m.add_class::<pyagent::PyAgent>()?;
     m.add_class::<event_stream::PyEventIterator>()?;
     m.add_class::<pyworkflow::PyJudgeWrapper>()?;
