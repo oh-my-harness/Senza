@@ -14,6 +14,11 @@
 | `06_hooks.py` | 11 个生命周期 hook（观察 + `before_tool_call`/`should_stop` 决策） |
 | `07_rules.py` | Rules 规则引擎：4 种 predicate + 审批 hook |
 | `08_budget_pricing.py` | `pricing` 定价表 + `budget` 预算超限停止 |
+| `09_skills.py` | `load_skills` 加载 SKILL.md + 自动注册 `skill_read` 工具 |
+| `10_plugins.py` | `create_plugin` 打包 tools+hooks，agent 层 + workflow 层 `with_step_plugin` |
+| `11_steering.py` | 多轮对话：`steer`/`follow_up`/`next_turn`/`continue_run` + 队列管理 + 上下文管理器 |
+| `12_session_branch.py` | 会话树：`fork_branch`/`navigate_tree`/`list_branches`/`generate_branch_summary` |
+| `13_anthropic_standalone.py` | Anthropic provider 独立示例 + `version`/`to_json`/`from_json` 工具函数 |
 
 ## Runtime 层（`runtime/`）
 
@@ -30,6 +35,7 @@
 | `07_shell_executor.py` | Python callback executor + 命令白名单 |
 | `08_http_executor.py` | `create_http_executor` + httpbin.org 测试 |
 | `09_composite_judge.py` | `create_composite_judge` 按节点路由 + 声明式边 fallback |
+| `10_hooks_retries.py` | `with_hooks` + `with_max_retries` + `restore_from_step` 按步恢复 |
 
 ## 运行
 
@@ -39,6 +45,10 @@ export OPENAI_API_KEY=sk-...
 
 # 可选：覆盖默认模型（默认 gpt-4o）
 # export SENZA_MODEL=gpt-4o-mini
+
+# Anthropic 示例使用 Claude 模型：
+# export ANTHROPIC_API_KEY=sk-ant-...
+# export SENZA_MODEL=claude-sonnet-4-20250514
 
 # 从本目录运行
 python agent/01_basic_prompt.py
