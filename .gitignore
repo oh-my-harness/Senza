@@ -6,5 +6,4 @@ docs/superpowers
 .cargo/config.toml
 target
 .venv/
-Cargo.lock
 *.so
