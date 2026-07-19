@@ -58,44 +58,18 @@ impl PyJudge {
 impl StepTransitionJudge for PyJudge {
     fn decide<'a>(&'a self, ctx: &StepCtx<'a>) -> BoxFuture<'a, Transition> {
         let callback = Arc::clone(&self.callback);
-        // 在进入 spawn_blocking 前提取 owned 数据，避免跨线程借用
         let step_id = ctx.current_step.id().to_string();
         let structured = ctx.last_result.structured.clone();
         let output = ctx.last_result.output.clone();
         let step_count = ctx.step_history.len();
         let retry_count = count_consecutive_retries(ctx.step_history, ctx.current_step.id());
+        let tool_calls_count = ctx.last_result.tool_calls_count;
 
         Box::pin(async move {
-            let result = tokio::task::spawn_blocking(move || {
-                Python::attach(|py| {
-                    let cb = callback.bind(py);
-                    let dict = PyDict::new(py);
-                    dict.set_item("step_id", &step_id)?;
-                    dict.set_item("output", &output)?;
-                    dict.set_item("step_count", step_count)?;
-                    dict.set_item("retry_count", retry_count)?;
-                    if let Some(s) = &structured {
-                        dict.set_item("structured", value_to_pyobject(py, s)?)?;
-                    } else {
-                        dict.set_item("structured", py.None())?;
-                    }
-
-                    let raw = cb.call1((dict,))?;
-                    let transition_str: String = raw.extract()?;
-                    Ok::<_, PyErr>(transition_str)
-                })
-            })
-            .await;
-
-            match result {
-                Ok(Ok(s)) => parse_transition(&s),
-                Ok(Err(e)) => Transition::Abort {
-                    reason: format!("judge callback error: {e}"),
-                },
-                Err(e) => Transition::Abort {
-                    reason: format!("judge join failed: {e}"),
-                },
-            }
+            call_python_judge(
+                &callback, &step_id, &output, &structured,
+                step_count, retry_count, tool_calls_count,
+            ).await
         })
     }
 
@@ -295,8 +269,10 @@ impl StepTransitionJudge for PyCompositeJudgeInner {
             let output = ctx.last_result.output.clone();
             let step_count = ctx.step_history.len();
             let retry_count = count_consecutive_retries(ctx.step_history, ctx.current_step.id());
+            let tool_calls_count = ctx.last_result.tool_calls_count;
             return Box::pin(async move {
-                call_python_judge(&cb, &step_id, &output, &structured, step_count, retry_count)
+                call_python_judge(&cb, &step_id, &output, &structured,
+                    step_count, retry_count, tool_calls_count)
                     .await
             });
         }
@@ -307,8 +283,10 @@ impl StepTransitionJudge for PyCompositeJudgeInner {
             let output = ctx.last_result.output.clone();
             let step_count = ctx.step_history.len();
             let retry_count = count_consecutive_retries(ctx.step_history, ctx.current_step.id());
+            let tool_calls_count = ctx.last_result.tool_calls_count;
             return Box::pin(async move {
-                call_python_judge(&cb, &step_id, &output, &structured, step_count, retry_count)
+                call_python_judge(&cb, &step_id, &output, &structured,
+                    step_count, retry_count, tool_calls_count)
                     .await
             });
         }
@@ -387,6 +365,7 @@ async fn call_python_judge(
     structured: &Option<Value>,
     step_count: usize,
     retry_count: usize,
+    tool_calls_count: u32,
 ) -> Transition {
     let cb = Arc::clone(callback);
     let structured = structured.clone();
@@ -401,6 +380,7 @@ async fn call_python_judge(
             dict.set_item("output", &output)?;
             dict.set_item("step_count", step_count)?;
             dict.set_item("retry_count", retry_count)?;
+            dict.set_item("tool_calls_count", tool_calls_count)?;
             if let Some(s) = &structured {
                 dict.set_item("structured", value_to_pyobject(py, s)?)?;
             } else {
