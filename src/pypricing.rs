@@ -15,7 +15,9 @@ use pyo3::types::PyDict;
 /// 缺失的字段默认为 0.0（允许只提供 input/output 的简化定价表）。
 fn dict_to_token_price(d: &Bound<'_, PyDict>) -> PyResult<TokenPrice> {
     fn get_f64(d: &Bound<'_, PyDict>, key: &str) -> PyResult<f64> {
-        Ok(d.get_item(key)?.and_then(|v| v.extract::<f64>().ok()).unwrap_or(0.0))
+        Ok(d.get_item(key)?
+            .and_then(|v| v.extract::<f64>().ok())
+            .unwrap_or(0.0))
     }
     Ok(TokenPrice {
         input_per_mtok: get_f64(d, "input_per_mtok")?,
@@ -45,23 +47,17 @@ struct CallbackPricingProvider {
 
 impl PricingProvider for CallbackPricingProvider {
     fn price_for(&self, model: &str, provider: &str) -> Option<TokenPrice> {
-        Python::attach(|py| {
-            match self.callback.bind(py).call1((model, provider)) {
-                Ok(result) => {
-                    if result.is_none() {
-                        return None;
-                    }
-                    let dict = result.cast::<PyDict>().ok()?;
-                    dict_to_token_price(dict).ok()
+        Python::attach(|py| match self.callback.bind(py).call1((model, provider)) {
+            Ok(result) => {
+                if result.is_none() {
+                    return None;
                 }
-                Err(e) => {
-                    tracing::warn!(
-                        "pricing callback for model '{}' failed: {}",
-                        model,
-                        e
-                    );
-                    None
-                }
+                let dict = result.cast::<PyDict>().ok()?;
+                dict_to_token_price(dict).ok()
+            }
+            Err(e) => {
+                tracing::warn!("pricing callback for model '{}' failed: {}", model, e);
+                None
             }
         })
     }

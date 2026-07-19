@@ -9,8 +9,8 @@
 
 use std::sync::Arc;
 
-use llm_harness_agent::{Plugin, Skill};
 use llm_harness_agent::ModelInfo;
+use llm_harness_agent::{Plugin, Skill};
 use llm_harness_loop::config::RetryConfig;
 use llm_harness_loop::final_answer::FinalAnswerMode;
 use llm_harness_runtime::builder::HarnessBuilder;
@@ -19,9 +19,9 @@ use pyo3::prelude::*;
 
 use crate::pyagent::runtime;
 use crate::pybudget::PyBudgetExceededHook;
-use crate::pyhooks::PyHookWrapper;
 use crate::pyharness::PyAgentHarness;
 use crate::pyharness::parse_thinking_level;
+use crate::pyhooks::PyHookWrapper;
 use crate::pyplugin::PyPluginWrapper;
 use crate::pypricing::PyPricingProvider;
 use crate::pyprovider::PyProvider;
@@ -286,10 +286,7 @@ impl PyHarnessBuilder {
     ///
     /// skill 须由 `load_skills()` 创建。多次调用累积多个 skill。
     #[pyo3(text_signature = "($self, skill)")]
-    fn skill<'a>(
-        mut slf: PyRefMut<'a, Self>,
-        skill: &Bound<'_, PySkill>,
-    ) -> PyRefMut<'a, Self> {
+    fn skill<'a>(mut slf: PyRefMut<'a, Self>, skill: &Bound<'_, PySkill>) -> PyRefMut<'a, Self> {
         if let Some(b) = slf.builder.take() {
             let plugin = SingleSkillPlugin {
                 skill: skill.borrow().skill.clone(),
@@ -308,10 +305,7 @@ impl PyHarnessBuilder {
         skills: Vec<Bound<'_, PySkill>>,
     ) -> PyRefMut<'a, Self> {
         if let Some(b) = slf.builder.take() {
-            let collected: Vec<Skill> = skills
-                .iter()
-                .map(|s| s.borrow().skill.clone())
-                .collect();
+            let collected: Vec<Skill> = skills.iter().map(|s| s.borrow().skill.clone()).collect();
             let plugin = MultiSkillPlugin { skills: collected };
             slf.builder = Some(b.install(&plugin));
         }

@@ -8,8 +8,8 @@
 use std::sync::Arc;
 
 use llm_harness_runtime::rules::{
-    Contains, Decision, NumberRangeField, Predicate, RateLimit, RegexField, Rule, RuleBasedApprovalHook,
-    RuleChain, RuleChainBuilder,
+    Contains, Decision, NumberRangeField, Predicate, RateLimit, RegexField, Rule,
+    RuleBasedApprovalHook, RuleChain, RuleChainBuilder,
 };
 use llm_harness_types::BeforeToolCallHook;
 use pyo3::prelude::*;
@@ -73,7 +73,10 @@ impl PyRuleChainBuilder {
             }
         };
         // Take predicate out of the wrapper (replace with no-op).
-        let p = std::mem::replace(&mut predicate.borrow_mut().predicate, Box::new(NoopPredicate));
+        let p = std::mem::replace(
+            &mut predicate.borrow_mut().predicate,
+            Box::new(NoopPredicate),
+        );
         if let Some(b) = slf.builder.take() {
             slf.builder = Some(b.rule(Rule {
                 tool_name: tool_name.to_string(),
@@ -86,10 +89,7 @@ impl PyRuleChainBuilder {
 
     /// 设置全不命中时的 fallback（默认 Deny）。
     #[pyo3(text_signature = "($self, decision)")]
-    fn fallback<'a>(
-        mut slf: PyRefMut<'a, Self>,
-        decision: &str,
-    ) -> PyResult<PyRefMut<'a, Self>> {
+    fn fallback<'a>(mut slf: PyRefMut<'a, Self>, decision: &str) -> PyResult<PyRefMut<'a, Self>> {
         let d = match decision {
             "allow" => Decision::Allow,
             "deny" => Decision::Deny,
@@ -120,12 +120,13 @@ impl PyRuleChainBuilder {
 /// 创建一个 `RuleChainBuilder`。
 #[pyfunction]
 #[pyo3(text_signature = "()")]
-pub fn create_rule_chain<'py>(
-    py: Python<'py>,
-) -> PyResult<Bound<'py, PyRuleChainBuilder>> {
-    Py::new(py, PyRuleChainBuilder {
-        builder: Some(RuleChain::builder()),
-    })
+pub fn create_rule_chain<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyRuleChainBuilder>> {
+    Py::new(
+        py,
+        PyRuleChainBuilder {
+            builder: Some(RuleChain::builder()),
+        },
+    )
     .map(|p| p.into_bound(py))
 }
 
@@ -136,9 +137,12 @@ pub fn create_contains_predicate<'py>(
     py: Python<'py>,
     allowed: Vec<String>,
 ) -> PyResult<Bound<'py, PyPredicate>> {
-    Py::new(py, PyPredicate {
-        predicate: Box::new(Contains::new(allowed)),
-    })
+    Py::new(
+        py,
+        PyPredicate {
+            predicate: Box::new(Contains::new(allowed)),
+        },
+    )
     .map(|p| p.into_bound(py))
 }
 
@@ -152,12 +156,15 @@ pub fn create_regex_field_predicate<'py>(
 ) -> PyResult<Bound<'py, PyPredicate>> {
     let regex = regex::Regex::new(pattern)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("invalid regex: {e}")))?;
-    Py::new(py, PyPredicate {
-        predicate: Box::new(RegexField {
-            arg_path: arg_path.to_string(),
-            pattern: regex,
-        }),
-    })
+    Py::new(
+        py,
+        PyPredicate {
+            predicate: Box::new(RegexField {
+                arg_path: arg_path.to_string(),
+                pattern: regex,
+            }),
+        },
+    )
     .map(|p| p.into_bound(py))
 }
 
@@ -170,13 +177,16 @@ pub fn create_number_range_predicate<'py>(
     min: f64,
     max: f64,
 ) -> PyResult<Bound<'py, PyPredicate>> {
-    Py::new(py, PyPredicate {
-        predicate: Box::new(NumberRangeField {
-            arg_path: arg_path.to_string(),
-            min,
-            max,
-        }),
-    })
+    Py::new(
+        py,
+        PyPredicate {
+            predicate: Box::new(NumberRangeField {
+                arg_path: arg_path.to_string(),
+                min,
+                max,
+            }),
+        },
+    )
     .map(|p| p.into_bound(py))
 }
 
@@ -192,12 +202,15 @@ pub fn create_rate_limit_predicate<'py>(
     let max_u32 = u32::try_from(max).map_err(|_| {
         pyo3::exceptions::PyValueError::new_err(format!("max must fit in u32, got {max}"))
     })?;
-    Py::new(py, PyPredicate {
-        predicate: Box::new(RateLimit::new(
-            max_u32,
-            std::time::Duration::from_secs_f64(window_seconds),
-        )),
-    })
+    Py::new(
+        py,
+        PyPredicate {
+            predicate: Box::new(RateLimit::new(
+                max_u32,
+                std::time::Duration::from_secs_f64(window_seconds),
+            )),
+        },
+    )
     .map(|p| p.into_bound(py))
 }
 
@@ -212,8 +225,11 @@ pub fn create_rule_approval_hook<'py>(
     let chain_inner =
         std::mem::replace(&mut chain.borrow_mut().chain, RuleChain::builder().build());
     let hook: Arc<dyn BeforeToolCallHook> = Arc::new(RuleBasedApprovalHook::new(chain_inner));
-    Py::new(py, PyHookWrapper {
-        kind: HookKind::BeforeToolCall(hook),
-    })
+    Py::new(
+        py,
+        PyHookWrapper {
+            kind: HookKind::BeforeToolCall(hook),
+        },
+    )
     .map(|p| p.into_bound(py))
 }

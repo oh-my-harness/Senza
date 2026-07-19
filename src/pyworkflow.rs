@@ -138,9 +138,7 @@ fn count_consecutive_retries(history: &[StepRecord], step_id: &str) -> usize {
     history
         .iter()
         .rev()
-        .take_while(|r| {
-            r.step_id.as_str() == step_id && matches!(r.transition, Transition::Retry)
-        })
+        .take_while(|r| r.step_id.as_str() == step_id && matches!(r.transition, Transition::Retry))
         .count()
 }
 
@@ -298,7 +296,8 @@ impl StepTransitionJudge for PyCompositeJudgeInner {
             let step_count = ctx.step_history.len();
             let retry_count = count_consecutive_retries(ctx.step_history, ctx.current_step.id());
             return Box::pin(async move {
-                call_python_judge(&cb, &step_id, &output, &structured, step_count, retry_count).await
+                call_python_judge(&cb, &step_id, &output, &structured, step_count, retry_count)
+                    .await
             });
         }
 
@@ -309,7 +308,8 @@ impl StepTransitionJudge for PyCompositeJudgeInner {
             let step_count = ctx.step_history.len();
             let retry_count = count_consecutive_retries(ctx.step_history, ctx.current_step.id());
             return Box::pin(async move {
-                call_python_judge(&cb, &step_id, &output, &structured, step_count, retry_count).await
+                call_python_judge(&cb, &step_id, &output, &structured, step_count, retry_count)
+                    .await
             });
         }
 
@@ -1059,7 +1059,14 @@ impl PyWorkflowEngine {
         let engine = py
             .detach(move || {
                 rt.block_on(async move {
-                    WorkflowEngine::restore_from_step(store, task_id, step.to_string(), config, judge_arc).await
+                    WorkflowEngine::restore_from_step(
+                        store,
+                        task_id,
+                        step.to_string(),
+                        config,
+                        judge_arc,
+                    )
+                    .await
                 })
             })
             .map_err(workflow_error_to_pyerr)?;

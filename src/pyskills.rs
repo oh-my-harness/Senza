@@ -158,7 +158,10 @@ impl ExecutionEnv for LocalFsEnv {
     ) -> BoxFuture<'a, Result<(), EnvError>> {
         use std::io::Write;
         Box::pin(async move {
-            let mut f = std::fs::OpenOptions::new().create(true).append(true).open(path)?;
+            let mut f = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(path)?;
             f.write_all(content)?;
             Ok(())
         })
@@ -174,14 +177,12 @@ impl ExecutionEnv for LocalFsEnv {
             let modified = md
                 .modified()
                 .map(|t| {
-                    let dur = t
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default();
+                    let dur = t.duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
                     chrono::DateTime::<chrono::Utc>::from_timestamp(
                         dur.as_secs() as i64,
                         dur.subsec_nanos(),
                     )
-                    .unwrap_or_else(|| chrono::Utc::now())
+                    .unwrap_or_else(chrono::Utc::now)
                 })
                 .unwrap_or_else(|_| chrono::Utc::now());
             Ok(FileInfo {
@@ -206,14 +207,12 @@ impl ExecutionEnv for LocalFsEnv {
                 let modified = md
                     .modified()
                     .map(|t| {
-                        let dur = t
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .unwrap_or_default();
+                        let dur = t.duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
                         chrono::DateTime::<chrono::Utc>::from_timestamp(
                             dur.as_secs() as i64,
                             dur.subsec_nanos(),
                         )
-                        .unwrap_or_else(|| chrono::Utc::now())
+                        .unwrap_or_else(chrono::Utc::now)
                     })
                     .unwrap_or_else(|_| chrono::Utc::now());
                 out.push(FileInfo {
@@ -296,10 +295,7 @@ impl ExecutionEnv for LocalFsEnv {
 /// 发出，仅返回成功加载的 skill。
 #[pyfunction]
 #[pyo3(text_signature = "(path)")]
-pub fn load_skills<'py>(
-    py: Python<'py>,
-    path: &str,
-) -> PyResult<Bound<'py, pyo3::types::PyList>> {
+pub fn load_skills<'py>(py: Python<'py>, path: &str) -> PyResult<Bound<'py, pyo3::types::PyList>> {
     let dir = PathBuf::from(path);
     let env: Arc<dyn ExecutionEnv> = Arc::new(LocalFsEnv::new(path));
     let rt = runtime(py);
@@ -316,12 +312,7 @@ pub fn load_skills<'py>(
                 DiagnosticLevel::Warn => "warning",
                 DiagnosticLevel::Error => "error",
             };
-            let msg = format!(
-                "skills: [{}] {}: {}",
-                level,
-                d.source.display(),
-                d.message
-            );
+            let msg = format!("skills: [{}] {}: {}", level, d.source.display(), d.message);
             warnings_mod.call_method1("warn", (msg,))?;
         }
     }

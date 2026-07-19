@@ -8,8 +8,8 @@ use pyo3::prelude::*;
 
 pub mod event_stream;
 pub mod pyagent;
-pub mod pybuilder;
 pub mod pybudget;
+pub mod pybuilder;
 pub mod pyeventstream;
 pub mod pyharness;
 pub mod pyhooks;
@@ -75,7 +75,10 @@ fn senza(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(pyprovider::create_anthropic_provider, m)?)?;
     m.add_class::<pypricing::PyPricingProvider>()?;
     m.add_function(wrap_pyfunction!(pypricing::create_pricing_provider, m)?)?;
-    m.add_function(wrap_pyfunction!(pypricing::create_pricing_provider_callback, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        pypricing::create_pricing_provider_callback,
+        m
+    )?)?;
     m.add_class::<pybudget::PyBudgetExceededHook>()?;
     m.add_function(wrap_pyfunction!(pybudget::create_budget_exceeded_hook, m)?)?;
     m.add_class::<pyrules::PyPredicate>()?;
