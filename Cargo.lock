@@ -689,7 +689,7 @@ dependencies = [
 
 [[package]]
 name = "llm-harness-py"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "anyhow",
  "base64",
@@ -698,6 +698,7 @@ dependencies = [
  "llm-harness-agent",
  "llm-harness-loop",
  "llm-harness-runtime",
+ "llm-harness-runtime-sandbox-os",
  "llm-harness-types",
  "pyo3",
  "pyo3-build-config",
@@ -733,6 +734,22 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "llm-harness-runtime-sandbox-os"
+version = "0.3.0"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=94c6be883359b219bb3ca86328583d87354be696#94c6be883359b219bb3ca86328583d87354be696"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "futures",
+ "llm-harness-runtime",
+ "llm-harness-types",
+ "serde_json",
+ "tokio",
+ "tokio-util",
  "uuid",
 ]
 

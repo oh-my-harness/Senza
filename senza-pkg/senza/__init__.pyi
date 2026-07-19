@@ -183,6 +183,9 @@ def create_composite_judge() -> CompositeJudge: ...
 class Executor:
     """Opaque executor wrapper."""
 
+class ExecutionEnv:
+    """Opaque execution environment wrapper (e.g. from create_os_env)."""
+
 def create_executor(callback: Callable[[dict], dict]) -> Executor: ...
 def create_shell_executor(
     commands: list[str],
@@ -195,6 +198,7 @@ def create_http_executor(
     max_timeout_ms: int = ...,
     allow_private_ip_targets: bool = ...,
 ) -> Executor: ...
+def create_os_env(working_dir: str = ...) -> ExecutionEnv: ...
 
 # ── Agent layer: HarnessBuilder ──────────────────────────────────────────────
 
@@ -315,9 +319,8 @@ class WorkflowEngine:
         model: str,
         judge: Judge | CompositeJudge,
         session_base_dir: str = ...,
+        env: Optional[ExecutionEnv] = ...,
     ) -> None: ...
-
-    @classmethod
     def restore(
         cls,
         task_store_dir: str,

@@ -1,6 +1,6 @@
 [package]
 name = "llm-harness-py"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2024"
 license = "MIT"
 publish = false
@@ -15,6 +15,7 @@ llm-harness-types   = { git = "https://github.com/oh-my-harness/llm-harness-runt
 llm-harness-loop    = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "PLACEHOLDER" }
 llm-harness-agent   = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "PLACEHOLDER" }
 llm-harness-runtime = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "PLACEHOLDER" }
+llm-harness-runtime-sandbox-os = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "PLACEHOLDER" }
 chrono = "0.4"
 serde_json = "1"
 regex = "1"

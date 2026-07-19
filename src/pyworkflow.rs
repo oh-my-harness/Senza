@@ -63,6 +63,7 @@ impl StepTransitionJudge for PyJudge {
         let structured = ctx.last_result.structured.clone();
         let output = ctx.last_result.output.clone();
         let step_count = ctx.step_history.len();
+        let retry_count = count_consecutive_retries(ctx.step_history, ctx.current_step.id());
 
         Box::pin(async move {
             let result = tokio::task::spawn_blocking(move || {
@@ -72,6 +73,7 @@ impl StepTransitionJudge for PyJudge {
                     dict.set_item("step_id", &step_id)?;
                     dict.set_item("output", &output)?;
                     dict.set_item("step_count", step_count)?;
+                    dict.set_item("retry_count", retry_count)?;
                     if let Some(s) = &structured {
                         dict.set_item("structured", value_to_pyobject(py, s)?)?;
                     } else {
@@ -121,6 +123,25 @@ fn parse_transition(s: &str) -> Transition {
             reason: format!("invalid transition: {s}"),
         },
     }
+}
+
+/// 统计 `step_history` 末尾连续属于 `step_id` 的 Retry 记录数。
+///
+/// 与引擎 `apply_transition` 的 `max_retries` 统计口径一致：从末尾向前
+/// 取连续的 `step_id == step_id && transition == Retry` 记录。
+///
+/// judge 调用时当前步的记录尚未 push（engine 在 `apply_transition`
+/// 之后才 push），故：
+/// - 首次执行后调用：返回 0
+/// - 第一次 Retry 重跑后调用：返回 1
+fn count_consecutive_retries(history: &[StepRecord], step_id: &str) -> usize {
+    history
+        .iter()
+        .rev()
+        .take_while(|r| {
+            r.step_id.as_str() == step_id && matches!(r.transition, Transition::Retry)
+        })
+        .count()
 }
 
 // ── PyExecutor ──────────────────────────────────────────────────────────────
@@ -240,8 +261,8 @@ pub struct PyJudgeWrapper {
 /// 未注册的 step 如果 workflow 有声明式 Expr 边，引擎会自动注入 `EdgeConditionJudge`
 /// 作为 edge_fallback。
 pub struct PyCompositeJudgeInner {
-    handlers: std::sync::Mutex<HashMap<String, Py<PyAny>>>,
-    fallback: std::sync::Mutex<Option<Py<PyAny>>>,
+    handlers: std::sync::Mutex<HashMap<String, Arc<Py<PyAny>>>>,
+    fallback: std::sync::Mutex<Option<Arc<Py<PyAny>>>>,
     edge_fallback: std::sync::Mutex<Option<EdgeConditionJudge>>,
 }
 
@@ -270,12 +291,14 @@ impl StepTransitionJudge for PyCompositeJudgeInner {
         let step_id = ctx.current_step.id().to_string();
 
         // 1. Try registered handler (async — calls Python)
+        //    用 Arc::clone 避免 Py<PyAny>::clone（需 GIL attached）。
         if let Some(cb) = self.handlers.lock().unwrap().get(&step_id).cloned() {
             let structured = ctx.last_result.structured.clone();
             let output = ctx.last_result.output.clone();
             let step_count = ctx.step_history.len();
+            let retry_count = count_consecutive_retries(ctx.step_history, ctx.current_step.id());
             return Box::pin(async move {
-                call_python_judge(&cb, &step_id, &output, &structured, step_count).await
+                call_python_judge(&cb, &step_id, &output, &structured, step_count, retry_count).await
             });
         }
 
@@ -284,8 +307,9 @@ impl StepTransitionJudge for PyCompositeJudgeInner {
             let structured = ctx.last_result.structured.clone();
             let output = ctx.last_result.output.clone();
             let step_count = ctx.step_history.len();
+            let retry_count = count_consecutive_retries(ctx.step_history, ctx.current_step.id());
             return Box::pin(async move {
-                call_python_judge(&cb, &step_id, &output, &structured, step_count).await
+                call_python_judge(&cb, &step_id, &output, &structured, step_count, retry_count).await
             });
         }
 
@@ -328,13 +352,13 @@ impl PyCompositeJudge {
             .handlers
             .lock()
             .unwrap()
-            .insert(step.to_string(), callback);
+            .insert(step.to_string(), Arc::new(callback));
         Ok(())
     }
 
     /// Set a fallback handler for steps without a registered `.on()` handler.
     fn fallback(&self, callback: Py<PyAny>) -> PyResult<()> {
-        *self.inner.fallback.lock().unwrap() = Some(callback);
+        *self.inner.fallback.lock().unwrap() = Some(Arc::new(callback));
         Ok(())
     }
 
@@ -355,16 +379,16 @@ impl PyCompositeJudge {
         self.inner.clone()
     }
 }
-
 /// Shared helper: call a Python judge callback and parse the transition.
 async fn call_python_judge(
-    callback: &Py<PyAny>,
+    callback: &Arc<Py<PyAny>>,
     step_id: &str,
     output: &str,
     structured: &Option<Value>,
     step_count: usize,
+    retry_count: usize,
 ) -> Transition {
-    let cb = callback.clone();
+    let cb = Arc::clone(callback);
     let structured = structured.clone();
     let output = output.to_string();
     let step_id = step_id.to_string();
@@ -376,6 +400,7 @@ async fn call_python_judge(
             dict.set_item("step_id", &step_id)?;
             dict.set_item("output", &output)?;
             dict.set_item("step_count", step_count)?;
+            dict.set_item("retry_count", retry_count)?;
             if let Some(s) = &structured {
                 dict.set_item("structured", value_to_pyobject(py, s)?)?;
             } else {
@@ -643,6 +668,45 @@ impl EnvFactory for UnsupportedEnvFactory {
     }
 }
 
+// ── ExecutionEnv 暴露 ──────────────────────────────────────────────────────
+
+/// Python 侧不透明的 `ExecutionEnv` 包装。
+///
+/// 通过 `create_os_env(working_dir)` 创建，承载真实 OS 文件系统与 shell
+/// 执行能力。传入 `WorkflowEngine(workflow, provider, model, judge, env=...)`
+/// 后，引擎内 `ShellExecutor` / `HttpCallExecutor` 等执行器即可调用真实命令。
+#[pyclass(name = "ExecutionEnv")]
+pub struct PyEnvWrapper {
+    pub env: Arc<dyn ExecutionEnv>,
+}
+
+#[pymethods]
+impl PyEnvWrapper {
+    fn __repr__(&self) -> String {
+        format!("ExecutionEnv(working_dir={:?})", self.env.working_dir())
+    }
+}
+
+impl PyEnvWrapper {
+    pub fn new(env: Arc<dyn ExecutionEnv>) -> Self {
+        Self { env }
+    }
+}
+
+/// 将用户提供的 `Arc<dyn ExecutionEnv>` 包装为 `EnvFactory`。
+///
+/// `create()` 忽略传入的 cwd（env 在构造时已绑定 working_dir）。
+/// 这让 `WorkflowEngine.__new__(env=...)` 能把同一个 env 注入引擎。
+struct PyEnvFactory {
+    env: Arc<dyn ExecutionEnv>,
+}
+
+impl EnvFactory for PyEnvFactory {
+    fn create(&self, _cwd: &std::path::Path) -> Result<Arc<dyn ExecutionEnv>, AgentError> {
+        Ok(self.env.clone())
+    }
+}
+
 /// `Arc<PyPlugin>` 的 `Plugin` 适配器。
 ///
 /// `PyPlugin` 实现了 `Plugin`，但 `Arc<PyPlugin>` 没有。
@@ -826,8 +890,12 @@ impl PyWorkflowEngine {
     /// `workflow_dict` 包含 `entry_step`/`steps`/`edges`。
     /// `provider` 提供底层 LLM client；`model` 为模型标识；
     /// `judge` 决定步骤间跳转。
+    ///
+    /// `env` 可选：由 `create_os_env(working_dir)` 创建的 `ExecutionEnv`。
+    /// 提供后，`ShellExecutor` 等执行器可调用真实命令；不提供时引擎使用
+    /// `UnsupportedEnv`，`execute_shell` 永远返回错误。
     #[new]
-    #[pyo3(signature = (workflow_dict, provider, model, judge, session_base_dir="sessions"))]
+    #[pyo3(signature = (workflow_dict, provider, model, judge, session_base_dir="sessions", env=None))]
     fn new(
         py: Python<'_>,
         workflow_dict: &Bound<'_, PyDict>,
@@ -835,15 +903,24 @@ impl PyWorkflowEngine {
         model: &str,
         judge: &Bound<'_, PyAny>,
         session_base_dir: &str,
+        env: Option<Bound<'_, PyEnvWrapper>>,
     ) -> PyResult<Self> {
         let workflow = dict_to_workflow(workflow_dict)?;
         let client = provider.borrow().client.clone();
         let judge_arc: Arc<dyn StepTransitionJudge> = extract_judge(py, judge, &workflow)?;
 
+        let env_factory: Arc<dyn EnvFactory> = match env {
+            Some(wrapper) => {
+                let env: Arc<dyn ExecutionEnv> = wrapper.borrow().env.clone();
+                Arc::new(PyEnvFactory { env })
+            }
+            None => Arc::new(UnsupportedEnvFactory),
+        };
+
         let config = WorkflowEngineConfig {
             client,
             model: model.to_string(),
-            env_factory: Arc::new(UnsupportedEnvFactory),
+            env_factory,
             session_factory: Arc::new(JsonlSessionFactory),
             session_base_dir: std::path::PathBuf::from(session_base_dir),
             customize_builder: None,
@@ -1129,6 +1206,10 @@ impl PyWorkflowEngine {
     }
 
     /// 设置步骤数上限。超过 → Failed。
+    ///
+    /// 语义：`step_history.len()` 超过 `max` 时整个 workflow 置为 Failed。
+    /// 此值是 workflow 级总护栏——包含所有 step（含 Retry 重跑）。
+    /// 默认 100。与 `with_max_retries` 独立：retry 受两者共同约束。
     fn with_max_steps<'a>(mut slf: PyRefMut<'a, Self>, max: usize) -> PyRefMut<'a, Self> {
         if let Some(arc) = slf.engine.take() {
             match Arc::try_unwrap(arc) {
@@ -1142,6 +1223,18 @@ impl PyWorkflowEngine {
     }
 
     /// 设置连续 Retry 上限。超过 → Failed。
+    ///
+    /// 语义（per-step，非 workflow 级）：当 judge 对当前 step 连续返回
+    /// `Retry` 的次数超过 `max` 时，workflow 置为 Failed。`max_retries=N`
+    /// 允许 N 次 Retry，第 N+1 次触发 Failed（不含原始执行）。
+    ///
+    /// judge 仍会在每次 Retry 后被调用——engine 不自动吞重试，judge
+    /// 需自行决定是否继续 Retry。可在 judge 中读 `ctx["retry_count"]`
+    /// 获取当前 step 的连续 Retry 次数（0 = 首次执行后）。
+    ///
+    /// 与 `StepExecutionPolicy.max_attempts` 独立：最坏情况单步执行次数
+    /// = `max_retries × max_attempts`。`max_steps` 是最终兜底。
+    /// 默认 5。
     fn with_max_retries<'a>(mut slf: PyRefMut<'a, Self>, max: usize) -> PyRefMut<'a, Self> {
         if let Some(arc) = slf.engine.take() {
             match Arc::try_unwrap(arc) {

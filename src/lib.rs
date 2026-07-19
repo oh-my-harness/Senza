@@ -3,6 +3,7 @@
 use std::sync::Arc;
 
 use llm_harness_runtime::workflow::executor::{HttpCallExecutor, HttpCallPolicy, ShellExecutor};
+use llm_harness_runtime_sandbox_os::OsEnv;
 use pyo3::prelude::*;
 
 pub mod event_stream;
@@ -40,6 +41,7 @@ fn senza(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<pyworkflow::PyJudgeWrapper>()?;
     m.add_class::<pyworkflow::PyCompositeJudge>()?;
     m.add_class::<pyworkflow::PyExecutorWrapper>()?;
+    m.add_class::<pyworkflow::PyEnvWrapper>()?;
     m.add_class::<pyhooks::PyHookWrapper>()?;
     m.add_class::<pytool::PyToolWrapper>()?;
     m.add_class::<pytool::PyToolContext>()?;
@@ -50,6 +52,7 @@ fn senza(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(create_executor, m)?)?;
     m.add_function(wrap_pyfunction!(create_shell_executor, m)?)?;
     m.add_function(wrap_pyfunction!(create_http_executor, m)?)?;
+    m.add_function(wrap_pyfunction!(create_os_env, m)?)?;
     m.add_function(wrap_pyfunction!(create_before_turn_hook, m)?)?;
     m.add_class::<pyeventstream::PyEventStreamHandle>()?;
     m.add_class::<pyeventstream::PyWaitForExternalEventTool>()?;
@@ -255,6 +258,29 @@ fn create_http_executor<'py>(
         executor: Arc::new(exec),
     };
     Py::new(py, wrapper).map(|p| p.into_bound(py))
+}
+
+/// Create an OS-backed `ExecutionEnv` rooted at `working_dir`.
+///
+/// The returned env exposes the real filesystem and shell of the host.
+/// Pass it to `WorkflowEngine(..., env=...)` so that executors such as
+/// `create_shell_executor` can run real commands (subject to their own
+/// allowlists). Without an env, the engine uses `UnsupportedEnv`, whose
+/// `execute_shell` always returns an error.
+///
+/// SECURITY: This env executes real shell commands on the host. The
+/// `ShellExecutor` command allowlist is the first line of defense, but
+/// callers are responsible for the security of `working_dir` and the
+/// surrounding runtime.
+#[pyfunction]
+#[pyo3(signature = (working_dir="."))]
+fn create_os_env<'py>(
+    py: Python<'py>,
+    working_dir: &str,
+) -> PyResult<Bound<'py, pyworkflow::PyEnvWrapper>> {
+    let env: Arc<dyn llm_harness_types::ExecutionEnv> =
+        Arc::new(OsEnv::new(std::path::PathBuf::from(working_dir)));
+    Py::new(py, pyworkflow::PyEnvWrapper::new(env)).map(|p| p.into_bound(py))
 }
 
 /// 从 Python callable 创建一个 `BeforeTurnHook`。

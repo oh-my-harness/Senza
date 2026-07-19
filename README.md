@@ -186,11 +186,11 @@ lh.create_anthropic_provider(api_key, base_url=None)
 
 | 方法 | 说明 |
 |------|------|
-| `WorkflowEngine(workflow_dict, provider, model, judge)` | 构造引擎 |
+| `WorkflowEngine(workflow_dict, provider, model, judge, env=...)` | 构造引擎；`env` 可选，传 `create_os_env(...)` 以启用 shell 执行 |
 | `.with_tool(tool)` / `.with_executor(name, exec)` | 注册工具/执行器 |
 | `.with_hooks([hooks])` | 注册 hooks |
 | `.with_task_store(dir)` | 启用持久化 |
-| `.with_max_steps(n)` / `.with_max_retries(n)` | 步数/重试上限 |
+| `.with_max_steps(n)` / `.with_max_retries(n)` | 总步数上限 / per-step 连续 Retry 上限（超限 → Failed） |
 | `.run()` | 执行（阻塞） |
 | `.state()` | "idle"/"running"/"paused"/"succeeded"/"failed"/"cancelled" |
 | `.current_step()` / `.step_history()` | 进度查询 |
@@ -204,9 +204,30 @@ lh.create_anthropic_provider(api_key, base_url=None)
 ```python
 lh.create_composite_judge()           # CompositeJudge（按节点注册独立路由）
 lh.create_executor(callback)           # Python 回调执行器
-lh.create_shell_executor(commands)     # Shell 命令执行器（命令白名单）
+lh.create_shell_executor(commands)     # Shell 命令执行器（命令白名单，需配合 create_os_env）
 lh.create_http_executor(allowed_hosts) # HTTP 调用执行器（host 白名单）
-```
+lh.create_os_env(working_dir=".")      # OS 文件系统 + shell 执行环境（传给 WorkflowEngine(env=...)）
+
+
+### Judge ctx 字段
+
+Judge callback 收到的 `ctx: dict` 包含：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `step_id` | str | 当前步 ID |
+| `output` | str | 当前步执行输出 |
+| `structured` | dict \| None | 结构化结果（`SubmitStepResultTool` 提交的 JSON） |
+| `step_count` | int | `step_history` 长度（含当前步） |
+| `retry_count` | int | 当前 step 的连续 Retry 次数（0 = 首次执行后；与 `with_max_retries` 同口径） |
+
+### Retry 语义
+
+- `with_max_retries(n)`：**per-step** 连续 Retry 上限。`n=3` 允许 3 次 Retry，第 4 次触发 Failed（不含原始执行）。
+- `with_max_steps(n)`：**workflow 级** 总步数护栏，含所有 Retry 重跑。超限 → Failed。
+- judge 每次 Retry 后仍会被调用，engine 不自动吞重试——judge 自行决定是否继续 Retry。
+- 与 `StepExecutionPolicy.max_attempts` 独立：最坏情况单步执行次数 = `max_retries × max_attempts`。
+- 如需 per-回环 独立限制，在 judge 中读 `ctx["retry_count"]` 并自行决策。
 
 ### Hooks（11 种）
 
