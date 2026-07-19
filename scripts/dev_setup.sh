@@ -3,34 +3,26 @@ set -euo pipefail
 
 # Build + install the Senza wheel for local development.
 #
-# Creates (or reuses) a virtualenv at .venv/, builds the wheel via
-# build_wheel.sh, and pip-installs it into the venv.
-# After this, run check_stubs.py or examples directly.
+# Creates (or reuses) the repo virtualenv at .venv/, builds the wheel
+# via build_wheel.sh, and pip-installs it into the venv. All scripts in
+# this repo use the repo venv exclusively; if it cannot be created from
+# a linkable Python, this script errors out.
 #
 # Usage:
-#   ./scripts/dev_setup.sh                  # use .venv, python3
-#   PYTHON=/path/to/python ./scripts/dev_setup.sh
+#   ./scripts/dev_setup.sh
 #   VENV=/path/to/venv ./scripts/dev_setup.sh
+#   BASE_PYTHON=/opt/homebrew/bin/python3.12 ./scripts/dev_setup.sh
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-PYTHON="${PYTHON:-python3}"
-VENV="${VENV:-$REPO_ROOT/.venv}"
 
-# ── Create / reuse venv ──────────────────────────────────────────────
-if [ ! -d "$VENV" ]; then
-    echo "==> Creating virtualenv at $VENV ..."
-    "$PYTHON" -m venv "$VENV"
-fi
+# shellcheck source=_venv.sh
+. "$SCRIPT_DIR/_venv.sh"
 
-# Activate and pick the venv interpreter
-# shellcheck disable=SC1091
-source "$VENV/bin/activate"
-PYTHON="$(command -v python)"
+ensure_venv
 
-# Ensure pip + maturin + pytest are present in the venv
+# Ensure build/test deps are present in the venv.
 echo "==> Ensuring build/test deps ..."
-"$PYTHON" -m pip install --quiet --upgrade pip
 "$PYTHON" -m pip install --quiet --upgrade maturin pytest
 
 # ── Build wheel ──────────────────────────────────────────────────────
@@ -38,7 +30,7 @@ echo ""
 echo "==> Building wheel ..."
 "$SCRIPT_DIR/build_wheel.sh" --test-utils
 
-WHEEL=$(ls "$REPO_ROOT"/dist/senza_sdk*.whl "$REPO_ROOT"/dist/senza*.whl 2>/dev/null | tail -1)
+WHEEL=$(ls -t "$REPO_ROOT"/dist/senza_sdk*.whl "$REPO_ROOT"/dist/senza*.whl 2>/dev/null | head -1)
 if [ -z "$WHEEL" ]; then
     echo "ERROR: No wheel found in $REPO_ROOT/dist/"
     exit 1

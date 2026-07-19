@@ -13,7 +13,11 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-PYTHON="${PYTHON:-python3}"
+
+# shellcheck source=_venv.sh
+. "$SCRIPT_DIR/_venv.sh"
+ensure_venv
+
 EXTRA_FEATURES=""
 if [ "${1:-}" = "--test-utils" ]; then
     EXTRA_FEATURES="test-utils"
@@ -30,7 +34,7 @@ cp "$CARGO_TOML" "$CARGO_TOML.bak"
 trap 'mv "$CARGO_TOML.bak" "$CARGO_TOML" 2>/dev/null || true' EXIT
 perl -pi -e "s/PLACEHOLDER/$SHA/g" "$CARGO_TOML"
 
-export PYO3_PYTHON="$(command -v $PYTHON)"
+# PYO3_PYTHON is exported by ensure_venv.
 
 cd "$REPO_ROOT"
 echo "==> Building wheel..."
@@ -41,7 +45,9 @@ else
 fi
 
 
-WHEEL=$(ls "$REPO_ROOT/target/wheels/senza_sdk"*.whl "$REPO_ROOT/target/wheels/senza"*.whl 2>/dev/null | tail -1)
+# Pick the newest wheel by mtime so a stale wheel built for a different
+# Python version or feature set never shadows the just-built one.
+WHEEL=$(ls -t "$REPO_ROOT"/target/wheels/senza_sdk*.whl "$REPO_ROOT"/target/wheels/senza*.whl 2>/dev/null | head -1)
 if [ -z "$WHEEL" ]; then
     echo "ERROR: No wheel found in $REPO_ROOT/target/wheels/"
     exit 1

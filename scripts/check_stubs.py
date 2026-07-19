@@ -3,17 +3,33 @@
 
 Usage:
     python scripts/check_stubs.py
+    ./scripts/check_stubs.py
 
 Must be run after `pip install` the senza wheel. Reads
 senza-pkg/senza/__init__.pyi, introspects the installed senza
 module, and exits 1 if signatures diverge.
+
+This script always runs under the repo virtualenv (.venv/). If invoked
+from another interpreter, it re-executes itself under .venv/bin/python.
 """
 from __future__ import annotations
 
-import ast
+import os
 import sys
-from dataclasses import dataclass, field
 from pathlib import Path
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+_VENV_PY = _REPO_ROOT / ".venv" / "bin" / "python"
+if os.path.realpath(sys.executable) != os.path.realpath(str(_VENV_PY)):
+    if not _VENV_PY.exists():
+        sys.stderr.write(
+            f"ERROR: repo venv not found at {_VENV_PY}.\n"
+            f"       Create it with: ./scripts/dev_setup.sh\n"
+        )
+        raise SystemExit(1)
+    os.execv(str(_VENV_PY), [str(_VENV_PY), __file__, *sys.argv[1:]])
+import ast
+from dataclasses import dataclass, field
 
 
 @dataclass
