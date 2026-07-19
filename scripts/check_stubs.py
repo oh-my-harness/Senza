@@ -20,13 +20,11 @@ from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _VENV_PY = _REPO_ROOT / ".venv" / "bin" / "python"
-if os.path.realpath(sys.executable) != os.path.realpath(str(_VENV_PY)):
-    if not _VENV_PY.exists():
-        sys.stderr.write(
-            f"ERROR: repo venv not found at {_VENV_PY}.\n"
-            f"       Create it with: ./scripts/dev_setup.sh\n"
-        )
-        raise SystemExit(1)
+if _VENV_PY.exists() and os.path.realpath(sys.executable) != os.path.realpath(str(_VENV_PY)):
+    # Repo venv exists but we're not running under it — re-exec into it.
+    # (Local dev: always use the repo venv. CI: no venv is created, so
+    # the existence check above is false and we fall through to the
+    # current interpreter, which has senza installed via setup-python.)
     os.execv(str(_VENV_PY), [str(_VENV_PY), __file__, *sys.argv[1:]])
 import ast
 from dataclasses import dataclass, field
