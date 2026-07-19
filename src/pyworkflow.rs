@@ -67,9 +67,15 @@ impl StepTransitionJudge for PyJudge {
 
         Box::pin(async move {
             call_python_judge(
-                &callback, &step_id, &output, &structured,
-                step_count, retry_count, tool_calls_count,
-            ).await
+                &callback,
+                &step_id,
+                &output,
+                &structured,
+                step_count,
+                retry_count,
+                tool_calls_count,
+            )
+            .await
         })
     }
 
@@ -271,9 +277,16 @@ impl StepTransitionJudge for PyCompositeJudgeInner {
             let retry_count = count_consecutive_retries(ctx.step_history, ctx.current_step.id());
             let tool_calls_count = ctx.last_result.tool_calls_count;
             return Box::pin(async move {
-                call_python_judge(&cb, &step_id, &output, &structured,
-                    step_count, retry_count, tool_calls_count)
-                    .await
+                call_python_judge(
+                    &cb,
+                    &step_id,
+                    &output,
+                    &structured,
+                    step_count,
+                    retry_count,
+                    tool_calls_count,
+                )
+                .await
             });
         }
 
@@ -285,9 +298,16 @@ impl StepTransitionJudge for PyCompositeJudgeInner {
             let retry_count = count_consecutive_retries(ctx.step_history, ctx.current_step.id());
             let tool_calls_count = ctx.last_result.tool_calls_count;
             return Box::pin(async move {
-                call_python_judge(&cb, &step_id, &output, &structured,
-                    step_count, retry_count, tool_calls_count)
-                    .await
+                call_python_judge(
+                    &cb,
+                    &step_id,
+                    &output,
+                    &structured,
+                    step_count,
+                    retry_count,
+                    tool_calls_count,
+                )
+                .await
             });
         }
 
