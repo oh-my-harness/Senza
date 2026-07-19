@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Run Rust checks: fmt, clippy, and tests.
+# Run all checks: Rust (fmt, clippy, test) and Python (pytest).
 #
 # Injects the runtime SHA from senza-pkg/runtime.lock into Cargo.toml
 # (replacing PLACEHOLDER), runs the requested checks, then restores
 # Cargo.toml. This mirrors the build_wheel.sh injection pattern.
 #
 # Usage:
-#   ./scripts/cargo_checks.sh              # fmt + clippy + test
+#   ./scripts/cargo_checks.sh              # fmt + clippy + cargo test + pytest
 #   ./scripts/cargo_checks.sh fmt          # cargo fmt --check only
 #   ./scripts/cargo_checks.sh clippy       # cargo clippy only
-#   ./scripts/cargo_checks.sh test         # cargo test only
+#   ./scripts/cargo_checks.sh test         # cargo test only (Rust integration tests)
+#   ./scripts/cargo_checks.sh pytest       # pytest only (Python tests in tests/)
 #   ./scripts/cargo_checks.sh fmt clippy   # fmt + clippy
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -40,10 +41,9 @@ trap 'mv "$CARGO_TOML.bak" "$CARGO_TOML" 2>/dev/null || true' EXIT
 perl -pi -e "s/PLACEHOLDER/$SHA/g" "$CARGO_TOML"
 
 cd "$REPO_ROOT"
-
-# Default: run all three
+# Default: run all four stages
 if [ "$#" -eq 0 ]; then
-    STAGES=("fmt" "clippy" "test")
+    STAGES=("fmt" "clippy" "test" "pytest")
 else
     STAGES=("$@")
 fi
@@ -82,8 +82,20 @@ for stage in "${STAGES[@]}"; do
                 exit 1
             fi
             ;;
+        pytest)
+            echo ""
+            echo "==> pytest tests/ ..."
+            # Python tests live alongside the Rust integration tests in
+            # tests/*.py. They exercise the Senza Python API (built into
+            # the venv by dev_setup.sh / build_wheel.sh --test-utils).
+            # The repo venv (from _venv.sh) provides both the interpreter
+            # and the installed senza module.
+            if ! "$PYTHON" -m pytest tests/ -q 2>&1 | tee /tmp/senza_pytest.log; then
+                exit 1
+            fi
+            ;;
         *)
-            echo "ERROR: unknown stage '$stage' (use: fmt, clippy, test)" >&2
+            echo "ERROR: unknown stage '$stage' (use: fmt, clippy, test, pytest)" >&2
             exit 1
             ;;
     esac
