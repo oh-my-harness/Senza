@@ -11,6 +11,9 @@
 | `03_streaming.py` | 通过 `events()` 逐 token 流式输出 |
 | `04_dynamic_config.py` | `set_model`、`set_system_prompt`、`set_temperature`、`set_thinking_level`、`usage` |
 | `05_multi_provider.py` | 通过 glob 模式将不同模型路由到不同 provider |
+| `06_hooks.py` | 11 个生命周期 hook（观察 + `before_tool_call`/`should_stop` 决策） |
+| `07_rules.py` | Rules 规则引擎：4 种 predicate + 审批 hook |
+| `08_budget_pricing.py` | `pricing` 定价表 + `budget` 预算超限停止 |
 
 ## Runtime 层（`runtime/`）
 
