@@ -1080,34 +1080,38 @@ impl PyWorkflowEngine {
     fn with_tool<'a>(
         mut slf: PyRefMut<'a, Self>,
         tool: &Bound<'_, PyToolWrapper>,
-    ) -> PyRefMut<'a, Self> {
-        if let Some(arc) = slf.engine.take() {
-            match Arc::try_unwrap(arc) {
-                Ok(engine) => {
-                    let t: Arc<dyn Tool> = tool.borrow().tool.clone();
-                    slf.engine = Some(Arc::new(engine.with_tool(t)));
-                }
-                Err(arc) => slf.engine = Some(arc),
-            }
-        }
-        slf
+    ) -> PyResult<PyRefMut<'a, Self>> {
+        let arc = slf
+            .engine
+            .take()
+            .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("engine already consumed"))?;
+        let engine = Arc::try_unwrap(arc).map_err(|_| {
+            pyo3::exceptions::PyRuntimeError::new_err(
+                "engine is shared (running?); cannot add tool",
+            )
+        })?;
+        let t: Arc<dyn Tool> = tool.borrow().tool.clone();
+        slf.engine = Some(Arc::new(engine.with_tool(t)));
+        Ok(slf)
     }
 
     /// 注册一个外部事件 tool（`PyWaitForExternalEventTool`）。返回 self 以支持链式调用。
     fn with_external_tool<'a>(
         mut slf: PyRefMut<'a, Self>,
         tool: &Bound<'_, PyWaitForExternalEventTool>,
-    ) -> PyRefMut<'a, Self> {
-        if let Some(arc) = slf.engine.take() {
-            match Arc::try_unwrap(arc) {
-                Ok(engine) => {
-                    let t: Arc<dyn Tool> = tool.borrow().tool.clone();
-                    slf.engine = Some(Arc::new(engine.with_tool(t)));
-                }
-                Err(arc) => slf.engine = Some(arc),
-            }
-        }
-        slf
+    ) -> PyResult<PyRefMut<'a, Self>> {
+        let arc = slf
+            .engine
+            .take()
+            .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("engine already consumed"))?;
+        let engine = Arc::try_unwrap(arc).map_err(|_| {
+            pyo3::exceptions::PyRuntimeError::new_err(
+                "engine is shared (running?); cannot add tool",
+            )
+        })?;
+        let t: Arc<dyn Tool> = tool.borrow().tool.clone();
+        slf.engine = Some(Arc::new(engine.with_tool(t)));
+        Ok(slf)
     }
 
     /// 注入额外 hooks。返回 self 以支持链式调用。
@@ -1166,21 +1170,26 @@ impl PyWorkflowEngine {
     ///
     /// 通过 `customize_builder` 配置：每步构造 harness 时应用。
     /// 多次调用累加（后调覆盖先调，语义同 builder last-write-wins）。
-    fn with_max_tokens<'a>(mut slf: PyRefMut<'a, Self>, max_tokens: u32) -> PyRefMut<'a, Self> {
-        if let Some(arc) = slf.engine.take() {
-            match Arc::try_unwrap(arc) {
-                Ok(mut engine) => {
-                    let prev = engine.config_customize_builder().clone();
-                    engine.set_customize_builder(Arc::new(move |b| {
-                        let b = if let Some(p) = &prev { p(b) } else { b };
-                        b.max_tokens(max_tokens)
-                    }));
-                    slf.engine = Some(Arc::new(engine));
-                }
-                Err(arc) => slf.engine = Some(arc),
-            }
-        }
-        slf
+    fn with_max_tokens<'a>(
+        mut slf: PyRefMut<'a, Self>,
+        max_tokens: u32,
+    ) -> PyResult<PyRefMut<'a, Self>> {
+        let arc = slf
+            .engine
+            .take()
+            .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("engine already consumed"))?;
+        let mut engine = Arc::try_unwrap(arc).map_err(|_| {
+            pyo3::exceptions::PyRuntimeError::new_err(
+                "engine is shared (running?); cannot set max_tokens",
+            )
+        })?;
+        let prev = engine.config_customize_builder().clone();
+        engine.set_customize_builder(Arc::new(move |b| {
+            let b = if let Some(p) = &prev { p(b) } else { b };
+            b.max_tokens(max_tokens)
+        }));
+        slf.engine = Some(Arc::new(engine));
+        Ok(slf)
     }
 
     /// 为指定 step 安装 plugin。返回 self 以支持链式调用。
@@ -1188,20 +1197,22 @@ impl PyWorkflowEngine {
         mut slf: PyRefMut<'a, Self>,
         step_id: &str,
         plugin: &Bound<'_, PyPluginWrapper>,
-    ) -> PyRefMut<'a, Self> {
-        if let Some(arc) = slf.engine.take() {
-            match Arc::try_unwrap(arc) {
-                Ok(engine) => {
-                    let p = plugin.borrow().plugin.clone();
-                    slf.engine =
-                        Some(Arc::new(engine.with_step_plugin(step_id, move || {
-                            Box::new(PyPluginAdapter(p.clone()))
-                        })));
-                }
-                Err(arc) => slf.engine = Some(arc),
-            }
-        }
-        slf
+    ) -> PyResult<PyRefMut<'a, Self>> {
+        let arc = slf
+            .engine
+            .take()
+            .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("engine already consumed"))?;
+        let engine = Arc::try_unwrap(arc).map_err(|_| {
+            pyo3::exceptions::PyRuntimeError::new_err(
+                "engine is shared (running?); cannot add step plugin",
+            )
+        })?;
+        let p = plugin.borrow().plugin.clone();
+        slf.engine =
+            Some(Arc::new(engine.with_step_plugin(step_id, move || {
+                Box::new(PyPluginAdapter(p.clone()))
+            })));
+        Ok(slf)
     }
 
     /// 注册一个命名 executor。返回 self 以支持链式调用。
@@ -1209,32 +1220,36 @@ impl PyWorkflowEngine {
         mut slf: PyRefMut<'a, Self>,
         name: &str,
         executor: &Bound<'_, PyExecutorWrapper>,
-    ) -> PyRefMut<'a, Self> {
-        if let Some(arc) = slf.engine.take() {
-            match Arc::try_unwrap(arc) {
-                Ok(engine) => {
-                    let e = executor.borrow().executor.clone();
-                    slf.engine = Some(Arc::new(engine.with_executor(name, e)));
-                }
-                Err(arc) => slf.engine = Some(arc),
-            }
-        }
-        slf
+    ) -> PyResult<PyRefMut<'a, Self>> {
+        let arc = slf
+            .engine
+            .take()
+            .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("engine already consumed"))?;
+        let engine = Arc::try_unwrap(arc).map_err(|_| {
+            pyo3::exceptions::PyRuntimeError::new_err(
+                "engine is shared (running?); cannot add executor",
+            )
+        })?;
+        let e = executor.borrow().executor.clone();
+        slf.engine = Some(Arc::new(engine.with_executor(name, e)));
+        Ok(slf)
     }
 
     /// 设置自定义 TaskStore（JSONL 文件存储）。
     /// `dir` 是所有 task 数据的根目录。
-    fn with_task_store<'a>(mut slf: PyRefMut<'a, Self>, dir: &str) -> PyRefMut<'a, Self> {
-        if let Some(arc) = slf.engine.take() {
-            match Arc::try_unwrap(arc) {
-                Ok(engine) => {
-                    let store = Arc::new(JsonlTaskStore::new(PathBuf::from(dir)));
-                    slf.engine = Some(Arc::new(engine.with_task_store(store)));
-                }
-                Err(arc) => slf.engine = Some(arc),
-            }
-        }
-        slf
+    fn with_task_store<'a>(mut slf: PyRefMut<'a, Self>, dir: &str) -> PyResult<PyRefMut<'a, Self>> {
+        let arc = slf
+            .engine
+            .take()
+            .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("engine already consumed"))?;
+        let engine = Arc::try_unwrap(arc).map_err(|_| {
+            pyo3::exceptions::PyRuntimeError::new_err(
+                "engine is shared (running?); cannot set task store",
+            )
+        })?;
+        let store = Arc::new(JsonlTaskStore::new(PathBuf::from(dir)));
+        slf.engine = Some(Arc::new(engine.with_task_store(store)));
+        Ok(slf)
     }
 
     /// 设置步骤数上限。超过 → Failed。
@@ -1242,16 +1257,18 @@ impl PyWorkflowEngine {
     /// 语义：`step_history.len()` 超过 `max` 时整个 workflow 置为 Failed。
     /// 此值是 workflow 级总护栏——包含所有 step（含 Retry 重跑）。
     /// 默认 100。与 `with_max_retries` 独立：retry 受两者共同约束。
-    fn with_max_steps<'a>(mut slf: PyRefMut<'a, Self>, max: usize) -> PyRefMut<'a, Self> {
-        if let Some(arc) = slf.engine.take() {
-            match Arc::try_unwrap(arc) {
-                Ok(engine) => {
-                    slf.engine = Some(Arc::new(engine.with_max_steps(max)));
-                }
-                Err(arc) => slf.engine = Some(arc),
-            }
-        }
-        slf
+    fn with_max_steps<'a>(mut slf: PyRefMut<'a, Self>, max: usize) -> PyResult<PyRefMut<'a, Self>> {
+        let arc = slf
+            .engine
+            .take()
+            .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("engine already consumed"))?;
+        let engine = Arc::try_unwrap(arc).map_err(|_| {
+            pyo3::exceptions::PyRuntimeError::new_err(
+                "engine is shared (running?); cannot set max_steps",
+            )
+        })?;
+        slf.engine = Some(Arc::new(engine.with_max_steps(max)));
+        Ok(slf)
     }
 
     /// 设置连续 Retry 上限。超过 → Failed。
@@ -1267,16 +1284,21 @@ impl PyWorkflowEngine {
     /// 与 `StepExecutionPolicy.max_attempts` 独立：最坏情况单步执行次数
     /// = `max_retries × max_attempts`。`max_steps` 是最终兜底。
     /// 默认 5。
-    fn with_max_retries<'a>(mut slf: PyRefMut<'a, Self>, max: usize) -> PyRefMut<'a, Self> {
-        if let Some(arc) = slf.engine.take() {
-            match Arc::try_unwrap(arc) {
-                Ok(engine) => {
-                    slf.engine = Some(Arc::new(engine.with_max_retries(max)));
-                }
-                Err(arc) => slf.engine = Some(arc),
-            }
-        }
-        slf
+    fn with_max_retries<'a>(
+        mut slf: PyRefMut<'a, Self>,
+        max: usize,
+    ) -> PyResult<PyRefMut<'a, Self>> {
+        let arc = slf
+            .engine
+            .take()
+            .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("engine already consumed"))?;
+        let engine = Arc::try_unwrap(arc).map_err(|_| {
+            pyo3::exceptions::PyRuntimeError::new_err(
+                "engine is shared (running?); cannot set max_retries",
+            )
+        })?;
+        slf.engine = Some(Arc::new(engine.with_max_retries(max)));
+        Ok(slf)
     }
 
     /// 设置共享 context 变量（KV 黑板）。executor 可通过 `ExecutorCtx` 读取。
