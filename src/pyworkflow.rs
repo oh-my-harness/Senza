@@ -941,9 +941,13 @@ impl PyWorkflowEngine {
     /// `with_task_store(dir)` 指定的路径）。
     /// `task_id` 是要恢复的 task ID（`task-<uuid>` 格式）。
     /// `provider`/`model`/`judge` 与 `new()` 相同。
+    ///
+    /// `env` 可选：与 `new()` 的 `env` 参数语义一致。若原 workflow 使用了
+    /// `ShellExecutor` 等 shell 执行器，恢复时必须传入同一个 env，
+    /// 否则 shell 步骤会因 `UnsupportedEnv` 而失败。
     #[allow(clippy::too_many_arguments)]
     #[classmethod]
-    #[pyo3(signature = (task_store_dir, task_id, provider, model, judge, session_base_dir="sessions"))]
+    #[pyo3(signature = (task_store_dir, task_id, provider, model, judge, session_base_dir="sessions", env=None))]
     fn restore(
         _cls: &Bound<'_, pyo3::types::PyType>,
         py: Python<'_>,
@@ -953,6 +957,7 @@ impl PyWorkflowEngine {
         model: &str,
         judge: &Bound<'_, PyAny>,
         session_base_dir: &str,
+        env: Option<Bound<'_, PyEnvWrapper>>,
     ) -> PyResult<Self> {
         let store = Arc::new(JsonlTaskStore::new(PathBuf::from(task_store_dir)));
         let task_id = TaskId(task_id.to_string());
@@ -966,10 +971,18 @@ impl PyWorkflowEngine {
         };
         let judge_arc: Arc<dyn StepTransitionJudge> = extract_judge(py, judge, &empty_workflow)?;
 
+        let env_factory: Arc<dyn EnvFactory> = match env {
+            Some(wrapper) => {
+                let env: Arc<dyn ExecutionEnv> = wrapper.borrow().env.clone();
+                Arc::new(PyEnvFactory { env })
+            }
+            None => Arc::new(UnsupportedEnvFactory),
+        };
+
         let config = WorkflowEngineConfig {
             client,
             model: model.to_string(),
-            env_factory: Arc::new(UnsupportedEnvFactory),
+            env_factory,
             session_factory: Arc::new(JsonlSessionFactory),
             session_base_dir: std::path::PathBuf::from(session_base_dir),
             customize_builder: None,
@@ -997,9 +1010,12 @@ impl PyWorkflowEngine {
     ///
     /// `step` 必须在 step_history 中（该步曾执行过），否则返回错误。
     /// context 黑板不回滚，保留当前累积值。
+    ///
+    /// `env` 可选：与 `new()` 的 `env` 参数语义一致。若原 workflow 使用了
+    /// `ShellExecutor` 等 shell 执行器，恢复时必须传入同一个 env。
     #[allow(clippy::too_many_arguments)]
     #[classmethod]
-    #[pyo3(signature = (task_store_dir, task_id, step, provider, model, judge, session_base_dir="sessions"))]
+    #[pyo3(signature = (task_store_dir, task_id, step, provider, model, judge, session_base_dir="sessions", env=None))]
     fn restore_from_step(
         _cls: &Bound<'_, pyo3::types::PyType>,
         py: Python<'_>,
@@ -1010,6 +1026,7 @@ impl PyWorkflowEngine {
         model: &str,
         judge: &Bound<'_, PyAny>,
         session_base_dir: &str,
+        env: Option<Bound<'_, PyEnvWrapper>>,
     ) -> PyResult<Self> {
         let store = Arc::new(JsonlTaskStore::new(PathBuf::from(task_store_dir)));
         let task_id = TaskId(task_id.to_string());
@@ -1021,10 +1038,18 @@ impl PyWorkflowEngine {
         };
         let judge_arc: Arc<dyn StepTransitionJudge> = extract_judge(py, judge, &empty_workflow)?;
 
+        let env_factory: Arc<dyn EnvFactory> = match env {
+            Some(wrapper) => {
+                let env: Arc<dyn ExecutionEnv> = wrapper.borrow().env.clone();
+                Arc::new(PyEnvFactory { env })
+            }
+            None => Arc::new(UnsupportedEnvFactory),
+        };
+
         let config = WorkflowEngineConfig {
             client,
             model: model.to_string(),
-            env_factory: Arc::new(UnsupportedEnvFactory),
+            env_factory,
             session_factory: Arc::new(JsonlSessionFactory),
             session_base_dir: std::path::PathBuf::from(session_base_dir),
             customize_builder: None,

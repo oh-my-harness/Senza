@@ -329,6 +329,7 @@ class WorkflowEngine:
         model: str,
         judge: Judge | CompositeJudge,
         session_base_dir: str = ...,
+        env: Optional[ExecutionEnv] = ...,
     ) -> WorkflowEngine: ...
 
     @classmethod
@@ -341,6 +342,7 @@ class WorkflowEngine:
         model: str,
         judge: Judge | CompositeJudge,
         session_base_dir: str = ...,
+        env: Optional[ExecutionEnv] = ...,
     ) -> WorkflowEngine: ...
 
     # ── Registration (chainable) ──
