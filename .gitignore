@@ -7,3 +7,4 @@ docs/superpowers
 target
 .venv/
 Cargo.lock
+*.so
