@@ -25,6 +25,7 @@ use crate::pyhooks::PyHookWrapper;
 use crate::pyplugin::PyPluginWrapper;
 use crate::pypricing::PyPricingProvider;
 use crate::pyprovider::PyProvider;
+use crate::pyresponseformat::PyResponseFormat;
 use crate::pyskills::PySkill;
 use crate::pytool::PyToolWrapper;
 
@@ -178,6 +179,38 @@ impl PyHarnessBuilder {
             slf.builder = Some(b.should_stop_hook(h));
         }
         Ok(slf)
+    }
+
+    /// 注册一个 `AfterTurnHook`（无需包装在 Plugin 中）。
+    ///
+    /// 多次调用累积多个 hook——`CompositeAfterTurnHook` 为全执行语义，
+    /// 注册顺序不影响正确性（每个 hook 都会运行）。
+    #[pyo3(text_signature = "($self, hook)")]
+    fn after_turn_hook<'a>(
+        mut slf: PyRefMut<'a, Self>,
+        hook: &Bound<'_, PyHookWrapper>,
+    ) -> PyResult<PyRefMut<'a, Self>> {
+        if let Some(b) = slf.builder.take() {
+            let h = hook.borrow().as_after_turn_hook()?;
+            slf.builder = Some(b.after_turn_hook(h));
+        }
+        Ok(slf)
+    }
+
+    /// 设置 response format，用于要求模型输出结构化 JSON。
+    ///
+    /// 传入 `create_json_object_format()` 或 `create_json_schema_format(...)` 创建的 format。
+    /// 传 `None` 重置为默认值（不强制格式）。
+    #[pyo3(text_signature = "($self, fmt)")]
+    fn response_format<'a>(
+        mut slf: PyRefMut<'a, Self>,
+        fmt: Option<&Bound<'_, PyResponseFormat>>,
+    ) -> PyRefMut<'a, Self> {
+        if let Some(b) = slf.builder.take() {
+            let fmt = fmt.map(|f| f.borrow().fmt.clone());
+            slf.builder = Some(b.response_format(fmt));
+        }
+        slf
     }
 
     /// 直接设置 hook 集合。push 语义：hooks 追加到 builder 现有 hooks。

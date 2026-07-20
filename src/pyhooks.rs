@@ -1077,6 +1077,7 @@ impl PrepareNextTurnHook for PyPrepareNextTurnHook {
                             temperature: None,
                             tools: None,
                             active_tools: None,
+                            response_format: None,
                         });
                     }
                     let d = raw.cast::<PyDict>()?;
@@ -1120,6 +1121,7 @@ impl PrepareNextTurnHook for PyPrepareNextTurnHook {
                         temperature,
                         tools: None,
                         active_tools,
+                        response_format: None,
                     })
                 })
             })
@@ -1200,6 +1202,17 @@ impl PyHookWrapper {
             HookKind::ShouldStop(h) => Ok(h.clone()),
             other => Err(pyo3::exceptions::PyTypeError::new_err(format!(
                 "expected a ShouldStop hook, got {}",
+                other.kind_name()
+            ))),
+        }
+    }
+
+    /// 提取 `AfterTurnHook`，类型不匹配时返回 Python 异常。
+    pub fn as_after_turn_hook(&self) -> PyResult<Arc<dyn AfterTurnHook>> {
+        match &self.kind {
+            HookKind::AfterTurn(h) => Ok(h.clone()),
+            other => Err(pyo3::exceptions::PyTypeError::new_err(format!(
+                "expected an AfterTurn hook, got {}",
                 other.kind_name()
             ))),
         }

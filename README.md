@@ -219,9 +219,11 @@ Judge callback 收到的 `ctx: dict` 包含：
 |------|------|------|
 | `step_id` | str | 当前步 ID |
 | `output` | str | 当前步执行输出 |
-| `structured` | dict \| None | 结构化结果（`SubmitStepResultTool` 提交的 JSON） |
+| `structured` | dict \| None | 结构化结果（step 声明 `structured: true` 时，引擎从 final answer 提取的 JSON） |
+| `structured_status` | str | `"not_required"` / `"ok"` / `"failed"`（结构化提取状态） |
 | `step_count` | int | `step_history` 长度（含当前步） |
 | `retry_count` | int | 当前 step 的连续 Retry 次数（0 = 首次执行后；与 `with_max_retries` 同口径） |
+| `tool_calls_count` | int | 本步工具调用次数（不含 `submit_step_result`，该工具已移除） |
 
 ### Retry 语义
 

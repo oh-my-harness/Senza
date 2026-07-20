@@ -16,6 +16,7 @@ pub mod pyhooks;
 pub mod pyplugin;
 pub mod pypricing;
 pub mod pyprovider;
+pub mod pyresponseformat;
 pub mod pyrules;
 pub mod pyskills;
 pub mod pytool;
@@ -77,6 +78,15 @@ fn senza(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<pybuilder::PyHarnessBuilder>()?;
     m.add_class::<pyplugin::PyPluginWrapper>()?;
     m.add_function(wrap_pyfunction!(create_plugin, m)?)?;
+    m.add_class::<pyresponseformat::PyResponseFormat>()?;
+    m.add_function(wrap_pyfunction!(
+        pyresponseformat::create_json_object_format,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        pyresponseformat::create_json_schema_format,
+        m
+    )?)?;
     m.add_class::<pyprovider::PyProvider>()?;
     m.add_function(wrap_pyfunction!(pyprovider::create_openai_provider, m)?)?;
     m.add_function(wrap_pyfunction!(pyprovider::create_anthropic_provider, m)?)?;

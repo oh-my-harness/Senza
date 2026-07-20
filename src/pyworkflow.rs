@@ -60,6 +60,7 @@ impl StepTransitionJudge for PyJudge {
         let callback = Arc::clone(&self.callback);
         let step_id = ctx.current_step.id().to_string();
         let structured = ctx.last_result.structured.clone();
+        let structured_status = ctx.last_result.structured_status.clone();
         let output = ctx.last_result.output.clone();
         let step_count = ctx.step_history.len();
         let retry_count = count_consecutive_retries(ctx.step_history, ctx.current_step.id());
@@ -71,6 +72,7 @@ impl StepTransitionJudge for PyJudge {
                 &step_id,
                 &output,
                 &structured,
+                &structured_status,
                 step_count,
                 retry_count,
                 tool_calls_count,
@@ -207,6 +209,7 @@ impl StepExecutor for PyExecutor {
                 Ok(Ok((output, structured))) => Ok(StepResult {
                     output,
                     structured,
+                    structured_status: Default::default(),
                     tool_calls_count: 0,
                     session_id: String::new(),
                     cost: Default::default(),
@@ -272,6 +275,7 @@ impl StepTransitionJudge for PyCompositeJudgeInner {
         //    用 Arc::clone 避免 Py<PyAny>::clone（需 GIL attached）。
         if let Some(cb) = self.handlers.lock().unwrap().get(&step_id).cloned() {
             let structured = ctx.last_result.structured.clone();
+            let structured_status = ctx.last_result.structured_status.clone();
             let output = ctx.last_result.output.clone();
             let step_count = ctx.step_history.len();
             let retry_count = count_consecutive_retries(ctx.step_history, ctx.current_step.id());
@@ -282,6 +286,7 @@ impl StepTransitionJudge for PyCompositeJudgeInner {
                     &step_id,
                     &output,
                     &structured,
+                    &structured_status,
                     step_count,
                     retry_count,
                     tool_calls_count,
@@ -293,6 +298,7 @@ impl StepTransitionJudge for PyCompositeJudgeInner {
         // 2. Try user fallback callback (async — calls Python)
         if let Some(cb) = self.fallback.lock().unwrap().clone() {
             let structured = ctx.last_result.structured.clone();
+            let structured_status = ctx.last_result.structured_status.clone();
             let output = ctx.last_result.output.clone();
             let step_count = ctx.step_history.len();
             let retry_count = count_consecutive_retries(ctx.step_history, ctx.current_step.id());
@@ -303,6 +309,7 @@ impl StepTransitionJudge for PyCompositeJudgeInner {
                     &step_id,
                     &output,
                     &structured,
+                    &structured_status,
                     step_count,
                     retry_count,
                     tool_calls_count,
@@ -378,17 +385,20 @@ impl PyCompositeJudge {
     }
 }
 /// Shared helper: call a Python judge callback and parse the transition.
+#[allow(clippy::too_many_arguments)]
 async fn call_python_judge(
     callback: &Arc<Py<PyAny>>,
     step_id: &str,
     output: &str,
     structured: &Option<Value>,
+    structured_status: &llm_harness_runtime::workflow::model::StructuredStatus,
     step_count: usize,
     retry_count: usize,
     tool_calls_count: u32,
 ) -> Transition {
     let cb = Arc::clone(callback);
     let structured = structured.clone();
+    let structured_status = structured_status.clone();
     let output = output.to_string();
     let step_id = step_id.to_string();
 
@@ -406,6 +416,13 @@ async fn call_python_judge(
             } else {
                 dict.set_item("structured", py.None())?;
             }
+            dict.set_item(
+                "structured_status",
+                serde_json::to_string(&structured_status)
+                    .unwrap_or_else(|_| "\"not_required\"".into())
+                    .trim_matches('"')
+                    .to_string(),
+            )?;
             let raw = cb.call1((dict,))?;
             let transition_str: String = raw.extract()?;
             Ok::<_, PyErr>(transition_str)
@@ -493,7 +510,11 @@ fn dict_to_workflow(dict: &Bound<'_, PyDict>) -> PyResult<Workflow> {
                 .map(|v| v.extract())
                 .transpose()?
                 .unwrap_or_default();
-            steps.push(Step::llm(id, name, prompt, allowed_tools));
+            let structured: Option<bool> = step_dict
+                .get_item("structured")?
+                .filter(|v| !v.is_none())
+                .and_then(|v| v.extract::<bool>().ok());
+            steps.push(Step::llm(id, name, prompt, allowed_tools).with_structured(structured));
         }
     }
 
@@ -832,6 +853,13 @@ fn step_result_to_dict(py: Python<'_>, r: &StepResult) -> PyResult<Py<PyAny>> {
         None => dict.set_item("structured", py.None())?,
     }
     dict.set_item("tool_calls_count", r.tool_calls_count)?;
+    dict.set_item(
+        "structured_status",
+        serde_json::to_string(&r.structured_status)
+            .unwrap_or_else(|_| "\"not_required\"".into())
+            .trim_matches('"')
+            .to_string(),
+    )?;
     dict.set_item("session_id", r.session_id.clone())?;
     dict.set_item("cost", cost_aggregate_to_dict(py, &r.cost)?)?;
     Ok(dict.into_any().unbind())
