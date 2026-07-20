@@ -654,7 +654,7 @@ checksum = "92daf443525c4cce67b150400bc2316076100ce0b3686209eb8cf3c31612e6f0"
 [[package]]
 name = "llm-harness-agent"
 version = "0.3.0"
-source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=7d4df809bb43a1edb655e8cf8aea70f1f771142f#7d4df809bb43a1edb655e8cf8aea70f1f771142f"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=c41e1ad23fdfa9ccf8585596fbf4aadc8e83e5ee#c41e1ad23fdfa9ccf8585596fbf4aadc8e83e5ee"
 dependencies = [
  "anyhow",
  "chrono",
@@ -672,7 +672,7 @@ dependencies = [
 [[package]]
 name = "llm-harness-loop"
 version = "0.3.0"
-source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=7d4df809bb43a1edb655e8cf8aea70f1f771142f#7d4df809bb43a1edb655e8cf8aea70f1f771142f"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=c41e1ad23fdfa9ccf8585596fbf4aadc8e83e5ee#c41e1ad23fdfa9ccf8585596fbf4aadc8e83e5ee"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -689,7 +689,7 @@ dependencies = [
 
 [[package]]
 name = "llm-harness-py"
-version = "0.4.3"
+version = "0.4.4"
 dependencies = [
  "anyhow",
  "base64",
@@ -714,7 +714,7 @@ dependencies = [
 [[package]]
 name = "llm-harness-runtime"
 version = "0.3.0"
-source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=7d4df809bb43a1edb655e8cf8aea70f1f771142f#7d4df809bb43a1edb655e8cf8aea70f1f771142f"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=c41e1ad23fdfa9ccf8585596fbf4aadc8e83e5ee#c41e1ad23fdfa9ccf8585596fbf4aadc8e83e5ee"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -740,7 +740,7 @@ dependencies = [
 [[package]]
 name = "llm-harness-runtime-sandbox-os"
 version = "0.3.0"
-source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=7d4df809bb43a1edb655e8cf8aea70f1f771142f#7d4df809bb43a1edb655e8cf8aea70f1f771142f"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=c41e1ad23fdfa9ccf8585596fbf4aadc8e83e5ee#c41e1ad23fdfa9ccf8585596fbf4aadc8e83e5ee"
 dependencies = [
  "anyhow",
  "chrono",
@@ -756,7 +756,7 @@ dependencies = [
 [[package]]
 name = "llm-harness-types"
 version = "0.3.0"
-source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=7d4df809bb43a1edb655e8cf8aea70f1f771142f#7d4df809bb43a1edb655e8cf8aea70f1f771142f"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=c41e1ad23fdfa9ccf8585596fbf4aadc8e83e5ee#c41e1ad23fdfa9ccf8585596fbf4aadc8e83e5ee"
 dependencies = [
  "anyhow",
  "chrono",
@@ -773,7 +773,7 @@ dependencies = [
 [[package]]
 name = "llm_adapter"
 version = "0.1.0"
-source = "git+https://github.com/oh-my-harness/llm-api-adapter?rev=54e20caa#54e20caa5f973416657cfb993dc5cf68e61117b5"
+source = "git+https://github.com/oh-my-harness/llm-api-adapter?rev=a121b630#a121b630a62f4271e3560270d2bae70982b32b66"
 dependencies = [
  "async-trait",
  "eventsource-stream",
