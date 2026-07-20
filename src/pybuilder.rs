@@ -184,7 +184,7 @@ impl PyHarnessBuilder {
     /// 注册一个 `AfterTurnHook`（无需包装在 Plugin 中）。
     ///
     /// 多次调用累积多个 hook——`CompositeAfterTurnHook` 为全执行语义，
-    /// 注册顺序不影响正确性（每个 hook 都会运行）。
+    /// 按注册顺序依次执行每个 hook（顺序保证）。
     #[pyo3(text_signature = "($self, hook)")]
     fn after_turn_hook<'a>(
         mut slf: PyRefMut<'a, Self>,

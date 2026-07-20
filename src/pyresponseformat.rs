@@ -31,6 +31,8 @@ pub fn create_json_object_format<'py>(py: Python<'py>) -> PyResult<Bound<'py, Py
 /// - `name` — schema 的逻辑名（OpenAI wire format 要求）。
 /// - `schema` — JSON Schema 对象（dict 或 JSON 字符串）。
 /// - `strict=None` — `Some(True)` 要求模型严格遵循 schema。
+///
+/// 注：`schema` 不做本地 JSON Schema 合法性校验，由 provider 在请求时强制。
 #[pyfunction]
 #[pyo3(signature = (name, schema, strict=None))]
 pub fn create_json_schema_format<'py>(

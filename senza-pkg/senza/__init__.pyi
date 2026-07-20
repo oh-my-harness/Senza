@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, Iterator, Optional
+from typing import Any, Callable, Iterator, Optional, Union
 
 # ── Version & utilities ──────────────────────────────────────────────────────
 
@@ -48,7 +48,7 @@ class ResponseFormat:
 def create_json_object_format() -> ResponseFormat: ...
 def create_json_schema_format(
     name: str,
-    schema: Any,
+    schema: Union[dict, str],
     strict: Optional[bool] = ...,
 ) -> ResponseFormat: ...
 

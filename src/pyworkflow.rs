@@ -209,6 +209,8 @@ impl StepExecutor for PyExecutor {
                 Ok(Ok((output, structured))) => Ok(StepResult {
                     output,
                     structured,
+                    // 自定义 executor 不参与引擎的结构化提取（StructuredOutputCoordinator），
+                    // status 恒为 NotRequired；Python 回调可自行通过 `structured` 字段返回结构化结果。
                     structured_status: Default::default(),
                     tool_calls_count: 0,
                     session_id: String::new(),
@@ -418,10 +420,7 @@ async fn call_python_judge(
             }
             dict.set_item(
                 "structured_status",
-                serde_json::to_string(&structured_status)
-                    .unwrap_or_else(|_| "\"not_required\"".into())
-                    .trim_matches('"')
-                    .to_string(),
+                structured_status_str(&structured_status),
             )?;
             let raw = cb.call1((dict,))?;
             let transition_str: String = raw.extract()?;
@@ -855,14 +854,27 @@ fn step_result_to_dict(py: Python<'_>, r: &StepResult) -> PyResult<Py<PyAny>> {
     dict.set_item("tool_calls_count", r.tool_calls_count)?;
     dict.set_item(
         "structured_status",
-        serde_json::to_string(&r.structured_status)
-            .unwrap_or_else(|_| "\"not_required\"".into())
-            .trim_matches('"')
-            .to_string(),
+        structured_status_str(&r.structured_status),
     )?;
     dict.set_item("session_id", r.session_id.clone())?;
     dict.set_item("cost", cost_aggregate_to_dict(py, &r.cost)?)?;
     Ok(dict.into_any().unbind())
+}
+
+/// 将 `StructuredStatus` 转为面向 Python 的稳定字符串值。
+///
+/// 不依赖 `serde` 对枚举的序列化形状，避免上游 variant 命名变化时
+/// 泄漏到 Python 侧。与 README 文档一致：
+/// `"not_required"` / `"ok"` / `"failed"`。
+fn structured_status_str(
+    s: &llm_harness_runtime::workflow::model::StructuredStatus,
+) -> &'static str {
+    use llm_harness_runtime::workflow::model::StructuredStatus;
+    match s {
+        StructuredStatus::NotRequired => "not_required",
+        StructuredStatus::Ok => "ok",
+        StructuredStatus::Failed => "failed",
+    }
 }
 
 /// 将 `StepRecord` 转换为 Python dict。
