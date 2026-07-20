@@ -59,6 +59,7 @@ fn senza(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(create_shell_executor, m)?)?;
     m.add_function(wrap_pyfunction!(create_http_executor, m)?)?;
     m.add_function(wrap_pyfunction!(create_os_env, m)?)?;
+    m.add_function(wrap_pyfunction!(create_fs_tools_plugin, m)?)?;
     m.add_function(wrap_pyfunction!(create_before_turn_hook, m)?)?;
     m.add_class::<pyeventstream::PyEventStreamHandle>()?;
     m.add_class::<pyeventstream::PyWaitForExternalEventTool>()?;
@@ -290,6 +291,32 @@ fn create_os_env<'py>(
     let env: Arc<dyn llm_harness_types::ExecutionEnv> =
         Arc::new(OsEnv::new(std::path::PathBuf::from(working_dir)));
     Py::new(py, pyworkflow::PyEnvWrapper::new(env)).map(|p| p.into_bound(py))
+}
+
+/// 创建一个聚合 `bash`/`read`/`write`/`edit` 四件套的 `FsToolsPlugin`。
+///
+/// 四个工具通过共享的 `FileSnapshotStore` 耦合：`read` 记录文件快照并
+/// 在输出中附加 `[PATH#TAG]` 锚点，`edit` 据此检测 stale 内容并拒绝
+/// 对已过期快照的编辑；`write` 在覆写后使对应快照失效。
+///
+/// 这些工具通过 `ExecutionEnv` 执行真实文件系统 / shell 操作——
+/// 必须在 `HarnessBuilder.env(create_os_env(...))` 或
+/// `WorkflowEngine(..., env=create_os_env(...))` 提供真实 env 时才有意义。
+/// 在 `UnsupportedEnv`（默认）下，`bash`/`read`/`write`/`edit` 会返回错误。
+///
+/// 用法：
+/// ```python
+/// plugin = lh.create_fs_tools_plugin()
+/// harness = lh.HarnessBuilder("gpt-4o").plugin(plugin).env(lh.create_os_env()).build()
+/// ```
+#[pyfunction]
+fn create_fs_tools_plugin<'py>(py: Python<'py>) -> PyResult<Bound<'py, pyplugin::PyPluginWrapper>> {
+    let store = Arc::new(parking_lot::RwLock::new(
+        llm_harness_runtime_tools::FileSnapshotStore::new(),
+    ));
+    let plugin: Arc<dyn llm_harness_agent::Plugin> =
+        Arc::new(llm_harness_runtime_tools::FsToolsPlugin::new(Some(store)));
+    Py::new(py, pyplugin::PyPluginWrapper::new(plugin)).map(|p| p.into_bound(py))
 }
 
 /// 从 Python callable 创建一个 `BeforeTurnHook`。
@@ -548,10 +575,10 @@ fn create_plugin<'py>(
             hook_vec.push(borrowed.kind.clone());
         }
     }
-    let plugin = Arc::new(pyplugin::PyPlugin::new(
+    let plugin: Arc<dyn llm_harness_agent::Plugin> = Arc::new(pyplugin::PyPlugin::new(
         name.to_string(),
         tool_vec,
         hook_vec,
     ));
-    Py::new(py, pyplugin::PyPluginWrapper { plugin }).map(|p| p.into_bound(py))
+    Py::new(py, pyplugin::PyPluginWrapper::new(plugin)).map(|p| p.into_bound(py))
 }

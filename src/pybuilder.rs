@@ -28,6 +28,7 @@ use crate::pyprovider::PyProvider;
 use crate::pyskills::PySkill;
 use crate::pytool::PyToolWrapper;
 
+use crate::pyworkflow::PyEnvWrapper;
 /// Python 侧的 `HarnessBuilder`。
 ///
 /// 镜像 Rust `HarnessBuilder` 的 fluent API。fluent 方法以 `PyRefMut`
@@ -35,14 +36,16 @@ use crate::pytool::PyToolWrapper;
 #[pyclass(name = "HarnessBuilder")]
 pub struct PyHarnessBuilder {
     builder: Option<HarnessBuilder>,
+    /// 可选执行环境；`build()` 时注入。`None` → `UnsupportedEnv`（默认）。
+    env: Option<Arc<dyn ExecutionEnv>>,
 }
 #[pymethods]
 impl PyHarnessBuilder {
-    /// 创建一个新的 builder，指定初始模型 ID。
     #[new]
     fn new(model: &str) -> Self {
         Self {
             builder: Some(HarnessBuilder::new(model)),
+            env: None,
         }
     }
 
@@ -104,6 +107,16 @@ impl PyHarnessBuilder {
             let client = provider.borrow().client.clone();
             slf.builder = Some(b.provider(pattern, client));
         }
+        slf
+    }
+
+    /// 设置执行环境，供 `bash`/`read`/`write`/`edit` 等需要文件系统或
+    /// shell 能力的工具使用。传入 `create_os_env(working_dir)` 创建的 env。
+    ///
+    /// 未调用时使用 `UnsupportedEnv`——上述工具会返回错误。
+    #[pyo3(text_signature = "($self, env)")]
+    fn env<'a>(mut slf: PyRefMut<'a, Self>, env: &Bound<'_, PyEnvWrapper>) -> PyRefMut<'a, Self> {
+        slf.env = Some(env.borrow().env.clone());
         slf
     }
 
@@ -379,15 +392,19 @@ impl PyHarnessBuilder {
 
     /// 构建 harness 并返回 `AgentHarness`。
     ///
-    /// 使用 `UnsupportedEnv`（无文件系统 / shell 能力）作为执行环境。
-    /// 释放 GIL 后用全局 tokio runtime 执行 async build。若未注册任何
-    /// provider，返回 `RuntimeError`（`HarnessBuildError::NoProvider`）。
+    /// 执行环境为 `.env()` 设置的 env；未设置时使用 `UnsupportedEnv`
+    /// （无文件系统 / shell 能力）。释放 GIL 后用全局 tokio runtime
+    /// 执行 async build。若未注册任何 provider，返回 `RuntimeError`
+    /// （`HarnessBuildError::NoProvider`）。
     fn build(&mut self, py: Python<'_>) -> PyResult<Py<PyAgentHarness>> {
         let builder = self.builder.take().ok_or_else(|| {
             pyo3::exceptions::PyRuntimeError::new_err("build() already consumed this builder")
         })?;
 
-        let env: Arc<dyn ExecutionEnv> = Arc::new(UnsupportedEnv::new());
+        let env: Arc<dyn ExecutionEnv> = self
+            .env
+            .take()
+            .unwrap_or_else(|| Arc::new(UnsupportedEnv::new()));
         let rt = runtime(py);
         let result = py.detach(move || rt.block_on(async move { builder.build(env).await }));
 

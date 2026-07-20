@@ -711,8 +711,8 @@ impl EnvFactory for PyEnvFactory {
 ///
 /// `PyPlugin` 实现了 `Plugin`，但 `Arc<PyPlugin>` 没有。
 /// `with_step_plugin` 的工厂闭包需要返回 `Box<dyn Plugin>`，
-/// 此适配器让 `Arc<PyPlugin>` 可作为 `Plugin` 使用。
-struct PyPluginAdapter(Arc<crate::pyplugin::PyPlugin>);
+/// 此适配器让 `Arc<dyn Plugin>` 可作为 `Plugin` 使用（`with_step_plugin` 闭包工厂）。
+struct PyPluginAdapter(Arc<dyn llm_harness_agent::Plugin>);
 
 impl Plugin for PyPluginAdapter {
     fn name(&self) -> &str {
@@ -1187,6 +1187,41 @@ impl PyWorkflowEngine {
         engine.set_customize_builder(Arc::new(move |b| {
             let b = if let Some(p) = &prev { p(b) } else { b };
             b.max_tokens(max_tokens)
+        }));
+        slf.engine = Some(Arc::new(engine));
+        Ok(slf)
+    }
+
+    /// 设置每步 LLM 调用的 thinking level。
+    ///
+    /// 通过 `customize_builder` 配置：每步构造 harness 时应用。
+    /// 多次调用累加（后调覆盖先调，语义同 builder last-write-wins）。
+    fn with_thinking_level<'a>(
+        mut slf: PyRefMut<'a, Self>,
+        level: &str,
+    ) -> PyResult<PyRefMut<'a, Self>> {
+        let arc = slf
+            .engine
+            .take()
+            .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("engine already consumed"))?;
+        let mut engine = Arc::try_unwrap(arc).map_err(|_| {
+            pyo3::exceptions::PyRuntimeError::new_err(
+                "engine is shared (running?); cannot set thinking_level",
+            )
+        })?;
+        let parsed = match level.to_ascii_lowercase().as_str() {
+            "off" => llm_harness_types::ThinkingLevel::Off,
+            "minimal" => llm_harness_types::ThinkingLevel::Minimal,
+            "low" => llm_harness_types::ThinkingLevel::Low,
+            "medium" => llm_harness_types::ThinkingLevel::Medium,
+            "high" => llm_harness_types::ThinkingLevel::High,
+            "xhigh" => llm_harness_types::ThinkingLevel::XHigh,
+            _ => llm_harness_types::ThinkingLevel::High,
+        };
+        let prev = engine.config_customize_builder().clone();
+        engine.set_customize_builder(Arc::new(move |b| {
+            let b = if let Some(p) = &prev { p(b) } else { b };
+            b.thinking_level(parsed)
         }));
         slf.engine = Some(Arc::new(engine));
         Ok(slf)

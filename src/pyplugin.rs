@@ -102,10 +102,20 @@ impl Plugin for PyPlugin {
     }
 }
 
-/// 持有 `PyPlugin` 的不透明 Python 包装。
+/// 持有 `Plugin` trait 对象的不透明 Python 包装。
+///
+/// 可包装 `PyPlugin`（Python 侧 `create_plugin`）或任意 Rust 侧
+/// `Plugin` 实现（如 `FsToolsPlugin`）。
 #[pyclass(name = "Plugin")]
 pub struct PyPluginWrapper {
-    pub plugin: Arc<PyPlugin>,
+    pub plugin: Arc<dyn Plugin>,
+}
+
+impl PyPluginWrapper {
+    /// 从任意 `Plugin` trait 对象构造包装。
+    pub fn new(plugin: Arc<dyn Plugin>) -> Self {
+        Self { plugin }
+    }
 }
 
 #[pymethods]
