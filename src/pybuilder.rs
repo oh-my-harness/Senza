@@ -448,6 +448,23 @@ impl PyHarnessBuilder {
     }
 }
 
+// ── pub(crate) helpers（非 #[pymethods]：返回 Rust 类型） ─────────────────────
+
+impl PyHarnessBuilder {
+    /// 取出内部 `HarnessBuilder`（供 `with_step_builder` 适配器使用）。
+    pub(crate) fn take_builder(&mut self) -> Option<HarnessBuilder> {
+        self.builder.take()
+    }
+
+    /// 从已有 `HarnessBuilder` 构造包装（供 `with_step_builder` 适配器使用）。
+    pub(crate) fn from_builder(b: HarnessBuilder) -> Self {
+        Self {
+            builder: Some(b),
+            env: None,
+        }
+    }
+}
+
 // ── Skill plugin helpers ────────────────────────────────────────────────────
 
 /// 单 skill 插件——通过 `Plugin::register_skills` 注入一个 skill。

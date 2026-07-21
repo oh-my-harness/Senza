@@ -11,6 +11,7 @@ use std::sync::Arc;
 
 use futures::future::BoxFuture;
 use llm_harness_agent::{HarnessHooks, Plugin};
+use llm_harness_runtime::builder::HarnessBuilder;
 use llm_harness_runtime::lifecycle::task::TaskId;
 use llm_harness_runtime::lifecycle::task_store::JsonlTaskStore;
 use llm_harness_runtime::spawn::spawner::{EnvFactory, JsonlSessionFactory};
@@ -27,6 +28,7 @@ use pyo3::types::PyDict;
 use serde_json::Value;
 
 use crate::pyagent::runtime;
+use crate::pybuilder::PyHarnessBuilder;
 use crate::pyeventstream::PyWaitForExternalEventTool;
 use crate::pyplugin::PyPluginWrapper;
 use crate::pyprovider::PyProvider;
@@ -1287,6 +1289,65 @@ impl PyWorkflowEngine {
             Some(Arc::new(engine.with_step_plugin(step_id, move || {
                 Box::new(PyPluginAdapter(p.clone()))
             })));
+        Ok(slf)
+    }
+
+    /// 为指定 step 安装 per-step builder 定制闭包。返回 self 以支持链式调用。
+    ///
+    /// `customize` 签名：`customize(builder: HarnessBuilder) -> HarnessBuilder`。
+    /// 在共享 `customize_builder`（`with_hooks`/`with_max_tokens`/`with_thinking_level`
+    /// 等设置）之后、step plugin 注册之前应用，可覆盖共享设置。
+    ///
+    /// thinking_level。对未注册的 step 无影响。
+    ///
+    /// TODO(error-propagation): callback 内 Python 异常当前由 `.expect()`
+    /// 转成 panic，沿 tokio → `py.detach` 传回 Python 成为 `PanicException`，
+    /// 会丢失原始异常类型。要做结构化错误传播需改 runtime 的
+    /// `BuilderCustomize` 签名（`Fn(HarnessBuilder) -> HarnessBuilder` →
+    /// 返回 `Result`），跨仓库改动，暂未实施。
+    fn with_step_builder<'a>(
+        mut slf: PyRefMut<'a, Self>,
+        step_id: &str,
+        customize: Py<PyAny>,
+    ) -> PyResult<PyRefMut<'a, Self>> {
+        let arc = slf
+            .engine
+            .take()
+            .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("engine already consumed"))?;
+        let engine = Arc::try_unwrap(arc).map_err(|_| {
+            pyo3::exceptions::PyRuntimeError::new_err(
+                "engine is shared (running?); cannot add step builder",
+            )
+        })?;
+        let customize = Arc::new(customize);
+        slf.engine = Some(Arc::new(engine.with_step_builder(
+            step_id,
+            move |b: HarnessBuilder| {
+                // Python callback 在 GIL 下同步调用。customize 闭包在 builder 构造
+                // 阶段执行（非热路径），且 callback 通常只调几个 builder 方法，
+                // 阻塞时间极短。
+                Python::attach(|py| {
+                    let py_builder = PyHarnessBuilder::from_builder(b);
+                    let py_obj = Py::new(py, py_builder)?;
+                    let ret = customize.call1(py, (py_obj,))?;
+                    let bound = ret.bind(py);
+                    let mut borrowed = bound
+                        .cast::<PyHarnessBuilder>()
+                        .map_err(|_| {
+                            pyo3::exceptions::PyTypeError::new_err(
+                                "with_step_builder callback must return a HarnessBuilder",
+                            )
+                        })?
+                        .borrow_mut();
+                    borrowed.take_builder().ok_or_else(|| {
+                        pyo3::exceptions::PyRuntimeError::new_err(
+                            "with_step_builder callback returned a consumed HarnessBuilder",
+                        )
+                    })
+                })
+                .expect("with_step_builder: Python callback panicked")
+            },
+        )));
         Ok(slf)
     }
 

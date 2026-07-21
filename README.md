@@ -192,6 +192,8 @@ lh.create_anthropic_provider(api_key, base_url=None, messages_path=None)
 | `.with_hooks([hooks])` | 注册 hooks |
 | `.with_task_store(dir)` | 启用持久化 |
 | `.with_max_steps(n)` / `.with_max_retries(n)` | 总步数上限 / per-step 连续 Retry 上限（超限 → Failed） |
+| `.with_max_tokens(n)` / `.with_thinking_level(level)` | per-step LLM 参数（共享，所有 step） |
+| `.with_step_builder(step_id, customize)` | per-step builder 定制闭包（覆盖共享设置，如 system_prompt） |
 | `.run()` | 执行（阻塞） |
 | `.state()` | "idle"/"running"/"paused"/"succeeded"/"failed"/"cancelled" |
 | `.current_step()` / `.step_history()` | 进度查询 |
