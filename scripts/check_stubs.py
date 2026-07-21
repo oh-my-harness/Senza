@@ -39,6 +39,15 @@ class FuncSig:
 
 SKIP_DUNDER = {"__init__", "__enter__", "__exit__"}
 
+# Methods inherited from BaseException that PyO3's create_exception! does
+# not expose with __text_signature__. Listing them in .pyi (e.g. on
+# RustPanicError) is correct for type-checkers but trips the runtime drift
+# check, so skip the existence/param comparison for them entirely.
+SKIP_BASEEXCEPTION_METHODS = {
+    "add_note", "with_traceback", "args", "__cause__", "__context__",
+    "__traceback__", "__suppress_context__", "__notes__",
+}
+
 # Methods that only exist when built with --features test-utils.
 # The .pyi (production stubs) correctly omits them.
 SKIP_RUNTIME_ONLY = {
@@ -252,7 +261,15 @@ def compare_signatures(
     all_keys = set(pyi_sigs) | set(rt_sigs)
 
     for key in sorted(all_keys):
+        method_name = key.split(".")[-1] if "." in key else key
+
         if key in SKIP_RUNTIME_ONLY:
+            continue
+        if method_name in SKIP_BASEEXCEPTION_METHODS:
+            # BaseException-level methods (add_note, with_traceback, …)
+            # are never given __text_signature__ by create_exception!, so
+            # listing them in .pyi is correct for type-checkers but would
+            # falsely trip the runtime drift check.
             continue
         if key not in rt_sigs or rt_sigs.get(key) is None:
             diffs.append(f"  {key}: in .pyi but not in runtime")
@@ -261,7 +278,6 @@ def compare_signatures(
             # For dunder methods with synthetic *args/**kwargs signatures,
             # .pyi may legitimately omit them (e.g. classes constructed via
             # factory functions). Skip existence check for SKIP_DUNDER.
-            method_name = key.split(".")[-1] if "." in key else key
             rt_sig = rt_sigs.get(key)
             if rt_sig and method_name in SKIP_DUNDER and _is_synthetic_init(rt_sig):
                 continue
@@ -269,7 +285,6 @@ def compare_signatures(
             continue
 
         # For dunder methods, only check existence (skip param comparison)
-        method_name = key.split(".")[-1] if "." in key else key
         if method_name in SKIP_DUNDER:
             continue
 
@@ -290,7 +305,6 @@ def compare_signatures(
                 f"    .pyi defaults:     {pyi_sig.defaults}\n"
                 f"    runtime defaults: {rt_sig.defaults}"
             )
-
     return diffs
 
 
