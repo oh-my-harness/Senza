@@ -97,6 +97,9 @@ fn parse_transition(s: &str) -> Transition {
             let target = s[3..].trim().to_string();
             Transition::To(target)
         }
+        s if s.starts_with("pause:") => Transition::Pause {
+            reason: s[6..].trim().to_string(),
+        },
         s if s.starts_with("fail:") => Transition::Fail {
             reason: s[5..].trim().to_string(),
         },
@@ -839,6 +842,10 @@ fn transition_to_dict(py: Python<'_>, t: &Transition) -> PyResult<Py<PyAny>> {
         }
         Transition::Abort { reason } => {
             dict.set_item("type", "abort")?;
+            dict.set_item("reason", reason.clone())?;
+        }
+        Transition::Pause { reason } => {
+            dict.set_item("type", "pause")?;
             dict.set_item("reason", reason.clone())?;
         }
     }
