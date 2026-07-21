@@ -28,7 +28,7 @@ futures = "0.3"
 tokio-util = "0.7"
 base64 = "0.22"
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter", "registry"] }
 
 [dev-dependencies]
 pyo3 = { version = "0.29", features = ["macros", "py-clone", "auto-initialize"] }

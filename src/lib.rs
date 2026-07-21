@@ -13,6 +13,7 @@ pub mod pybuilder;
 pub mod pyeventstream;
 pub mod pyharness;
 pub mod pyhooks;
+pub mod pylogging;
 pub mod pyplugin;
 pub mod pypricing;
 pub mod pyprovider;
@@ -27,14 +28,9 @@ pub mod value_conv;
 /// PyO3 module entry point.
 #[pymodule]
 fn senza(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
-    let _ = tracing_subscriber::fmt()
-        .with_writer(std::io::stderr)
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::builder()
-                .with_default_directive(tracing::level_filters::LevelFilter::WARN.into())
-                .from_env_lossy(),
-        )
-        .try_init();
+    // 桥接 Rust tracing → Python logging：用户 `logging.basicConfig(level=DEBUG)`
+    // 即可看到 Rust 底座日志，级别/handler/格式完全由 Python 侧控制。
+    pylogging::init_logging();
     m.add_function(wrap_pyfunction!(version, m)?)?;
     m.add_function(wrap_pyfunction!(to_json, m)?)?;
     m.add_function(wrap_pyfunction!(pyviewer::read_sessions, m)?)?;
