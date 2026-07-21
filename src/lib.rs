@@ -15,6 +15,7 @@ pub mod pyeventstream;
 pub mod pyharness;
 pub mod pyhooks;
 pub mod pylogging;
+pub mod pyloop;
 pub mod pyplugin;
 pub mod pypricing;
 pub mod pyprovider;
@@ -34,6 +35,7 @@ fn senza(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     pylogging::init_logging();
     m.add("RustPanicError", py.get_type::<pyerror::RustPanicError>())?;
     m.add_function(wrap_pyfunction!(version, m)?)?;
+    m.add_function(wrap_pyfunction!(set_event_loop, m)?)?;
     m.add_function(wrap_pyfunction!(to_json, m)?)?;
     m.add_function(wrap_pyfunction!(pyviewer::read_sessions, m)?)?;
     m.add_function(wrap_pyfunction!(pyviewer::viewer_html, m)?)?;
@@ -121,6 +123,22 @@ fn senza(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
 #[pyfunction]
 fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
+}
+
+/// Register the user's asyncio event loop for async callback scheduling.
+///
+/// When set, `async def` tool/hook/budget callbacks are scheduled onto the
+/// registered loop via `asyncio.run_coroutine_threadsafe`, instead of
+/// `asyncio.run()` (which creates a throwaway loop).  This lets callbacks
+/// share loop-bound resources (sessions, locks, queues) with the caller.
+///
+/// The loop must be running on another thread; otherwise a deadlock will
+/// occur because the blocking thread waits for a result the loop cannot
+/// produce.
+#[pyfunction]
+#[pyo3(text_signature = "(loop)")]
+fn set_event_loop(loop_obj: Py<PyAny>) {
+    pyloop::set_event_loop(loop_obj);
 }
 
 /// Convert a Python object to a JSON string.

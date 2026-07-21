@@ -5,13 +5,13 @@
 //! Context struct 中的 `&'a` 引用字段在进入 `spawn_blocking` 前转换为
 //! owned 数据（clone 或序列化），避免跨线程借用。
 //!
-//! # asyncio.run 限制
+//! # asyncio 回调调度
 //!
-//! `async def` callback 在 `spawn_blocking` 线程上通过 `asyncio.run()` 执行，
-//! 该函数会创建全新的 event loop。因此 callback 内部不能使用绑定到主
-//! event loop 的 asyncio 原语（如 `asyncio.Lock`、`asyncio.Queue`、
-//! `asyncio.Event`），否则会死锁。如需共享主 loop 的原语，应使用
-//! `asyncio.run_coroutine_threadsafe()` 将 coroutine 调度回主 loop。
+//! `async def` callback 通过 [`crate::pyloop::run_coro`] 执行。当用户通过
+//! `senza.set_event_loop(loop)` 注册了正在运行的 event loop 时，coroutine 会被
+//! `asyncio.run_coroutine_threadsafe()` 调度到该 loop 上执行，可安全使用主 loop
+//! 的 asyncio 原语（`asyncio.Lock`、`asyncio.Queue` 等）。未注册 loop 时回退到
+//! `asyncio.run()`（创建临时 loop）。
 
 use std::str::FromStr;
 use std::sync::Arc;
@@ -1161,8 +1161,9 @@ pub(crate) fn call_callback_with_mode<'py>(
     let bound = cb.bind(py);
     let result = bound.call1(args)?;
     if is_async {
-        let asyncio = pyo3::types::PyModule::import(py, "asyncio")?;
-        Ok(asyncio.call_method1("run", (result,))?)
+        // Schedule the coroutine on the user's main event loop when
+        // possible (issue #13), falling back to asyncio.run().
+        Ok(crate::pyloop::run_coro(py, &result)?)
     } else {
         Ok(result)
     }

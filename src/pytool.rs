@@ -73,11 +73,11 @@ impl Tool for PyTool {
                     let py_ctx = PyToolContext::new(abort.clone(), update_tx.clone());
 
                     if is_async {
-                        // async: 在当前 spawn_blocking 线程上用 asyncio.run 执行 coroutine。
-                        // asyncio.run 内部 select() 会释放 GIL，其他线程可运行。
-                        let coro = cb.call1((py_args, py_ctx))?.unbind();
-                        let asyncio = pyo3::types::PyModule::import(py, "asyncio")?;
-                        let raw = asyncio.call_method1("run", (coro,))?;
+                        // async: schedule the coroutine on the user's main
+                        // event loop when possible (issue #13), falling
+                        // back to asyncio.run().
+                        let coro = cb.call1((py_args, py_ctx))?;
+                        let raw = crate::pyloop::run_coro(py, &coro)?;
                         parse_tool_result(&raw)
                     } else {
                         // sync: 直接调用
