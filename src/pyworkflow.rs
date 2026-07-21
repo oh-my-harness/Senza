@@ -598,6 +598,7 @@ fn workflow_event_to_dict(py: Python<'_>, event: &WorkflowEvent) -> PyResult<Py<
                 None => dict.set_item("structured", py.None())?,
             }
             dict.set_item("tool_calls_count", result.tool_calls_count)?;
+            dict.set_item("cost", cost_aggregate_to_dict(py, &result.cost)?)?;
             Ok(dict.into_any().unbind())
         }
         WorkflowEvent::Paused { reason } => {
