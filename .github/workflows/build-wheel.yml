@@ -163,15 +163,14 @@ jobs:
           [net]
           git-fetch-with-cli = true
           CARGO_EOF
-      - name: Install test dependencies
-        run: pip install pytest pytest-timeout maturin
-
       - name: Create virtualenv
         shell: bash
         run: |
           python -m venv .venv
           echo "VIRTUAL_ENV=$PWD/.venv" >> $GITHUB_ENV
           echo "$PWD/.venv/bin" >> $GITHUB_PATH
+      - name: Install test dependencies
+        run: pip install pytest pytest-timeout maturin
       - name: Build test-utils wheel
         uses: PyO3/maturin-action@v1
         with:
