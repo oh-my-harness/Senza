@@ -13,7 +13,7 @@ use futures::future::BoxFuture;
 use llm_harness_agent::{HarnessHooks, Plugin};
 use llm_harness_runtime::builder::HarnessBuilder;
 use llm_harness_runtime::lifecycle::task::TaskId;
-use llm_harness_runtime::lifecycle::task_store::JsonlTaskStore;
+use llm_harness_runtime::lifecycle::task_store::{JsonlTaskStore, TaskStore, TaskSummary};
 use llm_harness_runtime::spawn::spawner::{EnvFactory, JsonlSessionFactory};
 use llm_harness_runtime::workflow::engine::{WorkflowEngine, WorkflowEngineConfig, WorkflowEvent};
 use llm_harness_runtime::workflow::error::WorkflowError;
@@ -1386,6 +1386,81 @@ impl PyWorkflowEngine {
         let store = Arc::new(JsonlTaskStore::new(PathBuf::from(dir)));
         slf.engine = Some(Arc::new(engine.with_task_store(store)));
         Ok(slf)
+    }
+
+    /// 枚举 TaskStore 中的所有 task，返回摘要列表。classmethod。
+    ///
+    /// `task_store_dir` 是 `JsonlTaskStore` 的根目录（之前 `with_task_store(dir)`
+    /// 或 `restore()` 使用的路径）。
+    ///
+    /// 返回 `list[dict]`，每个 dict 包含：
+    /// - `task_id` (str): task 标识
+    /// - `status` (str): 生命周期状态（idle/running/paused/succeeded/failed/cancelled）
+    /// - `current_step` (str): 当前步骤
+    /// - `step_count` (int): 已完成步骤数
+    /// - `started_at` (str | None): 启动时间（ISO 8601）
+    /// - `ended_at` (str | None): 结束时间
+    /// - `reason` (str | None): 暂停/失败/取消原因
+    /// - `planned_by` (str | None): 规划此 workflow 的 task ID
+    ///
+    /// 结果按 `started_at` 降序排列（最新的在前）。
+    #[classmethod]
+    #[pyo3(text_signature = "(task_store_dir)")]
+    fn list_tasks(
+        _cls: &Bound<'_, pyo3::types::PyType>,
+        py: Python<'_>,
+        task_store_dir: &str,
+    ) -> PyResult<Vec<Py<PyAny>>> {
+        let store = JsonlTaskStore::new(PathBuf::from(task_store_dir));
+        let rt = runtime(py);
+        let summaries: Vec<TaskSummary> =
+            crate::pyerror::detach_catch_panic_result(py, move || {
+                rt.block_on(async move { store.list_tasks().await })
+            })?;
+        let mut result = Vec::with_capacity(summaries.len());
+        for s in &summaries {
+            let dict = pyo3::types::PyDict::new(py);
+            dict.set_item("task_id", &s.task_id.0)?;
+            dict.set_item("status", workflow_status_to_str(&s.status))?;
+            dict.set_item("current_step", &s.current_step)?;
+            dict.set_item("step_count", s.step_count)?;
+            let started_at: Py<PyAny> = s
+                .started_at
+                .map(|dt| {
+                    dt.to_rfc3339()
+                        .into_pyobject(py)
+                        .unwrap()
+                        .into_any()
+                        .unbind()
+                })
+                .unwrap_or_else(|| py.None());
+            dict.set_item("started_at", started_at)?;
+            let ended_at: Py<PyAny> = s
+                .ended_at
+                .map(|dt| {
+                    dt.to_rfc3339()
+                        .into_pyobject(py)
+                        .unwrap()
+                        .into_any()
+                        .unbind()
+                })
+                .unwrap_or_else(|| py.None());
+            dict.set_item("ended_at", ended_at)?;
+            let reason: Py<PyAny> = s
+                .reason
+                .as_ref()
+                .map(|r| r.as_str().into_pyobject(py).unwrap().into_any().unbind())
+                .unwrap_or_else(|| py.None());
+            dict.set_item("reason", reason)?;
+            let planned_by: Py<PyAny> = s
+                .planned_by
+                .as_ref()
+                .map(|t| t.0.as_str().into_pyobject(py).unwrap().into_any().unbind())
+                .unwrap_or_else(|| py.None());
+            dict.set_item("planned_by", planned_by)?;
+            result.push(dict.into_any().unbind());
+        }
+        Ok(result)
     }
 
     /// 设置步骤数上限。超过 → Failed。
