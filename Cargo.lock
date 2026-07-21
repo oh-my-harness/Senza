@@ -654,7 +654,7 @@ checksum = "92daf443525c4cce67b150400bc2316076100ce0b3686209eb8cf3c31612e6f0"
 [[package]]
 name = "llm-harness-agent"
 version = "0.3.0"
-source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=a7d8489f6609f033c767b4e5eb9228a4db255b37#a7d8489f6609f033c767b4e5eb9228a4db255b37"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=cf57a8f7c25af65a21b6fa907f9106c8a877cdc9#cf57a8f7c25af65a21b6fa907f9106c8a877cdc9"
 dependencies = [
  "anyhow",
  "chrono",
@@ -672,7 +672,7 @@ dependencies = [
 [[package]]
 name = "llm-harness-loop"
 version = "0.3.0"
-source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=a7d8489f6609f033c767b4e5eb9228a4db255b37#a7d8489f6609f033c767b4e5eb9228a4db255b37"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=cf57a8f7c25af65a21b6fa907f9106c8a877cdc9#cf57a8f7c25af65a21b6fa907f9106c8a877cdc9"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -706,6 +706,7 @@ dependencies = [
  "pyo3-build-config",
  "regex",
  "serde_json",
+ "session-viewer",
  "tempfile",
  "tokio",
  "tokio-util",
@@ -716,7 +717,7 @@ dependencies = [
 [[package]]
 name = "llm-harness-runtime"
 version = "0.3.0"
-source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=a7d8489f6609f033c767b4e5eb9228a4db255b37#a7d8489f6609f033c767b4e5eb9228a4db255b37"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=cf57a8f7c25af65a21b6fa907f9106c8a877cdc9#cf57a8f7c25af65a21b6fa907f9106c8a877cdc9"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -742,7 +743,7 @@ dependencies = [
 [[package]]
 name = "llm-harness-runtime-sandbox-os"
 version = "0.3.0"
-source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=a7d8489f6609f033c767b4e5eb9228a4db255b37#a7d8489f6609f033c767b4e5eb9228a4db255b37"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=cf57a8f7c25af65a21b6fa907f9106c8a877cdc9#cf57a8f7c25af65a21b6fa907f9106c8a877cdc9"
 dependencies = [
  "anyhow",
  "chrono",
@@ -758,7 +759,7 @@ dependencies = [
 [[package]]
 name = "llm-harness-runtime-tools"
 version = "0.3.0"
-source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=a7d8489f6609f033c767b4e5eb9228a4db255b37#a7d8489f6609f033c767b4e5eb9228a4db255b37"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=cf57a8f7c25af65a21b6fa907f9106c8a877cdc9#cf57a8f7c25af65a21b6fa907f9106c8a877cdc9"
 dependencies = [
  "futures",
  "llm-harness-agent",
@@ -773,7 +774,7 @@ dependencies = [
 [[package]]
 name = "llm-harness-types"
 version = "0.3.0"
-source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=a7d8489f6609f033c767b4e5eb9228a4db255b37#a7d8489f6609f033c767b4e5eb9228a4db255b37"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=cf57a8f7c25af65a21b6fa907f9106c8a877cdc9#cf57a8f7c25af65a21b6fa907f9106c8a877cdc9"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1321,6 +1322,18 @@ dependencies = [
  "itoa",
  "ryu",
  "serde",
+]
+
+[[package]]
+name = "session-viewer"
+version = "0.3.0"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=cf57a8f7c25af65a21b6fa907f9106c8a877cdc9#cf57a8f7c25af65a21b6fa907f9106c8a877cdc9"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "serde",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]

@@ -20,6 +20,7 @@ pub mod pyresponseformat;
 pub mod pyrules;
 pub mod pyskills;
 pub mod pytool;
+pub mod pyviewer;
 pub mod pyworkflow;
 pub mod value_conv;
 
@@ -36,6 +37,8 @@ fn senza(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
         .try_init();
     m.add_function(wrap_pyfunction!(version, m)?)?;
     m.add_function(wrap_pyfunction!(to_json, m)?)?;
+    m.add_function(wrap_pyfunction!(pyviewer::read_sessions, m)?)?;
+    m.add_function(wrap_pyfunction!(pyviewer::viewer_html, m)?)?;
     m.add_function(wrap_pyfunction!(from_json, m)?)?;
     // `PyAgent`'s `#[new]` uses `MockLlmClient` (test-only). Gating the
     // class registration behind `test-utils` keeps it out of production
