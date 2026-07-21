@@ -128,9 +128,18 @@ def introspect_runtime_signatures() -> dict[str, FuncSig]:
         obj = getattr(senza, name)
         if not callable(obj) or isinstance(obj, type):
             continue
+        # Skip re-exported typing/stdlib objects (e.g. AsyncGenerator)
+        if not str(getattr(obj, "__module__", "")).startswith("senza"):
+            continue
         ts = getattr(obj, "__text_signature__", None)
         if ts and ts != ():
             sigs[name] = _parse_text_signature(ts)
+        else:
+            try:
+                sig = inspect.signature(obj)
+                sigs[name] = _parse_inspect_signature(sig)
+            except Exception:
+                pass
 
     # Class methods
     for name in dir(senza):
@@ -150,6 +159,12 @@ def introspect_runtime_signatures() -> dict[str, FuncSig]:
             ts = getattr(mobj, "__text_signature__", None)
             if ts and ts != ():
                 sigs[f"{name}.{mname}"] = _parse_text_signature(ts)
+            else:
+                try:
+                    sig = inspect.signature(mobj)
+                    sigs[f"{name}.{mname}"] = _parse_inspect_signature(sig)
+                except Exception:
+                    pass
 
     return sigs
 
@@ -209,6 +224,22 @@ def _parse_text_signature(ts: str) -> FuncSig:
     return FuncSig(params=params, defaults=defaults)
 
 
+def _parse_inspect_signature(sig: "inspect.Signature") -> FuncSig:
+    """Parse an inspect.Signature (Python-defined functions) into FuncSig."""
+    params: list[str] = []
+    defaults: set[str] = set()
+    for name, param in sig.parameters.items():
+        if param.kind == inspect.Parameter.VAR_POSITIONAL:
+            params.append(f"*{name}")
+        elif param.kind == inspect.Parameter.VAR_KEYWORD:
+            params.append(f"**{name}")
+        else:
+            params.append(name)
+            if param.default is not inspect.Parameter.empty:
+                defaults.add(name)
+    return FuncSig(params=params, defaults=defaults)
+
+
 def _is_synthetic_init(sig: FuncSig) -> bool:
     """Check if a signature is PyO3's synthetic *args/**kwargs placeholder."""
     return set(sig.params) == {"self", "*args", "**kwargs"} or set(sig.params) == {"*args", "**kwargs"}
@@ -223,7 +254,7 @@ def compare_signatures(
     for key in sorted(all_keys):
         if key in SKIP_RUNTIME_ONLY:
             continue
-        if key not in rt_sigs:
+        if key not in rt_sigs or rt_sigs.get(key) is None:
             diffs.append(f"  {key}: in .pyi but not in runtime")
             continue
         if key not in pyi_sigs:
@@ -231,8 +262,8 @@ def compare_signatures(
             # .pyi may legitimately omit them (e.g. classes constructed via
             # factory functions). Skip existence check for SKIP_DUNDER.
             method_name = key.split(".")[-1] if "." in key else key
-            rt_sig = rt_sigs[key]
-            if method_name in SKIP_DUNDER and _is_synthetic_init(rt_sig):
+            rt_sig = rt_sigs.get(key)
+            if rt_sig and method_name in SKIP_DUNDER and _is_synthetic_init(rt_sig):
                 continue
             diffs.append(f"  {key}: in runtime but not in .pyi")
             continue
@@ -245,6 +276,8 @@ def compare_signatures(
         pyi_sig = pyi_sigs[key]
         rt_sig = rt_sigs[key]
 
+        if rt_sig is None:
+            continue
         if pyi_sig.params != rt_sig.params:
             diffs.append(
                 f"  {key}: param mismatch\n"
