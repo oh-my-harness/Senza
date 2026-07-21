@@ -249,9 +249,9 @@ impl PyHarnessEventIterator {
         let timeout = std::time::Duration::from_millis(self.timeout_ms);
         let handle = self.handle.clone();
 
-        let recv_result = py.detach(move || {
+        let recv_result = crate::pyerror::detach_catch_panic(py, move || {
             handle.block_on(async move { tokio::time::timeout(timeout, rx.recv()).await })
-        });
+        })?;
 
         match recv_result {
             Ok(Ok(event)) => {
@@ -323,11 +323,10 @@ impl PyAgentHarness {
         let harness = self.harness.clone();
         let text = text.to_string();
         let rt = runtime(py);
-        let result = py.detach(move || rt.block_on(async move { harness.prompt(&text).await }));
-        match result {
-            Ok(()) => Ok(()),
-            Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e.to_string())),
-        }
+        crate::pyerror::detach_catch_panic_result(py, move || {
+            rt.block_on(async move { harness.prompt(&text).await })
+        })?;
+        Ok(())
     }
 
     /// 获取当前会话中的消息数量。
@@ -336,11 +335,10 @@ impl PyAgentHarness {
     fn message_count(&self, py: Python<'_>) -> PyResult<usize> {
         let harness = self.harness.clone();
         let rt = runtime(py);
-        let result = py.detach(move || rt.block_on(async move { harness.build_context().await }));
-        match result {
-            Ok(ctx) => Ok(ctx.messages.len()),
-            Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e.to_string())),
-        }
+        let ctx = crate::pyerror::detach_catch_panic_result(py, move || {
+            rt.block_on(async move { harness.build_context().await })
+        })?;
+        Ok(ctx.messages.len())
     }
 
     /// 返回当前会话的完整消息列表（user / assistant / tool_result 等）。
@@ -350,20 +348,17 @@ impl PyAgentHarness {
     fn get_messages(&self, py: Python<'_>) -> PyResult<Vec<Py<PyAny>>> {
         let harness = self.harness.clone();
         let rt = runtime(py);
-        let result = py.detach(move || rt.block_on(async move { harness.build_context().await }));
-        match result {
-            Ok(ctx) => {
-                let mut messages = Vec::new();
-                for msg in &ctx.messages {
-                    let json = serde_json::to_value(msg)
-                        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-                    let py_msg = value_to_pyobject(py, &json)?;
-                    messages.push(py_msg);
-                }
-                Ok(messages)
-            }
-            Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e.to_string())),
+        let ctx = crate::pyerror::detach_catch_panic_result(py, move || {
+            rt.block_on(async move { harness.build_context().await })
+        })?;
+        let mut messages = Vec::new();
+        for msg in &ctx.messages {
+            let json = serde_json::to_value(msg)
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+            let py_msg = value_to_pyobject(py, &json)?;
+            messages.push(py_msg);
         }
+        Ok(messages)
     }
 
     /// 返回最近一条 assistant 消息的文本内容。
@@ -374,32 +369,31 @@ impl PyAgentHarness {
     fn last_response(&self, py: Python<'_>) -> PyResult<String> {
         let harness = self.harness.clone();
         let rt = runtime(py);
-        let result = py.detach(move || rt.block_on(async move { harness.build_context().await }));
-        match result {
-            Ok(ctx) => {
-                for msg in ctx.messages.iter().rev() {
-                    let json = serde_json::to_value(msg)
-                        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
-                    if json.get("role").and_then(|r| r.as_str()) == Some("assistant")
-                        && let Some(content) = json.get("content").and_then(|c| c.as_array())
-                    {
-                        let text: String = content
-                            .iter()
-                            .filter_map(|block| {
-                                if block.get("type").and_then(|t| t.as_str()) == Some("text") {
-                                    block.get("text").and_then(|t| t.as_str()).map(String::from)
-                                } else {
-                                    None
-                                }
-                            })
-                            .collect::<Vec<_>>()
-                            .join("");
-                        return Ok(text);
-                    }
+        let ctx = crate::pyerror::detach_catch_panic_result(py, move || {
+            rt.block_on(async move { harness.build_context().await })
+        })?;
+        {
+            for msg in ctx.messages.iter().rev() {
+                let json = serde_json::to_value(msg)
+                    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+                if json.get("role").and_then(|r| r.as_str()) == Some("assistant")
+                    && let Some(content) = json.get("content").and_then(|c| c.as_array())
+                {
+                    let text: String = content
+                        .iter()
+                        .filter_map(|block| {
+                            if block.get("type").and_then(|t| t.as_str()) == Some("text") {
+                                block.get("text").and_then(|t| t.as_str()).map(String::from)
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                        .join("");
+                    return Ok(text);
                 }
-                Ok(String::new())
             }
-            Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e.to_string())),
+            Ok(String::new())
         }
     }
 
@@ -446,7 +440,7 @@ impl PyAgentHarness {
         let handle = runtime(py).handle().clone();
         let timeout = std::time::Duration::from_millis(timeout_ms);
 
-        let events: Vec<Py<PyAny>> = py.detach(move || {
+        let events: Vec<Py<PyAny>> = crate::pyerror::detach_catch_panic(py, move || {
             let mut events = Vec::new();
             let mut rx = rx;
             loop {
@@ -471,7 +465,7 @@ impl PyAgentHarness {
                 }
             }
             events
-        });
+        })?;
 
         Ok(events)
     }
@@ -496,7 +490,7 @@ impl PyAgentHarness {
         let handle = runtime(py).handle().clone();
         let timeout = std::time::Duration::from_millis(timeout_ms);
 
-        let events: PyResult<Vec<Py<PyAny>>> = py.detach(move || {
+        let events: PyResult<Vec<Py<PyAny>>> = crate::pyerror::detach_catch_panic(py, move || {
             // Spawn prompt as a background task so we can collect events concurrently.
             let prompt_harness = harness.clone();
             let prompt_text = text.clone();
@@ -555,7 +549,7 @@ impl PyAgentHarness {
                 Err(join_err) if join_err.is_cancelled() => Ok(events),
                 Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e.to_string())),
             }
-        });
+        })?;
 
         events
     }
@@ -578,9 +572,9 @@ impl PyAgentHarness {
             max_tokens: max_tokens.unwrap_or(0),
         });
         let rt = runtime(py);
-        let result =
-            py.detach(move || rt.block_on(async move { harness.set_model(model, info).await }));
-        result.map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+        crate::pyerror::detach_catch_panic_result(py, move || {
+            rt.block_on(async move { harness.set_model(model, info).await })
+        })
     }
 
     /// 设置或清除系统提示。下一轮生效。
@@ -595,9 +589,9 @@ impl PyAgentHarness {
     fn set_temperature(&self, py: Python<'_>, temperature: Option<f32>) -> PyResult<()> {
         let harness = self.harness.clone();
         let rt = runtime(py);
-        let result = py
-            .detach(move || rt.block_on(async move { harness.set_temperature(temperature).await }));
-        result.map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+        crate::pyerror::detach_catch_panic_result(py, move || {
+            rt.block_on(async move { harness.set_temperature(temperature).await })
+        })
     }
 
     /// 设置 thinking level。接受: "off", "minimal", "low", "medium", "high", "xhigh", "budget:<tokens>"。
@@ -605,9 +599,9 @@ impl PyAgentHarness {
         let level = parse_thinking_level(level)?;
         let harness = self.harness.clone();
         let rt = runtime(py);
-        let result =
-            py.detach(move || rt.block_on(async move { harness.set_thinking_level(level).await }));
-        result.map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+        crate::pyerror::detach_catch_panic_result(py, move || {
+            rt.block_on(async move { harness.set_thinking_level(level).await })
+        })
     }
 
     /// 设置每次 provider 调用的最大输出 token 数。下一轮生效。
@@ -625,9 +619,9 @@ impl PyAgentHarness {
         }
         let harness = self.harness.clone();
         let rt = runtime(py);
-        let result =
-            py.detach(move || rt.block_on(async move { harness.set_tools(tool_vec).await }));
-        result.map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+        crate::pyerror::detach_catch_panic_result(py, move || {
+            rt.block_on(async move { harness.set_tools(tool_vec).await })
+        })
     }
 
     // ── Steering / Follow-up ────────────────────────────────────────────────
@@ -648,8 +642,9 @@ impl PyAgentHarness {
     fn continue_run(&self, py: Python<'_>) -> PyResult<()> {
         let harness = self.harness.clone();
         let rt = runtime(py);
-        let result = py.detach(move || rt.block_on(async move { harness.continue_run().await }));
-        result.map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+        crate::pyerror::detach_catch_panic_result(py, move || {
+            rt.block_on(async move { harness.continue_run().await })
+        })
     }
 
     /// 发送下一条 user 消息并继续运行。
@@ -676,7 +671,9 @@ impl PyAgentHarness {
     fn wait_for_idle(&self, py: Python<'_>) -> PyResult<()> {
         let harness = self.harness.clone();
         let rt = runtime(py);
-        py.detach(move || rt.block_on(async move { harness.wait_for_idle().await }));
+        crate::pyerror::detach_catch_panic(py, move || {
+            rt.block_on(async move { harness.wait_for_idle().await })
+        })?;
         Ok(())
     }
 
@@ -684,7 +681,9 @@ impl PyAgentHarness {
     fn wait_for_settled(&self, py: Python<'_>) -> PyResult<()> {
         let harness = self.harness.clone();
         let rt = runtime(py);
-        py.detach(move || rt.block_on(async move { harness.wait_for_settled().await }));
+        crate::pyerror::detach_catch_panic(py, move || {
+            rt.block_on(async move { harness.wait_for_settled().await })
+        })?;
         Ok(())
     }
 
@@ -724,9 +723,9 @@ impl PyAgentHarness {
         let harness = self.harness.clone();
         let active = tools.map(|v| v.into_iter().collect::<HashSet<String>>());
         let rt = runtime(py);
-        let result =
-            py.detach(move || rt.block_on(async move { harness.set_active_tools(active).await }));
-        result.map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+        crate::pyerror::detach_catch_panic_result(py, move || {
+            rt.block_on(async move { harness.set_active_tools(active).await })
+        })
     }
 
     // ── Session / Branch management ─────────────────────────────────────────
@@ -743,11 +742,10 @@ impl PyAgentHarness {
         let entry = llm_harness_types::EntryId::from_str(from_entry)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         let rt = runtime(py);
-        let result =
-            py.detach(move || rt.block_on(async move { harness.fork_branch(entry, label).await }));
-        result
-            .map(|id| id.to_string())
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+        crate::pyerror::detach_catch_panic_result(py, move || {
+            rt.block_on(async move { harness.fork_branch(entry, label).await })
+        })
+        .map(|id| id.to_string())
     }
 
     /// Switch the active cursor to a target entry.
@@ -756,18 +754,18 @@ impl PyAgentHarness {
         let entry = llm_harness_types::EntryId::from_str(target)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         let rt = runtime(py);
-        let result =
-            py.detach(move || rt.block_on(async move { harness.navigate_tree(entry).await }));
-        result.map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+        crate::pyerror::detach_catch_panic_result(py, move || {
+            rt.block_on(async move { harness.navigate_tree(entry).await })
+        })
     }
 
     /// List all branches (leaves) in the session.
     fn list_branches(&self, py: Python<'_>) -> PyResult<Vec<Py<PyAny>>> {
         let harness = self.harness.clone();
         let rt = runtime(py);
-        let branches = py.detach(move || rt.block_on(async move { harness.list_branches().await }));
-        let branches =
-            branches.map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        let branches = crate::pyerror::detach_catch_panic_result(py, move || {
+            rt.block_on(async move { harness.list_branches().await })
+        })?;
         let mut result = Vec::new();
         for b in branches {
             let dict = PyDict::new(py);
@@ -785,10 +783,9 @@ impl PyAgentHarness {
     fn read_active_path(&self, py: Python<'_>) -> PyResult<Vec<Py<PyAny>>> {
         let harness = self.harness.clone();
         let rt = runtime(py);
-        let entries =
-            py.detach(move || rt.block_on(async move { harness.read_active_path().await }));
-        let entries =
-            entries.map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        let entries = crate::pyerror::detach_catch_panic_result(py, move || {
+            rt.block_on(async move { harness.read_active_path().await })
+        })?;
         Ok(session_entries_to_list(py, &entries))
     }
 
@@ -796,10 +793,9 @@ impl PyAgentHarness {
     fn read_all_entries(&self, py: Python<'_>) -> PyResult<Vec<Py<PyAny>>> {
         let harness = self.harness.clone();
         let rt = runtime(py);
-        let entries =
-            py.detach(move || rt.block_on(async move { harness.read_all_entries().await }));
-        let entries =
-            entries.map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        let entries = crate::pyerror::detach_catch_panic_result(py, move || {
+            rt.block_on(async move { harness.read_all_entries().await })
+        })?;
         Ok(session_entries_to_list(py, &entries))
     }
 
@@ -809,9 +805,9 @@ impl PyAgentHarness {
         let entry = llm_harness_types::EntryId::from_str(leaf)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         let rt = runtime(py);
-        let result =
-            py.detach(move || rt.block_on(async move { harness.delete_branch(entry).await }));
-        result.map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+        crate::pyerror::detach_catch_panic_result(py, move || {
+            rt.block_on(async move { harness.delete_branch(entry).await })
+        })
     }
 
     /// Generate an AI summary for the branch ending at a leaf entry.
@@ -820,11 +816,9 @@ impl PyAgentHarness {
         let entry = llm_harness_types::EntryId::from_str(leaf)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         let rt = runtime(py);
-        let result = py.detach(move || {
+        let summary = crate::pyerror::detach_catch_panic_result(py, move || {
             rt.block_on(async move { harness.generate_branch_summary(entry).await })
-        });
-        let summary =
-            result.map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        })?;
         let dict = PyDict::new(py);
         dict.set_item("leaf_id", summary.leaf_id.to_string())?;
         dict.set_item("from_entry", summary.from_entry.to_string())?;

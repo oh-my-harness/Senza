@@ -233,7 +233,8 @@ impl PyToolWrapper {
         let args_val = crate::value_conv::pyobject_to_value(args)?;
         let tool = self.tool.clone();
         // 在 Python 释放 GIL 后运行 tokio runtime，避免 GIL 与 runtime 死锁。
-        py.detach(|| {
+        // panic 隔离：Rust panic 转为 RustPanicError。
+        crate::pyerror::detach_catch_panic(py, move || {
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
@@ -250,7 +251,7 @@ impl PyToolWrapper {
                     .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
                 Python::attach(|py| toolresult_to_pyobject(py, &result))
             })
-        })
+        })?
     }
 }
 

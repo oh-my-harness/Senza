@@ -10,6 +10,7 @@ pub mod event_stream;
 pub mod pyagent;
 pub mod pybudget;
 pub mod pybuilder;
+pub mod pyerror;
 pub mod pyeventstream;
 pub mod pyharness;
 pub mod pyhooks;
@@ -27,10 +28,11 @@ pub mod value_conv;
 
 /// PyO3 module entry point.
 #[pymodule]
-fn senza(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn senza(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     // 桥接 Rust tracing → Python logging：用户 `logging.basicConfig(level=DEBUG)`
     // 即可看到 Rust 底座日志，级别/handler/格式完全由 Python 侧控制。
     pylogging::init_logging();
+    m.add("RustPanicError", py.get_type::<pyerror::RustPanicError>())?;
     m.add_function(wrap_pyfunction!(version, m)?)?;
     m.add_function(wrap_pyfunction!(to_json, m)?)?;
     m.add_function(wrap_pyfunction!(pyviewer::read_sessions, m)?)?;

@@ -86,10 +86,10 @@ impl PyAgent {
         let text = text.to_string();
         let rt = runtime(py);
 
-        // 释放 GIL，让 tokio worker 线程在需要时能 acquire GIL。
-        let result = py.detach(move || rt.block_on(async move { agent.prompt(text).await }));
-
-        result.map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        // 释放 GIL + panic 隔离：Rust panic 转为 RustPanicError 而非崩溃。
+        crate::pyerror::detach_catch_panic_result(py, move || {
+            rt.block_on(async move { agent.prompt(text).await })
+        })?;
 
         // 返回最后一条 assistant 消息的文本内容。
         let state = self.agent.state();

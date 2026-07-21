@@ -4,6 +4,13 @@ from __future__ import annotations
 
 from typing import Any, Callable, Iterator, Optional, Union
 
+# ── Exceptions ───────────────────────────────────────────────────────────────
+
+class RustPanicError(RuntimeError):
+    """Raised when the Rust runtime panics, instead of crashing the process."""
+    def add_note(self, note: str) -> None: ...
+    def with_traceback(self, tb: Any) -> RustPanicError: ...
+
 # ── Version & utilities ──────────────────────────────────────────────────────
 
 def version() -> str: ...

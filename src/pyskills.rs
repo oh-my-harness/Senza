@@ -300,9 +300,9 @@ pub fn load_skills<'py>(py: Python<'py>, path: &str) -> PyResult<Bound<'py, pyo3
     let env: Arc<dyn ExecutionEnv> = Arc::new(LocalFsEnv::new(path));
     let rt = runtime(py);
     // load_skills 是 async 且涉及文件 I/O，释放 GIL 更安全。
-    let (skills, diags) = py.detach(move || {
+    let (skills, diags) = crate::pyerror::detach_catch_panic(py, move || {
         rt.block_on(async move { llm_harness_agent::load_skills(env.as_ref(), &[dir]).await })
-    });
+    })?;
 
     // 将 SkillDiagnostic 作为 Python warning 发出，便于用户发现格式错误的 SKILL.md。
     if !diags.is_empty() {

@@ -289,9 +289,9 @@ impl PyEventIterator {
         let handle = self.handle.clone();
 
         // 释放 GIL 后在 tokio runtime 上阻塞等待 broadcast 事件。
-        let recv_result = py.detach(move || {
+        let recv_result = crate::pyerror::detach_catch_panic(py, move || {
             handle.block_on(async move { tokio::time::timeout(timeout, rx.recv()).await })
-        });
+        })?;
 
         match recv_result {
             // 收到事件

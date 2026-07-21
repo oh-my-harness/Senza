@@ -439,12 +439,10 @@ impl PyHarnessBuilder {
             .take()
             .unwrap_or_else(|| Arc::new(UnsupportedEnv::new()));
         let rt = runtime(py);
-        let result = py.detach(move || rt.block_on(async move { builder.build(env).await }));
-
-        match result {
-            Ok(harness) => Py::new(py, PyAgentHarness::new(Arc::new(harness))),
-            Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e.to_string())),
-        }
+        let harness = crate::pyerror::detach_catch_panic_result(py, move || {
+            rt.block_on(async move { builder.build(env).await })
+        })?;
+        Py::new(py, PyAgentHarness::new(Arc::new(harness)))
     }
 }
 
