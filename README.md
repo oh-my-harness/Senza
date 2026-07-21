@@ -297,7 +297,7 @@ events = harness.prompt_and_collect("在当前目录创建 hello.txt，内容写
 ---
 ## Session Viewer
 
-Senza 内置 session 查看器，可视化 `JsonlSessionRepo` 持久化的 agent session（与 `llm-harness-runtime` 的 Rust viewer 共享同一份 HTML）。
+Senza 内置 session 查看器，可视化 `JsonlSessionRepo` 持久化的 agent session。JSONL 解析和分支树构建由 Rust `session-viewer` crate 完成（通过 `senza.read_sessions()` / `senza.viewer_html()` 暴露），Python 端仅负责 HTTP serving 和浏览器启动——单一真相源，零重复逻辑。
 
 ```bash
 # CLI
@@ -310,7 +310,7 @@ import senza.viewer
 senza.viewer.serve("/path/to/sessions")  # 阻塞，自动打开浏览器
 ```
 
-支持：session 列表、分支树切换、消息渲染（user/assistant/tool-result）、thinking 和 tool-use 折叠、token 用量统计、config entry（model change / compaction / label 等）、图片内联。纯 stdlib 实现，不依赖 `.so`。
+支持：session 列表、分支树切换、消息渲染（user/assistant/tool-result）、thinking 和 tool-use 折叠、token 用量统计、config entry（model change / compaction / label 等）、图片内联。
 
 ---
 ## 示例
