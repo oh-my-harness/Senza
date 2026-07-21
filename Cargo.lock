@@ -654,7 +654,7 @@ checksum = "92daf443525c4cce67b150400bc2316076100ce0b3686209eb8cf3c31612e6f0"
 [[package]]
 name = "llm-harness-agent"
 version = "0.3.0"
-source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=207eb1138fdd909997faef46cf5a4232b23f76d8#207eb1138fdd909997faef46cf5a4232b23f76d8"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=e183b573a750dab96647609957dc0cf83ac1c348#e183b573a750dab96647609957dc0cf83ac1c348"
 dependencies = [
  "anyhow",
  "chrono",
@@ -672,7 +672,7 @@ dependencies = [
 [[package]]
 name = "llm-harness-loop"
 version = "0.3.0"
-source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=207eb1138fdd909997faef46cf5a4232b23f76d8#207eb1138fdd909997faef46cf5a4232b23f76d8"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=e183b573a750dab96647609957dc0cf83ac1c348#e183b573a750dab96647609957dc0cf83ac1c348"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -717,7 +717,7 @@ dependencies = [
 [[package]]
 name = "llm-harness-runtime"
 version = "0.3.0"
-source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=207eb1138fdd909997faef46cf5a4232b23f76d8#207eb1138fdd909997faef46cf5a4232b23f76d8"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=e183b573a750dab96647609957dc0cf83ac1c348#e183b573a750dab96647609957dc0cf83ac1c348"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -743,7 +743,7 @@ dependencies = [
 [[package]]
 name = "llm-harness-runtime-sandbox-os"
 version = "0.3.0"
-source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=207eb1138fdd909997faef46cf5a4232b23f76d8#207eb1138fdd909997faef46cf5a4232b23f76d8"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=e183b573a750dab96647609957dc0cf83ac1c348#e183b573a750dab96647609957dc0cf83ac1c348"
 dependencies = [
  "anyhow",
  "chrono",
@@ -759,7 +759,7 @@ dependencies = [
 [[package]]
 name = "llm-harness-runtime-tools"
 version = "0.3.0"
-source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=207eb1138fdd909997faef46cf5a4232b23f76d8#207eb1138fdd909997faef46cf5a4232b23f76d8"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=e183b573a750dab96647609957dc0cf83ac1c348#e183b573a750dab96647609957dc0cf83ac1c348"
 dependencies = [
  "futures",
  "llm-harness-agent",
@@ -774,7 +774,7 @@ dependencies = [
 [[package]]
 name = "llm-harness-types"
 version = "0.3.0"
-source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=207eb1138fdd909997faef46cf5a4232b23f76d8#207eb1138fdd909997faef46cf5a4232b23f76d8"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=e183b573a750dab96647609957dc0cf83ac1c348#e183b573a750dab96647609957dc0cf83ac1c348"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1327,7 +1327,7 @@ dependencies = [
 [[package]]
 name = "session-viewer"
 version = "0.3.0"
-source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=207eb1138fdd909997faef46cf5a4232b23f76d8#207eb1138fdd909997faef46cf5a4232b23f76d8"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=e183b573a750dab96647609957dc0cf83ac1c348#e183b573a750dab96647609957dc0cf83ac1c348"
 dependencies = [
  "anyhow",
  "chrono",
