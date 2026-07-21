@@ -309,6 +309,38 @@ pub(crate) fn parse_thinking_level(s: &str) -> PyResult<ThinkingLevel> {
     }
 }
 
+/// 从 broadcast channel 接收事件，同时每 200ms 检查 Python 信号（SIGINT）。
+///
+/// 返回 `Ok(Some(event))` 表示收到事件；`Ok(None)` 表示超时或 channel 已关闭；
+/// `Err(PyErr)` 表示信号中断（`KeyboardInterrupt`）。
+///
+/// 用 `tokio::select!` 同时等待 `rx.recv()` 和定时信号检查，确保即使
+/// `timeout` 很长（如 30s），Ctrl+C 也能在 ~200ms 内被打断。
+async fn recv_event_with_signal_check(
+    rx: &mut broadcast::Receiver<Arc<AgentHarnessEvent>>,
+    timeout: std::time::Duration,
+) -> PyResult<Option<Arc<AgentHarnessEvent>>> {
+    let signal_interval = std::time::Duration::from_millis(200);
+    let deadline = tokio::time::Instant::now() + timeout;
+    loop {
+        let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+        if remaining.is_zero() {
+            return Ok(None);
+        }
+        let wait = remaining.min(signal_interval);
+        tokio::select! {
+            biased;
+            result = rx.recv() => match result {
+                Ok(event) => return Ok(Some(event)),
+                Err(_) => return Ok(None),
+            },
+            _ = tokio::time::sleep(wait) => {
+                Python::attach(|py| py.check_signals())?;
+            }
+        }
+    }
+}
+
 /// Python 侧的 `AgentHarness` 包装类。
 #[pyclass(name = "AgentHarness")]
 pub struct PyAgentHarness {
@@ -337,9 +369,17 @@ impl PyAgentHarness {
         let harness = self.harness.clone();
         let text = text.to_string();
         let rt = runtime(py);
-        crate::pyerror::detach_catch_panic_result(py, move || {
-            rt.block_on(async move { harness.prompt(&text).await })
-        })?;
+        crate::pyerror::block_on_with_signal_check(
+            py,
+            rt,
+            async move {
+                harness
+                    .prompt(&text)
+                    .await
+                    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+            },
+            200,
+        )?;
         Ok(())
     }
 
@@ -462,14 +502,13 @@ impl PyAgentHarness {
         let handle = runtime(py).handle().clone();
         let timeout = std::time::Duration::from_millis(timeout_ms);
 
-        let events: Vec<Py<PyAny>> = crate::pyerror::detach_catch_panic(py, move || {
+        let events: Vec<Py<PyAny>> = crate::pyerror::detach_catch_panic_pyresult(py, move || {
             let mut events = Vec::new();
             let mut rx = rx;
             loop {
-                let recv =
-                    handle.block_on(async { tokio::time::timeout(timeout, rx.recv()).await });
+                let recv = handle.block_on(recv_event_with_signal_check(&mut rx, timeout));
                 match recv {
-                    Ok(Ok(event)) => {
+                    Ok(Some(event)) => {
                         let is_settled = matches!(
                             &*event,
                             AgentHarnessEvent::Settled | AgentHarnessEvent::Aborted
@@ -483,10 +522,11 @@ impl PyAgentHarness {
                             break;
                         }
                     }
-                    _ => break,
+                    Ok(None) => break,
+                    Err(e) => return Err(e),
                 }
             }
-            events
+            Ok(events)
         })?;
 
         Ok(events)
@@ -512,66 +552,72 @@ impl PyAgentHarness {
         let handle = runtime(py).handle().clone();
         let timeout = std::time::Duration::from_millis(timeout_ms);
 
-        let events: PyResult<Vec<Py<PyAny>>> = crate::pyerror::detach_catch_panic(py, move || {
-            // Spawn prompt as a background task so we can collect events concurrently.
-            let prompt_harness = harness.clone();
-            let prompt_text = text.clone();
-            let prompt_task =
-                handle.spawn(async move { prompt_harness.prompt(&prompt_text).await });
+        let events: PyResult<Vec<Py<PyAny>>> =
+            crate::pyerror::detach_catch_panic_pyresult(py, move || {
+                // Spawn prompt as a background task so we can collect events concurrently.
+                let prompt_harness = harness.clone();
+                let prompt_text = text.clone();
+                let prompt_task =
+                    handle.spawn(async move { prompt_harness.prompt(&prompt_text).await });
 
-            let mut events = Vec::new();
-            let mut rx = rx;
-            let mut got_terminal = false;
-            loop {
-                let recv =
-                    handle.block_on(async { tokio::time::timeout(timeout, rx.recv()).await });
-                match recv {
-                    Ok(Ok(event)) => {
-                        let is_settled = matches!(
-                            &*event,
-                            AgentHarnessEvent::Settled | AgentHarnessEvent::Aborted
-                        );
-                        Python::attach(|py| {
-                            if let Ok(dict) = harness_event_to_dict(py, &event) {
-                                events.push(dict);
+                let mut events = Vec::new();
+                let mut rx = rx;
+                let mut got_terminal = false;
+                loop {
+                    let recv = handle.block_on(recv_event_with_signal_check(&mut rx, timeout));
+                    match recv {
+                        Ok(Some(event)) => {
+                            let is_settled = matches!(
+                                &*event,
+                                AgentHarnessEvent::Settled | AgentHarnessEvent::Aborted
+                            );
+                            Python::attach(|py| {
+                                if let Ok(dict) = harness_event_to_dict(py, &event) {
+                                    events.push(dict);
+                                }
+                            });
+                            if is_settled {
+                                got_terminal = true;
+                                break;
                             }
-                        });
-                        if is_settled {
-                            got_terminal = true;
-                            break;
+                        }
+                        Ok(None) => break,
+                        Err(e) => {
+                            // Abort the prompt task before returning so we
+                            // don't leak a background LLM call.
+                            prompt_task.abort();
+                            return Err(e);
                         }
                     }
-                    _ => break,
                 }
-            }
 
-            // If the event loop timed out without a terminal event, abort
-            // the prompt task so we don't block indefinitely waiting for
-            // the LLM to finish.
-            if !got_terminal {
-                prompt_task.abort();
-            }
+                // If the event loop timed out without a terminal event, abort
+                // the prompt task so we don't block indefinitely waiting for
+                // the LLM to finish.
+                if !got_terminal {
+                    prompt_task.abort();
+                }
 
-            // Join the prompt task. If it completed naturally (after
-            // Settled/Aborted) this returns immediately. If we aborted
-            // it, we get a cancelled JoinError and return partial events.
-            match handle.block_on(prompt_task) {
-                Ok(Ok(())) => {
-                    // prompt() returns Ok even when the LLM call fails —
-                    // the error is stored in state.error_message. Check
-                    // it here so callers see failures instead of empty
-                    // event lists. (issue #58)
-                    if let Some(msg) = &harness.state().error_message {
-                        Err(pyo3::exceptions::PyRuntimeError::new_err(msg.clone()))
-                    } else {
-                        Ok(events)
+                // Join the prompt task. If it completed naturally (after
+                // Settled/Aborted) this returns immediately. If we aborted
+                // it, we get a cancelled JoinError and return partial events.
+                match handle.block_on(prompt_task) {
+                    Ok(Ok(())) => {
+                        // prompt() returns Ok even when the LLM call fails —
+                        // the error is stored in state.error_message. Check
+                        // it here so callers see failures instead of empty
+                        // event lists. (issue #58)
+                        if let Some(msg) = &harness.state().error_message {
+                            Err(pyo3::exceptions::PyRuntimeError::new_err(msg.clone()))
+                        } else {
+                            Ok(events)
+                        }
                     }
+                    Ok(Err(e)) => Err(pyo3::exceptions::PyRuntimeError::new_err(e.to_string())),
+                    Err(join_err) if join_err.is_cancelled() => Ok(events),
+                    Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e.to_string())),
                 }
-                Ok(Err(e)) => Err(pyo3::exceptions::PyRuntimeError::new_err(e.to_string())),
-                Err(join_err) if join_err.is_cancelled() => Ok(events),
-                Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e.to_string())),
-            }
-        })?;
+            });
 
         events
     }
@@ -664,9 +710,17 @@ impl PyAgentHarness {
     fn continue_run(&self, py: Python<'_>) -> PyResult<()> {
         let harness = self.harness.clone();
         let rt = runtime(py);
-        crate::pyerror::detach_catch_panic_result(py, move || {
-            rt.block_on(async move { harness.continue_run().await })
-        })
+        crate::pyerror::block_on_with_signal_check(
+            py,
+            rt,
+            async move {
+                harness
+                    .continue_run()
+                    .await
+                    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+            },
+            200,
+        )
     }
 
     /// 发送下一条 user 消息并继续运行。
@@ -693,20 +747,30 @@ impl PyAgentHarness {
     fn wait_for_idle(&self, py: Python<'_>) -> PyResult<()> {
         let harness = self.harness.clone();
         let rt = runtime(py);
-        crate::pyerror::detach_catch_panic(py, move || {
-            rt.block_on(async move { harness.wait_for_idle().await })
-        })?;
-        Ok(())
+        crate::pyerror::block_on_with_signal_check(
+            py,
+            rt,
+            async move {
+                harness.wait_for_idle().await;
+                Ok(())
+            },
+            200,
+        )
     }
 
     /// 阻塞直到 harness 进入 settled 状态（idle 且无待处理事件）。
     fn wait_for_settled(&self, py: Python<'_>) -> PyResult<()> {
         let harness = self.harness.clone();
         let rt = runtime(py);
-        crate::pyerror::detach_catch_panic(py, move || {
-            rt.block_on(async move { harness.wait_for_settled().await })
-        })?;
-        Ok(())
+        crate::pyerror::block_on_with_signal_check(
+            py,
+            rt,
+            async move {
+                harness.wait_for_settled().await;
+                Ok(())
+            },
+            200,
+        )
     }
 
     // ── Queue management ────────────────────────────────────────────────────

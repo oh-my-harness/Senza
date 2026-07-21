@@ -86,10 +86,18 @@ impl PyAgent {
         let text = text.to_string();
         let rt = runtime(py);
 
-        // 释放 GIL + panic 隔离：Rust panic 转为 RustPanicError 而非崩溃。
-        crate::pyerror::detach_catch_panic_result(py, move || {
-            rt.block_on(async move { agent.prompt(text).await })
-        })?;
+        // 释放 GIL + panic 隔离 + 信号检查（Ctrl+C 可打断）。
+        crate::pyerror::block_on_with_signal_check(
+            py,
+            rt,
+            async move {
+                agent
+                    .prompt(text)
+                    .await
+                    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+            },
+            200,
+        )?;
 
         // 返回最后一条 assistant 消息的文本内容。
         let state = self.agent.state();

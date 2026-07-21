@@ -1483,10 +1483,12 @@ impl PyWorkflowEngine {
             .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("engine not available"))?;
         let engine_clone = engine.clone();
         let rt = runtime(py);
-        crate::pyerror::detach_catch_panic(py, move || {
-            rt.block_on(async move { engine_clone.run().await })
-                .map_err(workflow_error_to_pyerr)
-        })??;
+        crate::pyerror::block_on_with_signal_check(
+            py,
+            rt,
+            async move { engine_clone.run().await.map_err(workflow_error_to_pyerr) },
+            200,
+        )?;
         Ok(())
     }
 
