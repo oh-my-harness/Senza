@@ -1614,15 +1614,20 @@ impl PyWorkflowEngine {
     }
 
     /// 订阅引擎事件流，返回 `WorkflowEventIterator`。
-    #[pyo3(signature = (timeout_ms=5000))]
-    fn subscribe(&self, py: Python<'_>, timeout_ms: u64) -> PyResult<Py<PyWorkflowEventIterator>> {
+    #[pyo3(signature = (timeout_ms=5000, max_consecutive_timeouts=1))]
+    fn subscribe(
+        &self,
+        py: Python<'_>,
+        timeout_ms: u64,
+        max_consecutive_timeouts: u32,
+    ) -> PyResult<Py<PyWorkflowEventIterator>> {
         let engine = self
             .engine
             .as_ref()
             .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("engine not available"))?;
         let rx = engine.subscribe();
         let handle = runtime(py).handle().clone();
-        let iter = PyWorkflowEventIterator::new(rx, timeout_ms, handle);
+        let iter = PyWorkflowEventIterator::new(rx, timeout_ms, max_consecutive_timeouts, handle);
         Py::new(py, iter)
     }
 
@@ -1678,6 +1683,8 @@ impl PyWorkflowEngine {
 pub struct PyWorkflowEventIterator {
     rx: Option<tokio::sync::broadcast::Receiver<WorkflowEvent>>,
     timeout_ms: u64,
+    max_consecutive_timeouts: u32,
+    consecutive_timeouts: u32,
     handle: tokio::runtime::Handle,
 }
 
@@ -1685,11 +1692,14 @@ impl PyWorkflowEventIterator {
     pub fn new(
         rx: tokio::sync::broadcast::Receiver<WorkflowEvent>,
         timeout_ms: u64,
+        max_consecutive_timeouts: u32,
         handle: tokio::runtime::Handle,
     ) -> Self {
         Self {
             rx: Some(rx),
             timeout_ms,
+            max_consecutive_timeouts,
+            consecutive_timeouts: 0,
             handle,
         }
     }
@@ -1701,7 +1711,7 @@ impl PyWorkflowEventIterator {
         slf
     }
 
-    /// 阻塞等待下一个事件，超时或 channel 关闭时返回 None。
+    /// 阻塞等待下一个事件，channel 关闭时返回 None。超时不终止，发出 timeout 事件后继续。
     fn __next__(&mut self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
         let rx = match &mut self.rx {
             Some(rx) => rx,
@@ -1717,6 +1727,7 @@ impl PyWorkflowEventIterator {
 
         match recv_result {
             Ok(Ok(event)) => {
+                self.consecutive_timeouts = 0;
                 let dict = workflow_event_to_dict(py, &event)?;
                 Ok(Some(dict))
             }
@@ -1726,9 +1737,18 @@ impl PyWorkflowEventIterator {
                 warning.set_item("skipped", n)?;
                 Ok(Some(warning.into_any().unbind()))
             }
-            Ok(Err(_)) => Ok(None),
-            // timeout elapsed：正常终止迭代
-            Err(_) => Ok(None),
+            Ok(Err(tokio::sync::broadcast::error::RecvError::Closed)) => Ok(None),
+            // timeout elapsed：达到 max_consecutive_timeouts 则终止，否则发出 timeout 事件继续
+            Err(_) => {
+                self.consecutive_timeouts += 1;
+                if self.consecutive_timeouts >= self.max_consecutive_timeouts {
+                    Ok(None)
+                } else {
+                    let timeout_event = PyDict::new(py);
+                    timeout_event.set_item("type", "timeout")?;
+                    Ok(Some(timeout_event.into_any().unbind()))
+                }
+            }
         }
     }
 }

@@ -117,15 +117,21 @@ impl PyAgent {
     /// 返回事件迭代器。`timeout_ms` 为单次 `__next__` 等待超时（毫秒）。
     ///
     /// 典型用法：`for event in agent.events(timeout_ms=5000): ...`
-    #[pyo3(signature = (timeout_ms=5000))]
+    #[pyo3(signature = (timeout_ms=5000, max_consecutive_timeouts=1))]
     fn events(
         &self,
         py: Python<'_>,
         timeout_ms: u64,
+        max_consecutive_timeouts: u32,
     ) -> PyResult<Py<crate::event_stream::PyEventIterator>> {
         let rx = self.agent.subscribe();
         let handle = runtime(py).handle().clone();
-        let iter = crate::event_stream::PyEventIterator::new(rx, timeout_ms, handle);
+        let iter = crate::event_stream::PyEventIterator::new(
+            rx,
+            timeout_ms,
+            max_consecutive_timeouts,
+            handle,
+        );
         Py::new(py, iter)
     }
 

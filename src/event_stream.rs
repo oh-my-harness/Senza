@@ -251,6 +251,8 @@ pub fn agent_event_to_dict(py: Python<'_>, event: &AgentEvent) -> PyResult<Py<Py
 pub struct PyEventIterator {
     rx: Option<tokio::sync::broadcast::Receiver<Arc<AgentEvent>>>,
     timeout_ms: u64,
+    max_consecutive_timeouts: u32,
+    consecutive_timeouts: u32,
     handle: tokio::runtime::Handle,
 }
 
@@ -259,11 +261,14 @@ impl PyEventIterator {
     pub fn new(
         rx: tokio::sync::broadcast::Receiver<Arc<AgentEvent>>,
         timeout_ms: u64,
+        max_consecutive_timeouts: u32,
         handle: tokio::runtime::Handle,
     ) -> Self {
         Self {
             rx: Some(rx),
             timeout_ms,
+            max_consecutive_timeouts,
+            consecutive_timeouts: 0,
             handle,
         }
     }
@@ -275,10 +280,10 @@ impl PyEventIterator {
         slf
     }
 
-    /// 阻塞等待下一个事件，超时或 channel 关闭时返回 None。
+    /// 阻塞等待下一个事件，channel 关闭时返回 None。
     ///
-    /// 通过 `py.detach()` 释放 GIL，在全局 tokio runtime 上
-    /// `block_on(tokio::time::timeout(rx.recv()))` 等待事件。
+    /// 超时不终止迭代，而是发出 `{"type": "timeout"}` 事件后继续轮询。
+    /// 调用者可根据 timeout 事件决定是否 break。通过 `py.detach()` 释放 GIL。
     fn __next__(&mut self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
         let rx = match &mut self.rx {
             Some(rx) => rx,
@@ -296,6 +301,7 @@ impl PyEventIterator {
         match recv_result {
             // 收到事件
             Ok(Ok(event)) => {
+                self.consecutive_timeouts = 0;
                 let dict = agent_event_to_dict(py, &event)?;
                 Ok(Some(dict))
             }
@@ -308,9 +314,18 @@ impl PyEventIterator {
                 Ok(Some(warning.into_any().unbind()))
             }
             // channel 关闭：迭代终止
-            Ok(Err(_recv_err)) => Ok(None),
-            // timeout elapsed：正常终止迭代
-            Err(_) => Ok(None),
+            Ok(Err(tokio::sync::broadcast::error::RecvError::Closed)) => Ok(None),
+            // timeout elapsed：达到 max_consecutive_timeouts 则终止，否则发出 timeout 事件继续
+            Err(_) => {
+                self.consecutive_timeouts += 1;
+                if self.consecutive_timeouts >= self.max_consecutive_timeouts {
+                    Ok(None)
+                } else {
+                    let timeout_event = pyo3::types::PyDict::new(py);
+                    timeout_event.set_item("type", "timeout")?;
+                    Ok(Some(timeout_event.into_any().unbind()))
+                }
+            }
         }
     }
 }

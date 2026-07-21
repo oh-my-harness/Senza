@@ -100,11 +100,27 @@ def test_event_stream_agent_end_has_new_messages():
 
 
 def test_event_stream_timeout_returns_empty():
-    """When no prompt is issued, the iterator times out and returns empty."""
+    """With default max_consecutive_timeouts=1, timeout terminates the iterator."""
     agent = senza.Agent(model="mock-model")
     it = agent.events(timeout_ms=100)
     events = list(it)
     assert events == []
+
+
+def test_event_stream_timeout_continues_with_higher_limit():
+    """With max_consecutive_timeouts > 1, timeout emits event and continues."""
+    agent = senza.Agent(model="mock-model")
+    it = agent.events(timeout_ms=100, max_consecutive_timeouts=3)
+    first = next(it)
+    assert first is not None
+    assert first["type"] == "timeout"
+    # Should continue (not terminate) since consecutive_timeouts(1) < max(3)
+    second = next(it)
+    assert second is not None
+    assert second["type"] == "timeout"
+    # Third timeout: consecutive_timeouts(3) >= max(3) → terminate
+    with __import__("pytest").raises(StopIteration):
+        next(it)
 
 
 def test_event_stream_text_delta_has_text_field():

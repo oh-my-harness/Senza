@@ -216,6 +216,8 @@ fn harness_event_to_dict(py: Python<'_>, event: &AgentHarnessEvent) -> PyResult<
 pub struct PyHarnessEventIterator {
     rx: Option<broadcast::Receiver<Arc<AgentHarnessEvent>>>,
     timeout_ms: u64,
+    max_consecutive_timeouts: u32,
+    consecutive_timeouts: u32,
     handle: tokio::runtime::Handle,
 }
 
@@ -223,11 +225,14 @@ impl PyHarnessEventIterator {
     pub fn new(
         rx: broadcast::Receiver<Arc<AgentHarnessEvent>>,
         timeout_ms: u64,
+        max_consecutive_timeouts: u32,
         handle: tokio::runtime::Handle,
     ) -> Self {
         Self {
             rx: Some(rx),
             timeout_ms,
+            max_consecutive_timeouts,
+            consecutive_timeouts: 0,
             handle,
         }
     }
@@ -239,7 +244,7 @@ impl PyHarnessEventIterator {
         slf
     }
 
-    /// 阻塞等待下一个事件，超时或 channel 关闭时返回 None。
+    /// 阻塞等待下一个事件，channel 关闭时返回 None。超时不终止，发出 timeout 事件后继续。
     fn __next__(&mut self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
         let rx = match &mut self.rx {
             Some(rx) => rx,
@@ -255,6 +260,7 @@ impl PyHarnessEventIterator {
 
         match recv_result {
             Ok(Ok(event)) => {
+                self.consecutive_timeouts = 0;
                 let dict = harness_event_to_dict(py, &event)?;
                 Ok(Some(dict))
             }
@@ -264,10 +270,18 @@ impl PyHarnessEventIterator {
                 warning.set_item("skipped", n)?;
                 Ok(Some(warning.into_any().unbind()))
             }
-            Ok(Err(_)) => Ok(None),
-            // timeout elapsed：正常终止迭代（py.detach 不捕获 panic，
-            // panic 会直接传播；Err 分支只匹配 Elapsed）
-            Err(_) => Ok(None),
+            Ok(Err(broadcast::error::RecvError::Closed)) => Ok(None),
+            // timeout elapsed：达到 max_consecutive_timeouts 则终止，否则发出 timeout 事件继续
+            Err(_) => {
+                self.consecutive_timeouts += 1;
+                if self.consecutive_timeouts >= self.max_consecutive_timeouts {
+                    Ok(None)
+                } else {
+                    let timeout_event = PyDict::new(py);
+                    timeout_event.set_item("type", "timeout")?;
+                    Ok(Some(timeout_event.into_any().unbind()))
+                }
+            }
         }
     }
 }
@@ -403,11 +417,19 @@ impl PyAgentHarness {
     }
 
     /// 返回 harness 事件迭代器。`timeout_ms` 为单次 `__next__` 等待超时（毫秒）。
-    #[pyo3(signature = (timeout_ms=5000))]
-    fn events(&self, py: Python<'_>, timeout_ms: u64) -> PyResult<Py<PyHarnessEventIterator>> {
+    #[pyo3(signature = (timeout_ms=5000, max_consecutive_timeouts=1))]
+    fn events(
+        &self,
+        py: Python<'_>,
+        timeout_ms: u64,
+        max_consecutive_timeouts: u32,
+    ) -> PyResult<Py<PyHarnessEventIterator>> {
         let rx = self.harness.subscribe();
         let handle = runtime(py).handle().clone();
-        Py::new(py, PyHarnessEventIterator::new(rx, timeout_ms, handle))
+        Py::new(
+            py,
+            PyHarnessEventIterator::new(rx, timeout_ms, max_consecutive_timeouts, handle),
+        )
     }
 
     /// 取消当前正在运行的 prompt（如果有）。不阻塞。
