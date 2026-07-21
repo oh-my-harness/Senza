@@ -31,6 +31,7 @@ use crate::pyagent::runtime;
 use crate::pybuilder::PyHarnessBuilder;
 use crate::pyeventstream::PyWaitForExternalEventTool;
 use crate::pyplugin::PyPluginWrapper;
+use crate::pypricing::PyPricingProvider;
 use crate::pyprovider::PyProvider;
 use crate::pytool::PyToolWrapper;
 use crate::value_conv::{pyobject_to_value, value_to_pyobject};
@@ -1236,6 +1237,35 @@ impl PyWorkflowEngine {
         engine.set_customize_builder(Arc::new(move |b| {
             let b = if let Some(p) = &prev { p(b) } else { b };
             b.max_tokens(max_tokens)
+        }));
+        slf.engine = Some(Arc::new(engine));
+        Ok(slf)
+    }
+    /// 为 workflow 级所有 LLM step 注入 PricingProvider。
+    ///
+    /// 通过 `customize_builder` 配置：每个 LLM step 构造 harness 时，
+    /// 在共享链上调用 `builder.pricing(provider)`。executor step 不构造
+    /// harness，故不受影响。多次调用累加（与 `with_hooks`/`with_max_tokens`
+    /// 同链，后调覆盖先调，语义同 builder last-write-wins）。
+    #[pyo3(text_signature = "($self, provider)")]
+    fn with_pricing<'a>(
+        mut slf: PyRefMut<'a, Self>,
+        provider: &Bound<'_, PyPricingProvider>,
+    ) -> PyResult<PyRefMut<'a, Self>> {
+        let arc = slf
+            .engine
+            .take()
+            .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("engine already consumed"))?;
+        let mut engine = Arc::try_unwrap(arc).map_err(|_| {
+            pyo3::exceptions::PyRuntimeError::new_err(
+                "engine is shared (running?); cannot set pricing",
+            )
+        })?;
+        let p = provider.borrow().provider.clone();
+        let prev = engine.config_customize_builder().clone();
+        engine.set_customize_builder(Arc::new(move |b| {
+            let b = if let Some(p) = &prev { p(b) } else { b };
+            b.pricing(p.clone())
         }));
         slf.engine = Some(Arc::new(engine));
         Ok(slf)
