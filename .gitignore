@@ -1,6 +1,7 @@
 sessions/
 dist/
 __pycache__/
+.pytest_cache/
 *.pyc
 docs/superpowers
 .cargo/config.toml

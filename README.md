@@ -1,15 +1,42 @@
 # Senza (森座)
 
-oh-my-harness Rust runtime 的 Python SDK，基于 PyO3 构建。
+> **生产级 Agent 运行时 — Rust 性能，Python 易用，崩溃可恢复，成本可控**
 
-Senza 向 Python 暴露 runtime 的两层能力：
+Senza 是 oh-my-harness Rust runtime 的 Python SDK，基于 PyO3 构建。面向需要长流程编排、崩溃恢复和成本管控的生产级 AI Agent 场景。
 
-| 层级 | 类 | 用途 |
-|------|-----|------|
-| **Agent** | `HarnessBuilder`、`AgentHarness` | 单轮 LLM 对话、工具调用、流式输出、动态配置 |
-| **Runtime** | `WorkflowEngine` | 多步工作流、条件路由、崩溃恢复、暂停/取消 |
+### 核心卖点
+
+| 特性 | 说明 |
+|------|------|
+| ⚡ **Rust 内核** | PyO3 绑定，比纯 Python 框架更高的吞吐和更低的内存占用 |
+| 🛡️ **原生崩溃恢复** | 工作流持久化 + 断点恢复，长流程不丢失进度 |
+| 💰 **内置预算管控** | 定价感知 + 预算上限 + 超限回调，每一分钱都看得见 |
+| 🔧 **两层 API** | Agent 层（单轮对话/工具调用/流式）+ Runtime 层（多步工作流/条件路由/暂停取消） |
+
+### Showcase
+
+两个完整应用 demo，不是 toy example：
+
+| 项目 | 场景 | 展示能力 |
+|------|------|---------|
+| [**blender-scene-generator**](https://github.com/oh-my-harness/blender-scene-generator) | 自然语言 → Blender 3D 场景 | AgentHarness + WorkflowEngine + human-in-the-loop |
+| [**eda-studio**](https://github.com/oh-my-harness/eda-studio) | LLM 驱动 RTL→GDS 芯片设计全流程 | 长流程编排 + 崩溃恢复 + 失败回环路由 + 多工具协调 |
+
+![Blender demo](https://raw.githubusercontent.com/oh-my-harness/blender-scene-generator/main/docs/examples/rainy_neon_alley.png)
 
 ---
+
+### 与其他框架对比
+
+| 特性 | Senza | LangGraph | CrewAI | AutoGen |
+|------|-------|-----------|--------|---------|
+| 实现语言 | Rust 内核 + Python SDK | 纯 Python | 纯 Python | 纯 Python |
+| 崩溃恢复 | ✅ 原生持久化 + 断点恢复 | ❌ 需自建 checkpoint | ❌ | ❌ |
+| 预算管控 | ✅ 内置定价 + 预算上限 | ❌ | ❌ | ❌ |
+| 工作流编排 | ✅ 条件路由/暂停/取消 | ✅ 图编排 | ✅ 顺序为主 | ✅ 对话编排 |
+| 生产级 demo | ✅ 芯片设计 RTL→GDS | ❌ | ❌ | ❌ |
+| 流式输出 | ✅ 原生 async | ✅ | ❌ | ✅ |
+
 
 ## 安装
 
@@ -171,6 +198,8 @@ with tempfile.TemporaryDirectory() as store_dir:
 lh.create_openai_provider(api_key, base_url=None, chat_path=None, thinking_scheme=None, parse_reasoning_content=True, tolerant_keepalive=True)
 lh.create_anthropic_provider(api_key, base_url=None, messages_path=None)
 ```
+
+> **接入通义千问 / DeepSeek / Ollama 等 OpenAI 兼容模型？** 见 [Provider 配置指南](docs/providers.md)。
 
 ### Agent 层
 
@@ -350,8 +379,8 @@ senza.viewer.serve("/path/to/sessions")  # 阻塞，自动打开浏览器
 
 见 [`examples/`](examples/) 目录：
 
-- `examples/agent/` — 5 个示例（基础对话、工具调用、流式输出、动态配置、多 provider）
-- `examples/runtime/` — 9 个示例（线性工作流、条件路由、执行器、崩溃恢复、暂停/取消、人工介入、Shell、HTTP、CompositeJudge）
+- `examples/agent/` — 13 个示例（基础对话、工具调用、流式输出、动态配置、多 provider、hooks、rules、skills、plugins、budget/pricing、steering、session 分支、Anthropic 独立调用）
+- `examples/runtime/` — 10 个示例（线性工作流、条件路由、执行器、崩溃恢复、暂停/取消、人工介入、Shell、HTTP、CompositeJudge、hooks+重试）
 
 ```bash
 export OPENAI_API_KEY=sk-...
@@ -374,3 +403,7 @@ python examples/runtime/01_linear_workflow.py
 ## 开发
 
 开发 Senza 本身见 [DEVELOPMENT.md](DEVELOPMENT.md)——涵盖本地搭建、测试（`./scripts/cargo_checks.sh` 一键跑 fmt+clippy+cargo test+pytest）、发布流程、CI 行为。下游项目想本地改 Senza 源码：用下游项目的 `scripts/install-senza-dev.sh`（editable 安装 `../Senza`）。
+
+## 贡献
+
+欢迎参与！见 [CONTRIBUTING.md](CONTRIBUTING.md) — 涵盖开发环境搭建、测试方法、PR 规范和 good first issue 指引。
