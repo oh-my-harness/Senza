@@ -55,6 +55,18 @@ print(lh.version())  # e.g. "0.3.0"
 
 ## 快速上手
 
+### 何时用 Agent，何时用 Workflow？
+
+| 场景 | 用什么 | 理由 |
+|------|--------|------|
+| 单轮问答 / 一次工具调用 | `AgentHarness` | 一步到位，无需编排 |
+| 多步流程、有条件分支 | `WorkflowEngine` | 需要路由、重试、持久化 |
+| 需要人工介入 / 暂停恢复 | `WorkflowEngine` | 原生支持 pause/resume + external event |
+| 需要崩溃恢复 | `WorkflowEngine` | `with_task_store` + `restore` |
+| 需要预算管控 | 两者皆可 | Agent 用 `.budget()`，Workflow 用 `.with_pricing()` + hooks |
+
+**简单判断**：如果你的流程可以用一个 prompt + 几个工具完成，用 Agent。如果需要多个 prompt 串联、有条件分支或需要持久化，用 Workflow。
+
 ### Agent：单轮 LLM 对话
 
 ```python
