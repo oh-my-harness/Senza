@@ -1,7 +1,6 @@
-"""04 — Dynamic Configuration: change model, system prompt, and temperature at runtime.
+"""04 — Dynamic Configuration: change system prompt and parameters at runtime.
 
-Demonstrates the newly exposed AgentHarness methods:
-  - set_model()
+Demonstrates the AgentHarness runtime methods:
   - set_system_prompt()
   - set_temperature()
   - set_thinking_level()
@@ -36,7 +35,7 @@ def main():
     harness.set_max_tokens(128)
 
     print("Prompt 1 (pirate mode)...")
-    events = harness.prompt_and_collect("Hello, how are you?", timeout_ms=15000)
+    events = harness.prompt_and_collect("Hello, how are you?", timeout_ms=30000)
     for event in events:
         if event["type"] == "text_delta":
             print(event.get("text", ""), end="")
@@ -44,14 +43,11 @@ def main():
             break
     print()
 
-    # Switch to a different model and persona
-    harness.set_model(os.environ.get("SENZA_MODEL_2", os.environ.get("SENZA_MODEL", "gpt-4o-mini")))
+    # Switch persona and parameters (same model, different behavior)
     harness.set_system_prompt("You are a formal academic. Be precise and cite sources.")
     harness.set_temperature(0.3)
     harness.set_thinking_level("medium")
-
-    print("\nPrompt 2 (academic mode)...")
-    events = harness.prompt_and_collect("What is the capital of France?", timeout_ms=15000)
+    events = harness.prompt_and_collect("What is the capital of France?", timeout_ms=30000)
     for event in events:
         if event["type"] == "text_delta":
             print(event.get("text", ""), end="")
