@@ -33,7 +33,8 @@ trap 'mv "$CARGO_TOML.bak" "$CARGO_TOML" 2>/dev/null || true' EXIT
 perl -pi -e "s/PLACEHOLDER/$SHA/g" "$CARGO_TOML"
 
 # Write Android linker config into .cargo/config.toml
-# (merge with existing [net] section if present)
+# The rustflags add -lpython3.12 so the .so declares a dependency on
+# Chaquopy's libpython3.12.so, making PyExc_* symbols resolvable at runtime.
 mkdir -p "$REPO_ROOT/.cargo"
 cat > "$REPO_ROOT/.cargo/config.toml" << EOF
 [net]
@@ -42,6 +43,7 @@ git-fetch-with-cli = true
 [target.aarch64-linux-android]
 linker = "$NDK_TOOLCHAIN/bin/aarch64-linux-android24-clang"
 ar = "$NDK_TOOLCHAIN/bin/llvm-ar"
+rustflags = ["-C", "link-arg=-lpython3.12"]
 EOF
 
 cd "$REPO_ROOT"
