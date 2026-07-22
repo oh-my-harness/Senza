@@ -45,7 +45,7 @@ pip install senza-sdk
 
 ```python
 import senza
-print(senza.version())  # e.g. "0.4.9"
+print(senza.version())  # e.g. "1.0.0"
 ```
 
 ---

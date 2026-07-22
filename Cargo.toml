@@ -1,6 +1,6 @@
 [package]
 name = "llm-harness-py"
-version = "0.4.9"
+version = "1.0.0"
 edition = "2024"
 license = "MIT"
 publish = false
