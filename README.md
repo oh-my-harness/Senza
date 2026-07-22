@@ -417,6 +417,7 @@ senza.viewer.serve("/path/to/sessions")  # 阻塞，自动打开浏览器
 
 - `examples/agent/` — 13 个示例（基础对话、工具调用、流式输出、动态配置、多 provider、hooks、rules、skills、plugins、budget/pricing、steering、session 分支、Anthropic 独立调用）
 - `examples/runtime/` — 10 个示例（线性工作流、条件路由、执行器、崩溃恢复、暂停/取消、人工介入、Shell、HTTP、CompositeJudge、hooks+重试）
+- `examples/templates/` — 3 个业务场景模板（代码审查、数据分析流水线、RAG 问答），可直接 fork 改造
 
 ```bash
 export OPENAI_API_KEY=sk-...
