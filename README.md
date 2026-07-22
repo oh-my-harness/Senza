@@ -91,6 +91,14 @@ for event in events:
 print(text)
 ```
 
+> **三种 prompt 方式怎么选？**
+>
+> | 方式 | 适用场景 | 说明 |
+> |------|---------|------|
+> | `harness.prompt_and_collect(text)` | **推荐**，同步场景 | 一步发送 + 收集所有事件，返回 `list[dict]` |
+> | `lh.stream_prompt(harness, text)` | 需要流式输出 | 模块级 async generator，逐 token yield 事件 |
+> | `harness.prompt(text)` + `harness.events()` | 需要线程级控制 | prompt 阻塞，需另起线程收集事件 |
+
 ### Agent：带工具调用
 
 ```python
