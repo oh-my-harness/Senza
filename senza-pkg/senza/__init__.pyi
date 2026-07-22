@@ -278,7 +278,17 @@ class HarnessBuilder:
 # ── Agent layer: AgentHarness ────────────────────────────────────────────────
 
 class HarnessEventIterator:
-    """Iterator over agent events (text_delta, tool_call_start, etc.)."""
+    """Iterator over harness events.
+
+    Event types include:
+    - text_delta, thinking_delta: token-level streaming
+    - message_start, message_update, message_end: message lifecycle
+    - tool_call_start, tool_call_args_delta, tool_call_end: LLM streaming a tool call
+    - tool_execution_start, tool_execution_update, tool_execution_end: tool execution lifecycle
+    - harness_tool_call_start, harness_tool_call_end: harness-level tool call wrappers
+    - phase_change, compaction_start, compaction_end: harness lifecycle
+    - settled, aborted, error: terminal events
+    """
 
 class AgentHarness:
     """Single-agent LLM harness with tool calling and streaming."""

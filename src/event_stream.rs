@@ -172,7 +172,7 @@ pub fn agent_event_to_dict(py: Python<'_>, event: &AgentEvent) -> PyResult<Py<Py
             dict.set_item("type", "tool_call_start")?;
             dict.set_item("message_id", message_id)?;
             dict.set_item("tool_use_id", tool_use_id)?;
-            dict.set_item("name", name)?;
+            dict.set_item("tool_name", name)?;
         }
         AgentEvent::ToolCallArgsDelta {
             tool_use_id,

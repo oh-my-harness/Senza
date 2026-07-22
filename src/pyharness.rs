@@ -178,10 +178,10 @@ fn harness_event_to_dict(py: Python<'_>, event: &AgentHarnessEvent) -> PyResult<
             args,
         } => {
             let dict = PyDict::new(py);
-            dict.set_item("type", "tool_call_start")?;
+            dict.set_item("type", "harness_tool_call_start")?;
             dict.set_item("tool_use_id", tool_use_id.clone())?;
             dict.set_item("tool_name", tool_name.clone())?;
-            dict.set_item("args", args.to_string())?;
+            dict.set_item("args", value_to_pyobject(py, args)?)?;
             Ok(dict.into_any().unbind())
         }
         AgentHarnessEvent::ToolCallEnd {
@@ -190,10 +190,13 @@ fn harness_event_to_dict(py: Python<'_>, event: &AgentHarnessEvent) -> PyResult<
             result,
         } => {
             let dict = PyDict::new(py);
-            dict.set_item("type", "tool_call_end")?;
+            dict.set_item("type", "harness_tool_call_end")?;
             dict.set_item("tool_use_id", tool_use_id.clone())?;
             dict.set_item("tool_name", tool_name.clone())?;
-            dict.set_item("result", format!("{result:?}"))?;
+            let result_dict = PyDict::new(py);
+            result_dict.set_item("details", value_to_pyobject(py, &result.details)?)?;
+            result_dict.set_item("is_error", result.is_error)?;
+            dict.set_item("result", result_dict)?;
             Ok(dict.into_any().unbind())
         }
         AgentHarnessEvent::Settled => {
