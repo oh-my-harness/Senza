@@ -11,12 +11,13 @@ Run:
 import os
 import sys
 
-import senza as lh
+import senza
 
 
 def main():
     api_key = os.environ.get("OPENAI_API_KEY", "sk-demo-key")
-    provider = lh.create_openai_provider(api_key=api_key)
+    base_url = os.environ.get("OPENAI_API_BASE") or None
+    provider = senza.create_openai_provider(api_key=api_key, base_url=base_url)
 
     workflow = {
         "entry_step": "generate",
@@ -48,8 +49,8 @@ def main():
         return "abort:done"
 
     engine = (
-        lh.WorkflowEngine(workflow, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), lh.create_judge(judge))
-        .with_executor("double_it", lh.create_executor(double_executor))
+        senza.WorkflowEngine(workflow, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), senza.create_judge(judge))
+        .with_executor("double_it", senza.create_executor(double_executor))
     )
 
     print("Running mixed LLM + executor workflow...")

@@ -38,7 +38,7 @@ import sys
 import tempfile
 import textwrap
 
-import senza as lh
+import senza
 
 
 def create_skill_dir(root: str) -> str:
@@ -89,13 +89,13 @@ def create_skill_dir(root: str) -> str:
 def main():
     api_key = os.environ.get("OPENAI_API_KEY", "sk-demo-key")
     base_url = os.environ.get("OPENAI_API_BASE") or None
-    provider = lh.create_openai_provider(api_key=api_key, base_url=base_url)
+    provider = senza.create_openai_provider(api_key=api_key, base_url=base_url)
 
     with tempfile.TemporaryDirectory() as tmpdir:
         skills_dir = create_skill_dir(tmpdir)
 
         # ── Load skills from the directory ────────────────────────────────
-        skills = lh.load_skills(skills_dir)
+        skills = senza.load_skills(skills_dir)
         print(f"Loaded {len(skills)} skill(s):")
         for s in skills:
             print(f"  - name={s.name}")
@@ -110,7 +110,7 @@ def main():
         # tool so the model can fetch skill content on demand.
         # Use .disable_skill_read_tool() to opt out.
         harness = (
-            lh.HarnessBuilder(os.environ.get("SENZA_MODEL", "gpt-4o"))
+            senza.HarnessBuilder(os.environ.get("SENZA_MODEL", "gpt-4o"))
             .provider("*", provider)
             .system_prompt(
                 "You are an incident-response assistant. You have access to "

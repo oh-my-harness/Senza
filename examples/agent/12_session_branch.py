@@ -28,17 +28,17 @@ Run:
 import os
 import sys
 
-import senza as lh
+import senza
 
 
 def main():
     api_key = os.environ.get("OPENAI_API_KEY", "sk-demo-key")
     base_url = os.environ.get("OPENAI_API_BASE") or None
-    provider = lh.create_openai_provider(api_key=api_key, base_url=base_url)
+    provider = senza.create_openai_provider(api_key=api_key, base_url=base_url)
     model = os.environ.get("SENZA_MODEL", "gpt-4o")
 
     harness = (
-        lh.HarnessBuilder(model)
+        senza.HarnessBuilder(model)
         .provider("*", provider)
         .system_prompt("You are a project planning assistant. Be concise.")
         .max_tokens(512)

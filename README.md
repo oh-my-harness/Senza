@@ -47,8 +47,8 @@ pip install senza-sdk
 验证：
 
 ```python
-import senza as lh
-print(lh.version())  # e.g. "0.3.0"
+import senza
+print(senza.version())  # e.g. "0.3.0"
 ```
 
 ---
@@ -70,12 +70,12 @@ print(lh.version())  # e.g. "0.3.0"
 ### Agent：单轮 LLM 对话
 
 ```python
-import senza as lh
+import senza
 
-provider = lh.create_openai_provider(api_key="sk-...")
+provider = senza.create_openai_provider(api_key="sk-...")
 
 harness = (
-    lh.HarnessBuilder("gpt-4o")
+    senza.HarnessBuilder("gpt-4o")
     .provider("*", provider)
     .system_prompt("你是一个有用的助手。")
     .max_tokens(512)
@@ -96,7 +96,7 @@ print(text)
 > | 方式 | 适用场景 | 说明 |
 > |------|---------|------|
 > | `harness.prompt_and_collect(text)` | **推荐**，同步场景 | 一步发送 + 收集所有事件，返回 `list[dict]` |
-> | `lh.stream_prompt(harness, text)` | 需要流式输出 | 模块级 async generator，逐 token yield 事件 |
+> | `senza.stream_prompt(harness, text)` | 需要流式输出 | 模块级 async generator，逐 token yield 事件 |
 > | `harness.prompt(text)` + `harness.events()` | 需要线程级控制 | prompt 阻塞，需另起线程收集事件 |
 
 ### Agent：带工具调用
@@ -110,14 +110,14 @@ def get_weather(args, ctx):
         "terminate": False,
     }
 
-tool = lh.create_tool(
+tool = senza.create_tool(
     "get_weather", "查询城市天气",
     json.dumps({"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}),
     get_weather,
 )
 
 harness = (
-    lh.HarnessBuilder("gpt-4o")
+    senza.HarnessBuilder("gpt-4o")
     .provider("*", provider)
     .tool(tool)
     .build()
@@ -131,12 +131,12 @@ Senza 提供模块级 async generator 函数，支持在 asyncio 事件循环中
 
 ```python
 import asyncio
-import senza as lh
+import senza
 
 async def main():
-    provider = lh.create_openai_provider(api_key="sk-...")
+    provider = senza.create_openai_provider(api_key="sk-...")
     harness = (
-        lh.HarnessBuilder("gpt-4o")
+        senza.HarnessBuilder("gpt-4o")
         .provider("*", provider)
         .system_prompt("你是一个有用的助手。")
         .max_tokens(256)
@@ -144,7 +144,7 @@ async def main():
     )
 
     # stream_prompt: 发送 prompt 并 async yield 事件
-    async for event in lh.stream_prompt(harness, "用一句话解释闭包。", timeout_ms=30000):
+    async for event in senza.stream_prompt(harness, "用一句话解释闭包。", timeout_ms=30000):
         if event["type"] == "text_delta":
             print(event.get("text", ""), end="", flush=True)
 
@@ -159,9 +159,9 @@ asyncio.run(main())
 ### Runtime：多步工作流
 
 ```python
-import senza as lh
+import senza
 
-provider = lh.create_openai_provider(api_key="sk-...")
+provider = senza.create_openai_provider(api_key="sk-...")
 
 workflow = {
     "entry_step": "writer",
@@ -178,7 +178,7 @@ def judge(ctx):
     return "abort:done"
 
 engine = (
-    lh.WorkflowEngine(workflow, provider, "gpt-4o", lh.create_judge(judge))
+    senza.WorkflowEngine(workflow, provider, "gpt-4o", senza.create_judge(judge))
     .with_max_tokens(256)
 )
 
@@ -213,14 +213,14 @@ import tempfile
 with tempfile.TemporaryDirectory() as store_dir:
     # 带持久化运行
     engine = (
-        lh.WorkflowEngine(workflow, provider, "gpt-4o", lh.create_judge(judge))
+        senza.WorkflowEngine(workflow, provider, "gpt-4o", senza.create_judge(judge))
         .with_task_store(store_dir)
     )
     task_id = engine.task_id()
     engine.run()
 
     # 崩溃后恢复
-    restored = lh.WorkflowEngine.restore(store_dir, task_id, provider, "gpt-4o", lh.create_judge(judge))
+    restored = senza.WorkflowEngine.restore(store_dir, task_id, provider, "gpt-4o", senza.create_judge(judge))
     print(restored.state(), restored.current_step())
 ```
 
@@ -231,8 +231,8 @@ with tempfile.TemporaryDirectory() as store_dir:
 ### Provider
 
 ```python
-lh.create_openai_provider(api_key, base_url=None, chat_path=None, thinking_scheme=None, parse_reasoning_content=True, tolerant_keepalive=True)
-lh.create_anthropic_provider(api_key, base_url=None, messages_path=None)
+senza.create_openai_provider(api_key, base_url=None, chat_path=None, thinking_scheme=None, parse_reasoning_content=True, tolerant_keepalive=True)
+senza.create_anthropic_provider(api_key, base_url=None, messages_path=None)
 ```
 
 > **接入通义千问 / DeepSeek / Ollama 等 OpenAI 兼容模型？** 见 [Provider 配置指南](docs/providers.md)。
@@ -301,12 +301,12 @@ lh.create_anthropic_provider(api_key, base_url=None, messages_path=None)
 ### Executor
 
 ```python
-lh.create_composite_judge()           # CompositeJudge（按节点注册独立路由）
-lh.create_executor(callback)           # Python 回调执行器
-lh.create_shell_executor(commands)     # Shell 命令执行器（命令白名单，需配合 create_os_env）
-lh.create_http_executor(allowed_hosts) # HTTP 调用执行器（host 白名单）
-lh.create_fs_tools_plugin()       # bash/read/write/edit 四件套 Plugin（需配合 create_os_env）
-lh.create_os_env(working_dir=".")      # OS 文件系统 + shell 执行环境（传给 WorkflowEngine(env=...)）
+senza.create_composite_judge()           # CompositeJudge（按节点注册独立路由）
+senza.create_executor(callback)           # Python 回调执行器
+senza.create_shell_executor(commands)     # Shell 命令执行器（命令白名单，需配合 create_os_env）
+senza.create_http_executor(allowed_hosts) # HTTP 调用执行器（host 白名单）
+senza.create_fs_tools_plugin()       # bash/read/write/edit 四件套 Plugin（需配合 create_os_env）
+senza.create_os_env(working_dir=".")      # OS 文件系统 + shell 执行环境（传给 WorkflowEngine(env=...)）
 
 
 ### Judge ctx 字段
@@ -334,57 +334,57 @@ Judge callback 收到的 `ctx: dict` 包含：
 ### Hooks（11 种）
 
 ```python
-lh.create_before_turn_hook(cb)         # cb(ctx: dict) -> None
-lh.create_after_turn_hook(cb)          # cb(ctx: dict) -> None
-lh.create_should_stop_hook(cb)         # cb(ctx: dict) -> bool
-lh.create_before_tool_call_hook(cb)    # cb(ctx: dict) -> str | None
-lh.create_after_tool_call_hook(cb)     # cb(ctx: dict) -> str | dict
+senza.create_before_turn_hook(cb)         # cb(ctx: dict) -> None
+senza.create_after_turn_hook(cb)          # cb(ctx: dict) -> None
+senza.create_should_stop_hook(cb)         # cb(ctx: dict) -> bool
+senza.create_before_tool_call_hook(cb)    # cb(ctx: dict) -> str | None
+senza.create_after_tool_call_hook(cb)     # cb(ctx: dict) -> str | dict
 # ... 还有 6 种（见 examples/ 和 skills/）
 ```
 
 ### Pricing
 
 ```python
-lh.create_pricing_provider(table)              # 静态定价表 dict
-lh.create_pricing_provider_callback(cb)        # cb(model, provider) -> dict | None
+senza.create_pricing_provider(table)              # 静态定价表 dict
+senza.create_pricing_provider_callback(cb)        # cb(model, provider) -> dict | None
 ```
 
 ### Budget
 
 ```python
-lh.create_budget_exceeded_hook(cb)  # cb(cost: dict, limit: float) -> bool
+senza.create_budget_exceeded_hook(cb)  # cb(cost: dict, limit: float) -> bool
 ```
 
 ### Rules 审批
 
 ```python
-lh.create_contains_predicate(allowed)              # tool_name ∈ allowed
-lh.create_regex_field_predicate(arg_path, pattern) # args[arg_path] 匹配正则
-lh.create_number_range_predicate(arg_path, min, max) # 数值区间
-lh.create_rate_limit_predicate(max, window_seconds)  # 限流
+senza.create_contains_predicate(allowed)              # tool_name ∈ allowed
+senza.create_regex_field_predicate(arg_path, pattern) # args[arg_path] 匹配正则
+senza.create_number_range_predicate(arg_path, min, max) # 数值区间
+senza.create_rate_limit_predicate(max, window_seconds)  # 限流
 
-chain = lh.create_rule_chain().rule("search", pred, "allow").fallback("deny").build()
-hook = lh.create_rule_approval_hook(chain)  # → BeforeToolCallHook
+chain = senza.create_rule_chain().rule("search", pred, "allow").fallback("deny").build()
+hook = senza.create_rule_approval_hook(chain)  # → BeforeToolCallHook
 ```
 
 ### Skills
 
 ```python
-lh.load_skills(path)  # 扫描目录下的 SKILL.md，返回 list[Skill]
+senza.load_skills(path)  # 扫描目录下的 SKILL.md，返回 list[Skill]
 ```
 
 ### Agent：内置 bash/read/write/edit 工具
 
 ```python
-import senza as lh
+import senza
 
-provider = lh.create_openai_provider(api_key="sk-...")
+provider = senza.create_openai_provider(api_key="sk-...")
 
 harness = (
-    lh.HarnessBuilder("gpt-4o")
+    senza.HarnessBuilder("gpt-4o")
     .provider("*", provider)
-    .plugin(lh.create_fs_tools_plugin())  # 注册 bash/read/write/edit
-    .env(lh.create_os_env("."))           # 提供真实文件系统 + shell
+    .plugin(senza.create_fs_tools_plugin())  # 注册 bash/read/write/edit
+    .env(senza.create_os_env("."))           # 提供真实文件系统 + shell
     .system_prompt("你是一个能读写文件的助手。")
     .build()
 )
@@ -415,9 +415,8 @@ senza.viewer.serve("/path/to/sessions")  # 阻塞，自动打开浏览器
 
 见 [`examples/`](examples/) 目录：
 
-- `examples/agent/` — 13 个示例（基础对话、工具调用、流式输出、动态配置、多 provider、hooks、rules、skills、plugins、budget/pricing、steering、session 分支、Anthropic 独立调用）
-- `examples/runtime/` — 10 个示例（线性工作流、条件路由、执行器、崩溃恢复、暂停/取消、人工介入、Shell、HTTP、CompositeJudge、hooks+重试）
-- `examples/templates/` — 3 个业务场景模板（代码审查、数据分析流水线、RAG 问答），可直接 fork 改造
+- `examples/agent/` — 15 个示例（基础对话、工具调用、流式输出、动态配置、多 provider、hooks、rules、skills、plugins、budget/pricing、steering、session 分支、Anthropic 独立调用、代码审查模板、RAG 问答模板）
+- `examples/runtime/` — 11 个示例（线性工作流、条件路由、执行器、崩溃恢复、暂停/取消、人工介入、Shell、HTTP、CompositeJudge、hooks+重试、数据分析流水线模板）
 
 ```bash
 export OPENAI_API_KEY=sk-...

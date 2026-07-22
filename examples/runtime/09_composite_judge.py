@@ -19,12 +19,13 @@ import json
 import os
 import re
 
-import senza as lh
+import senza
 
 
 def main():
     api_key = os.environ.get("OPENAI_API_KEY", "sk-demo-key")
-    provider = lh.create_openai_provider(api_key=api_key)
+    base_url = os.environ.get("OPENAI_API_BASE") or None
+    provider = senza.create_openai_provider(api_key=api_key, base_url=base_url)
 
     workflow = {
         "entry_step": "writer",
@@ -58,7 +59,7 @@ def main():
             "structured": {"score": score},
         }
 
-    judge = lh.create_composite_judge()
+    judge = senza.create_composite_judge()
     # Custom routing for writer only.
     # reviewer -> parse_score via a simple .on() handler.
     # parse_score: no .on() handler -> falls back to Expr edges
@@ -67,8 +68,8 @@ def main():
     judge.on("reviewer", lambda ctx: "to:parse_score")
 
     engine = (
-        lh.WorkflowEngine(workflow, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), judge)
-        .with_executor("parse_score", lh.create_executor(parse_score_executor))
+        senza.WorkflowEngine(workflow, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), judge)
+        .with_executor("parse_score", senza.create_executor(parse_score_executor))
         .with_max_tokens(256)
     )
 

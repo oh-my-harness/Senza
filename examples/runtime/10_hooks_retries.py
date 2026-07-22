@@ -30,13 +30,13 @@ import os
 import sys
 import tempfile
 
-import senza as lh
+import senza
 
 
 def main():
     api_key = os.environ.get("OPENAI_API_KEY", "sk-demo-key")
     base_url = os.environ.get("OPENAI_API_BASE") or None
-    provider = lh.create_openai_provider(api_key=api_key, base_url=base_url)
+    provider = senza.create_openai_provider(api_key=api_key, base_url=base_url)
     model = os.environ.get("SENZA_MODEL", "gpt-4o")
 
     workflow = {
@@ -67,7 +67,7 @@ def main():
         ],
     }
 
-    judge = lh.create_judge(lambda ctx: f"to:{ctx.get('next_step', 'finalize')}" if ctx.get("next_step") else "done")
+    judge = senza.create_judge(lambda ctx: f"to:{ctx.get('next_step', 'finalize')}" if ctx.get("next_step") else "done")
 
     # ── Hooks: log each LLM turn within the workflow ──────────────────────
     turn_counter = {"n": 0}
@@ -81,8 +81,8 @@ def main():
         print(f"  [after_turn]  turn #{turn_counter['n']} new_messages={n}")
 
     hooks = [
-        lh.create_before_turn_hook(on_before_turn),
-        lh.create_after_turn_hook(on_after_turn),
+        senza.create_before_turn_hook(on_before_turn),
+        senza.create_after_turn_hook(on_after_turn),
     ]
 
     with tempfile.TemporaryDirectory() as store_dir:
@@ -92,7 +92,7 @@ def main():
         print("=" * 60)
 
         engine = (
-            lh.WorkflowEngine(
+            senza.WorkflowEngine(
                 workflow_dict=workflow,
                 provider=provider,
                 model=model,
@@ -127,7 +127,7 @@ def main():
 
         # Simulate a crash: discard the engine, restore from step 'review'
         # This skips 'draft' (already done) and re-runs 'review' onward.
-        restored = lh.WorkflowEngine.restore_from_step(
+        restored = senza.WorkflowEngine.restore_from_step(
             task_store_dir=store_dir,
             task_id=task_id,
             step="review",

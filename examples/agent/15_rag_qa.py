@@ -15,7 +15,7 @@ import json
 import os
 import sys
 
-import senza as lh
+import senza
 
 KNOWLEDGE_BASE = {
     "senza": "Senza 是一个生产级 Agent 运行时，基于 Rust 内核 + Python SDK。支持崩溃恢复和预算管控。",
@@ -26,7 +26,8 @@ KNOWLEDGE_BASE = {
 
 def main():
     api_key = os.environ.get("OPENAI_API_KEY", "sk-demo-key")
-    provider = lh.create_openai_provider(api_key=api_key)
+    base_url = os.environ.get("OPENAI_API_BASE") or None
+    provider = senza.create_openai_provider(api_key=api_key, base_url=base_url)
 
     def search_kb(args, ctx):
         """Tool: search the knowledge base by keyword."""
@@ -44,7 +45,7 @@ def main():
             "terminate": False,
         }
 
-    search_tool = lh.create_tool(
+    search_tool = senza.create_tool(
         name="search_kb",
         description="Search the knowledge base for relevant information. Pass a keyword or topic.",
         parameters_schema=json.dumps({
@@ -58,7 +59,7 @@ def main():
     )
 
     harness = (
-        lh.HarnessBuilder(os.environ.get("SENZA_MODEL", "gpt-4o"))
+        senza.HarnessBuilder(os.environ.get("SENZA_MODEL", "gpt-4o"))
         .provider("*", provider)
         .system_prompt(
             "You are a QA assistant. Always use the search_kb tool to find relevant "

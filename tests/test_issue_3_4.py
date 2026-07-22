@@ -14,7 +14,7 @@ import os
 import tempfile
 
 import pytest
-import senza as lh
+import senza
 
 
 # ── #4: create_os_env + env= parameter ──────────────────────────────────────
@@ -22,14 +22,14 @@ import senza as lh
 
 def test_create_os_env_returns_execution_env():
     """create_os_env returns an opaque ExecutionEnv wrapper (#4)."""
-    env = lh.create_os_env(working_dir=".")
+    env = senza.create_os_env(working_dir=".")
     assert env is not None
     assert type(env).__name__ == "ExecutionEnv"
 
 
 def test_create_os_env_default_working_dir():
     """create_os_env defaults working_dir to '.' (#4)."""
-    env = lh.create_os_env()
+    env = senza.create_os_env()
     assert env is not None
 
 
@@ -47,12 +47,12 @@ def test_workflow_engine_accepts_env_parameter():
         ],
         "edges": [],
     }
-    env = lh.create_os_env(working_dir=".")
-    engine = lh.WorkflowEngine(
+    env = senza.create_os_env(working_dir=".")
+    engine = senza.WorkflowEngine(
         workflow,
-        lh.create_openai_provider(api_key="test-key"),
+        senza.create_openai_provider(api_key="test-key"),
         "gpt-4o",
-        lh.create_judge(lambda ctx: "abort:done"),
+        senza.create_judge(lambda ctx: "abort:done"),
         env=env,
     )
     assert engine.task_id().startswith("task-")
@@ -80,17 +80,17 @@ def test_shell_executor_runs_real_command_with_os_env():
         ],
         "edges": [],
     }
-    judge = lh.create_judge(lambda ctx: "abort:done")
-    env = lh.create_os_env(working_dir=".")
+    judge = senza.create_judge(lambda ctx: "abort:done")
+    env = senza.create_os_env(working_dir=".")
     engine = (
-        lh.WorkflowEngine(
+        senza.WorkflowEngine(
             workflow,
-            lh.create_openai_provider(api_key="test-key"),
+            senza.create_openai_provider(api_key="test-key"),
             "gpt-4o",
             judge,
             env=env,
         )
-        .with_executor("shell", lh.create_shell_executor(["echo"]))
+        .with_executor("shell", senza.create_shell_executor(["echo"]))
     )
     engine.run()
     history = engine.step_history()
@@ -121,16 +121,16 @@ def test_shell_executor_without_env_fails():
         ],
         "edges": [],
     }
-    judge = lh.create_judge(lambda ctx: "abort:done")
+    judge = senza.create_judge(lambda ctx: "abort:done")
     # No env= → UnsupportedEnv → execute_shell errors.
     engine = (
-        lh.WorkflowEngine(
+        senza.WorkflowEngine(
             workflow,
-            lh.create_openai_provider(api_key="test-key"),
+            senza.create_openai_provider(api_key="test-key"),
             "gpt-4o",
             judge,
         )
-        .with_executor("shell", lh.create_shell_executor(["echo"]))
+        .with_executor("shell", senza.create_shell_executor(["echo"]))
     )
     with pytest.raises(RuntimeError):
         engine.run()
@@ -165,16 +165,16 @@ def _two_step_shell_workflow():
 
 def _make_engine(judge, *, max_retries=3):
     """Build a 2-step shell workflow engine with OsEnv + ShellExecutor."""
-    env = lh.create_os_env(working_dir=".")
+    env = senza.create_os_env(working_dir=".")
     return (
-        lh.WorkflowEngine(
+        senza.WorkflowEngine(
             _two_step_shell_workflow(),
-            lh.create_openai_provider(api_key="test-key"),
+            senza.create_openai_provider(api_key="test-key"),
             "gpt-4o",
             judge,
             env=env,
         )
-        .with_executor("shell", lh.create_shell_executor(["echo"]))
+        .with_executor("shell", senza.create_shell_executor(["echo"]))
         .with_max_retries(max_retries)
     )
 def test_judge_ctx_exposes_retry_count():
@@ -194,7 +194,7 @@ def test_judge_ctx_exposes_retry_count():
             return "retry"
         return "to:done"
 
-    engine = _make_engine(lh.create_judge(judge_cb), max_retries=3)
+    engine = _make_engine(senza.create_judge(judge_cb), max_retries=3)
     engine.run()
     assert seen_counts == [0, 1, 0]
 
@@ -205,7 +205,7 @@ def test_max_retries_exceeded_fails_workflow():
     Per-step semantics: max_retries=1 allows 1 retry; the 2nd retry triggers
     Failed. Judge always returns "retry".
     """
-    engine = _make_engine(lh.create_judge(lambda ctx: "retry"), max_retries=1)
+    engine = _make_engine(senza.create_judge(lambda ctx: "retry"), max_retries=1)
     # engine.run() raises because the task fails.
     with pytest.raises(RuntimeError, match="max_retries"):
         engine.run()
@@ -220,7 +220,7 @@ def test_composite_judge_ctx_exposes_retry_count():
         seen_counts.append(ctx["retry_count"])
         return "retry"
 
-    judge = lh.create_composite_judge()
+    judge = senza.create_composite_judge()
     judge.on("s", on_s)
 
     engine = _make_engine(judge, max_retries=2)

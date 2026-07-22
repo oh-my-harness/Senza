@@ -34,13 +34,13 @@ import json
 import os
 import sys
 
-import senza as lh
+import senza
 
 
 def main():
     api_key = os.environ.get("OPENAI_API_KEY", "sk-demo-key")
     base_url = os.environ.get("OPENAI_API_BASE") or None
-    provider = lh.create_openai_provider(api_key=api_key, base_url=base_url)
+    provider = senza.create_openai_provider(api_key=api_key, base_url=base_url)
 
     # ── A simple tool so before_tool_call / after_tool_call fire ────────────
     def get_weather(args, ctx):
@@ -50,7 +50,7 @@ def main():
             "terminate": False,
         }
 
-    weather_tool = lh.create_tool(
+    weather_tool = senza.create_tool(
         name="get_weather",
         description="Get current weather for a city",
         parameters_schema=json.dumps({
@@ -97,21 +97,21 @@ def main():
         return reason == "end_turn"
 
     hooks = [
-        lh.create_before_turn_hook(on_before_turn),
-        lh.create_after_turn_hook(on_after_turn),
-        lh.create_before_provider_request_hook(on_before_provider_request),
-        lh.create_after_provider_response_hook(on_after_provider_response),
-        lh.create_before_tool_call_hook(on_before_tool_call),
-        lh.create_after_tool_call_hook(on_after_tool_call),
+        senza.create_before_turn_hook(on_before_turn),
+        senza.create_after_turn_hook(on_after_turn),
+        senza.create_before_provider_request_hook(on_before_provider_request),
+        senza.create_after_provider_response_hook(on_after_provider_response),
+        senza.create_before_tool_call_hook(on_before_tool_call),
+        senza.create_after_tool_call_hook(on_after_tool_call),
     ]
 
     harness = (
-        lh.HarnessBuilder(os.environ.get("SENZA_MODEL", "gpt-4o"))
+        senza.HarnessBuilder(os.environ.get("SENZA_MODEL", "gpt-4o"))
         .provider("*", provider)
         .system_prompt("You are a weather assistant. Use the get_weather tool to answer.")
         .tool(weather_tool)
         .hooks(hooks)
-        .should_stop_hook(lh.create_should_stop_hook(on_should_stop))
+        .should_stop_hook(senza.create_should_stop_hook(on_should_stop))
         .max_tokens(512)
         .build()
     )

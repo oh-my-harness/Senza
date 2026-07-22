@@ -15,7 +15,7 @@ import json
 import os
 import sys
 
-import senza as lh
+import senza
 
 SAMPLE_DATA = [
     {"product": "Widget A", "q1": 1200, "q2": 1500, "q3": 1100},
@@ -26,7 +26,8 @@ SAMPLE_DATA = [
 
 def main():
     api_key = os.environ.get("OPENAI_API_KEY", "sk-demo-key")
-    provider = lh.create_openai_provider(api_key=api_key)
+    base_url = os.environ.get("OPENAI_API_BASE") or None
+    provider = senza.create_openai_provider(api_key=api_key, base_url=base_url)
 
     workflow = {
         "entry_step": "analyze",
@@ -36,6 +37,7 @@ def main():
                 "name": "数据分析",
                 "prompt": "分析以下销售数据，找出趋势和异常。返回 JSON：{\"summary\": \"一句话总结\", \"anomaly\": \"异常描述或null\"}",
                 "allowed_tools": [],
+                "structured": True,
             },
             {
                 "id": "report",
@@ -67,8 +69,8 @@ def main():
         }
 
     engine = (
-        lh.WorkflowEngine(workflow, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), lh.create_judge(judge))
-        .with_executor("transform", lh.create_executor(transform_executor))
+        senza.WorkflowEngine(workflow, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), senza.create_judge(judge))
+        .with_executor("transform", senza.create_executor(transform_executor))
         .with_max_tokens(512)
     )
 

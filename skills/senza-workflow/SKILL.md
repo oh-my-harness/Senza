@@ -13,12 +13,12 @@ description: >-
 
 # Senza Workflow — Multi-Step Orchestration
 
-> SDK: `import senza as L`
+> SDK: `import senza`
 
 ## Core Pattern
 
 ```python
-import senza as L
+import senza
 
 # 1. Define workflow as a dict
 workflow = {
@@ -33,13 +33,13 @@ workflow = {
 }
 
 # 2. Create provider, judge, executor
-provider = L.create_openai_provider(api_key="sk-...")
-judge = L.create_judge(lambda ctx: "to:transform" if ctx.get("structured", {}).get("ok") else "retry")
-executor = L.create_executor(lambda ctx: {"output": "done", "structured": {"status": "ok"}})
+provider = senza.create_openai_provider(api_key="sk-...")
+judge = senza.create_judge(lambda ctx: "to:transform" if ctx.get("structured", {}).get("ok") else "retry")
+executor = senza.create_executor(lambda ctx: {"output": "done", "structured": {"status": "ok"}})
 
 # 3. Build engine (fluent chain)
 engine = (
-    L.WorkflowEngine(workflow, provider, "gpt-4o", judge)
+    senza.WorkflowEngine(workflow, provider, "gpt-4o", judge)
     .with_executor("transform", executor)
 )
 
@@ -114,7 +114,7 @@ def my_judge(ctx: dict) -> str:
     else:
         return "fail:quality gate failed"
 
-judge = L.create_judge(my_judge)
+judge = senza.create_judge(my_judge)
 ```
 
 `ctx` dict contains: `step_id`, `output`, `structured` (or None), `step_count`.
@@ -134,7 +134,7 @@ def my_executor(ctx: dict) -> dict:
         "structured": {"status": "ok", "result": 42},
     }
 
-executor = L.create_executor(my_executor)
+executor = senza.create_executor(my_executor)
 ```
 
 `ctx` dict contains: `step_id`, `step_name`, `config`, `prev_output`, `context` (dict of shared variables).
@@ -197,7 +197,7 @@ workflow = {
     ],
 }
 # No custom judge needed — EdgeConditionJudge auto-enabled
-judge = L.create_judge(lambda ctx: "abort:done")  # NoopJudge fallback
+judge = senza.create_judge(lambda ctx: "abort:done")  # NoopJudge fallback
 ```
 
 ### Mixing LLM and executor steps
@@ -220,7 +220,7 @@ workflow = {
 ### Event monitoring during run
 
 ```python
-engine = L.WorkflowEngine(workflow, provider, "gpt-4o", judge)
+engine = senza.WorkflowEngine(workflow, provider, "gpt-4o", judge)
 
 # Subscribe before run
 event_iter = engine.subscribe(timeout_ms=5000)
@@ -244,11 +244,11 @@ engine.run()
 Both are **NOT auto-registered** (security by design). Register explicitly:
 
 ```python
-shell_exec = L.create_shell_executor(["echo", "cat", "python"])
-http_exec = L.create_http_executor(["api.example.com"], allowed_schemes=["https"])
+shell_exec = senza.create_shell_executor(["echo", "cat", "python"])
+http_exec = senza.create_http_executor(["api.example.com"], allowed_schemes=["https"])
 
 engine = (
-    L.WorkflowEngine(workflow, provider, "gpt-4o", judge)
+    senza.WorkflowEngine(workflow, provider, "gpt-4o", judge)
     .with_executor("shell", shell_exec)
     .with_executor("http", http_exec)
 )

@@ -2,7 +2,7 @@
 import json
 import tempfile
 import pytest
-import senza as lh
+import senza
 
 
 # ── WorkflowEngine new methods ──────────────────────────────────────────────
@@ -15,33 +15,33 @@ def _make_workflow():
     }
 
 def _make_provider():
-    return lh.create_openai_provider(api_key="test-key")
+    return senza.create_openai_provider(api_key="test-key")
 
 def _make_judge():
-    return lh.create_judge(lambda ctx: "abort:done")
+    return senza.create_judge(lambda ctx: "abort:done")
 
 
 def test_workflow_engine_state():
     """state() returns 'idle' before run."""
-    engine = lh.WorkflowEngine(_make_workflow(), _make_provider(), "gpt-4o", _make_judge())
+    engine = senza.WorkflowEngine(_make_workflow(), _make_provider(), "gpt-4o", _make_judge())
     assert engine.state() == "idle"
 
 
 def test_workflow_engine_current_step():
     """current_step() returns the entry step before run."""
-    engine = lh.WorkflowEngine(_make_workflow(), _make_provider(), "gpt-4o", _make_judge())
+    engine = senza.WorkflowEngine(_make_workflow(), _make_provider(), "gpt-4o", _make_judge())
     assert engine.current_step() == "step1"
 
 
 def test_workflow_engine_step_history_empty():
     """step_history() returns empty list before run."""
-    engine = lh.WorkflowEngine(_make_workflow(), _make_provider(), "gpt-4o", _make_judge())
+    engine = senza.WorkflowEngine(_make_workflow(), _make_provider(), "gpt-4o", _make_judge())
     assert engine.step_history() == []
 
 
 def test_workflow_engine_total_cost_zero():
     """total_cost() returns zero-cost dict before run."""
-    engine = lh.WorkflowEngine(_make_workflow(), _make_provider(), "gpt-4o", _make_judge())
+    engine = senza.WorkflowEngine(_make_workflow(), _make_provider(), "gpt-4o", _make_judge())
     cost = engine.total_cost()
     assert cost["total_input_tokens"] == 0
     assert cost["total_output_tokens"] == 0
@@ -51,7 +51,7 @@ def test_workflow_engine_total_cost_zero():
 
 def test_workflow_engine_pause_and_cancel():
     """pause() and cancel() can be called without error (even pre-run)."""
-    engine = lh.WorkflowEngine(_make_workflow(), _make_provider(), "gpt-4o", _make_judge())
+    engine = senza.WorkflowEngine(_make_workflow(), _make_provider(), "gpt-4o", _make_judge())
     engine.pause("testing")
     # cancel changes state to Cancelled
     engine.cancel("done")
@@ -60,7 +60,7 @@ def test_workflow_engine_pause_and_cancel():
 
 def test_workflow_engine_checkpoint():
     """checkpoint() stores arbitrary JSON payload."""
-    engine = lh.WorkflowEngine(_make_workflow(), _make_provider(), "gpt-4o", _make_judge())
+    engine = senza.WorkflowEngine(_make_workflow(), _make_provider(), "gpt-4o", _make_judge())
     engine.checkpoint("phase 1 done", {"progress": 50, "status": "ok"})
 
 
@@ -68,7 +68,7 @@ def test_workflow_engine_with_task_store():
     """with_task_store() chains and returns self."""
     with tempfile.TemporaryDirectory() as d:
         engine = (
-            lh.WorkflowEngine(_make_workflow(), _make_provider(), "gpt-4o", _make_judge())
+            senza.WorkflowEngine(_make_workflow(), _make_provider(), "gpt-4o", _make_judge())
             .with_task_store(d)
         )
         assert engine is not None
@@ -78,7 +78,7 @@ def test_workflow_engine_with_task_store():
 def test_workflow_engine_with_max_steps_and_retries():
     """with_max_steps() and with_max_retries() chain correctly."""
     engine = (
-        lh.WorkflowEngine(_make_workflow(), _make_provider(), "gpt-4o", _make_judge())
+        senza.WorkflowEngine(_make_workflow(), _make_provider(), "gpt-4o", _make_judge())
         .with_max_steps(50)
         .with_max_retries(3)
     )
@@ -87,20 +87,20 @@ def test_workflow_engine_with_max_steps_and_retries():
 
 def test_workflow_engine_restore_classmethod():
     """restore() is accessible as a classmethod."""
-    assert hasattr(lh.WorkflowEngine, "restore")
+    assert hasattr(senza.WorkflowEngine, "restore")
     # Calling restore on a non-existent task should raise KeyError
     with tempfile.TemporaryDirectory() as d:
         with pytest.raises(KeyError, match="workflow not found"):
-            lh.WorkflowEngine.restore(d, "task-nonexistent", _make_provider(), "gpt-4o", _make_judge())
+            senza.WorkflowEngine.restore(d, "task-nonexistent", _make_provider(), "gpt-4o", _make_judge())
 
 
 def test_workflow_engine_restore_from_step_classmethod():
     """restore_from_step() is accessible as a classmethod."""
-    assert hasattr(lh.WorkflowEngine, "restore_from_step")
+    assert hasattr(senza.WorkflowEngine, "restore_from_step")
     # Calling restore_from_step on a non-existent task should raise
     with tempfile.TemporaryDirectory() as d:
         with pytest.raises((KeyError, RuntimeError)):
-            lh.WorkflowEngine.restore_from_step(
+            senza.WorkflowEngine.restore_from_step(
                 d, "task-nonexistent", "step1", _make_provider(), "gpt-4o", _make_judge()
             )
 
@@ -108,7 +108,7 @@ def test_workflow_engine_chained_build():
     """Full builder chain with all new methods."""
     with tempfile.TemporaryDirectory() as d:
         engine = (
-            lh.WorkflowEngine(_make_workflow(), _make_provider(), "gpt-4o", _make_judge())
+            senza.WorkflowEngine(_make_workflow(), _make_provider(), "gpt-4o", _make_judge())
             .with_task_store(d)
             .with_max_steps(100)
             .with_max_tokens(4096)
@@ -126,9 +126,9 @@ def test_workflow_engine_chained_build():
 # ── AgentHarness new methods ────────────────────────────────────────────────
 
 def _make_harness():
-    provider = lh.create_openai_provider(api_key="test-key")
+    provider = senza.create_openai_provider(api_key="test-key")
     return (
-        lh.HarnessBuilder("gpt-4o")
+        senza.HarnessBuilder("gpt-4o")
         .provider("gpt-*", provider)
         .system_prompt("You are helpful.")
         .build()
@@ -209,9 +209,9 @@ def test_harness_set_model():
 
 def test_harness_context_manager():
     """AgentHarness supports `with` statement."""
-    provider = lh.create_openai_provider(api_key="test-key")
+    provider = senza.create_openai_provider(api_key="test-key")
     harness = (
-        lh.HarnessBuilder("gpt-4o")
+        senza.HarnessBuilder("gpt-4o")
         .provider("gpt-*", provider)
         .system_prompt("You are helpful.")
         .build()
@@ -225,9 +225,9 @@ def test_harness_context_manager():
 
 def test_harness_context_manager_no_suppress():
     """Context manager does not suppress exceptions."""
-    provider = lh.create_openai_provider(api_key="test-key")
+    provider = senza.create_openai_provider(api_key="test-key")
     harness = (
-        lh.HarnessBuilder("gpt-4o")
+        senza.HarnessBuilder("gpt-4o")
         .provider("gpt-*", provider)
         .build()
     )
@@ -238,13 +238,13 @@ def test_harness_context_manager_no_suppress():
 
 def test_docstrings_present():
     """Key functions and classes have docstrings."""
-    assert lh.version.__doc__ is not None
-    assert lh.create_tool.__doc__ is not None
-    assert lh.create_event_channel.__doc__ is not None
-    assert lh.create_openai_provider.__doc__ is not None
-    assert lh.WorkflowEngine.__doc__ is not None
-    assert lh.WorkflowEngine.run.__doc__ is not None
-    assert lh.WorkflowEngine.restore.__doc__ is not None
-    assert lh.AgentHarness.__doc__ is not None
-    assert lh.AgentHarness.prompt.__doc__ is not None
-    assert lh.HarnessBuilder.__doc__ is not None
+    assert senza.version.__doc__ is not None
+    assert senza.create_tool.__doc__ is not None
+    assert senza.create_event_channel.__doc__ is not None
+    assert senza.create_openai_provider.__doc__ is not None
+    assert senza.WorkflowEngine.__doc__ is not None
+    assert senza.WorkflowEngine.run.__doc__ is not None
+    assert senza.WorkflowEngine.restore.__doc__ is not None
+    assert senza.AgentHarness.__doc__ is not None
+    assert senza.AgentHarness.prompt.__doc__ is not None
+    assert senza.HarnessBuilder.__doc__ is not None

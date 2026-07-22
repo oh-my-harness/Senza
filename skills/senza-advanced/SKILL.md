@@ -18,7 +18,7 @@ description: >-
 
 # Senza Advanced — Sub-Agents, Hooks, Human-in-the-Loop
 
-> SDK: `import senza as L`
+> SDK: `import senza`
 > Prerequisites: read `senza-agent` and `senza-workflow` skills first.
 
 ## Sub-Agent Spawning (7 LLM Tools)
@@ -105,8 +105,8 @@ def guard(ctx):
         return f"blocked: {tool_name} not allowed"
     return None  # allow
 
-hook = L.create_before_tool_call_hook(guard)
-engine = L.WorkflowEngine(workflow, provider, "gpt-4o", judge).with_hooks([hook])
+hook = senza.create_before_tool_call_hook(guard)
+engine = senza.WorkflowEngine(workflow, provider, "gpt-4o", judge).with_hooks([hook])
 ```
 
 ### Pattern: force stop after N turns
@@ -117,18 +117,18 @@ def stop_after_5(ctx):
     turn_count[0] += 1
     return turn_count[0] >= 5
 
-hook = L.create_should_stop_hook(stop_after_5)
+hook = senza.create_should_stop_hook(stop_after_5)
 ```
 
 ## Human-in-the-Loop (Event Channel)
 
 ```python
 # 1. Create channel
-handle, wait_tool = L.create_event_channel("review-task-001")
+handle, wait_tool = senza.create_event_channel("review-task-001")
 
 # 2. Register the wait tool — LLM can call it to pause for human input
 engine = (
-    L.WorkflowEngine(workflow, provider, "gpt-4o", judge)
+    senza.WorkflowEngine(workflow, provider, "gpt-4o", judge)
     .with_external_tool(wait_tool)
 )
 
@@ -143,24 +143,24 @@ The LLM calls `wait_for_external_event` tool → blocks until `handle.submit()` 
 
 ```python
 # Create tools
-tool1 = L.create_tool("search", "Search", schema_json, search_callback)
-tool2 = L.create_tool("write", "Write file", schema_json, write_callback)
+tool1 = senza.create_tool("search", "Search", schema_json, search_callback)
+tool2 = senza.create_tool("write", "Write file", schema_json, write_callback)
 
 # Create hooks
-guard_hook = L.create_before_tool_call_hook(guard_fn)
+guard_hook = senza.create_before_tool_call_hook(guard_fn)
 
 # Bundle into a plugin
-plugin = L.create_plugin(
+plugin = senza.create_plugin(
     name="my_plugin",
     tools=[tool1, tool2],
     hooks=[guard_hook],
 )
 
 # Register with engine or builder
-engine = L.WorkflowEngine(workflow, provider, "gpt-4o", judge)
+engine = senza.WorkflowEngine(workflow, provider, "gpt-4o", judge)
 engine.with_step_plugin("step1", plugin)  # per-step
 # or
-harness = L.HarnessBuilder("gpt-4o").provider("gpt-*", provider).plugin(plugin).build()
+harness = senza.HarnessBuilder("gpt-4o").provider("gpt-*", provider).plugin(plugin).build()
 ```
 
 ## Event Streaming

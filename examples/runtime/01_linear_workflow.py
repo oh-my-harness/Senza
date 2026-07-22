@@ -12,12 +12,13 @@ Run:
 import os
 import sys
 
-import senza as lh
+import senza
 
 
 def main():
     api_key = os.environ.get("OPENAI_API_KEY", "sk-demo-key")
-    provider = lh.create_openai_provider(api_key=api_key)
+    base_url = os.environ.get("OPENAI_API_BASE") or None
+    provider = senza.create_openai_provider(api_key=api_key, base_url=base_url)
 
     workflow = {
         "entry_step": "writer",
@@ -36,8 +37,8 @@ def main():
             return "to:reviewer"
         return "abort:done"
 
-    judge_obj = lh.create_judge(judge)
-    engine = lh.WorkflowEngine(workflow, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), judge_obj)
+    judge_obj = senza.create_judge(judge)
+    engine = senza.WorkflowEngine(workflow, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), judge_obj)
 
     print(f"Task ID: {engine.task_id()}")
     print(f"Initial state: {engine.state()}")

@@ -31,12 +31,12 @@ Run:
 import os
 import sys
 
-import senza as lh
+import senza
 
 
 def main():
     # ── SDK version ───────────────────────────────────────────────────────
-    print(f"Senza SDK version: {lh.version()}")
+    print(f"Senza SDK version: {senza.version()}")
 
     # ── Anthropic provider ────────────────────────────────────────────────
     api_key = os.environ.get("ANTHROPIC_API_KEY", "sk-ant-demo-key")
@@ -44,7 +44,7 @@ def main():
     # messages_path defaults to /v1/messages; override for proxies/gateways
     messages_path = os.environ.get("ANTHROPIC_MESSAGES_PATH") or None
 
-    provider = lh.create_anthropic_provider(
+    provider = senza.create_anthropic_provider(
         api_key=api_key,
         base_url=base_url,
         messages_path=messages_path,
@@ -53,7 +53,7 @@ def main():
     model = os.environ.get("SENZA_MODEL", "claude-sonnet-4-20250514")
 
     harness = (
-        lh.HarnessBuilder(model)
+        senza.HarnessBuilder(model)
         .provider("claude-*", provider)
         .system_prompt("You are a concise, helpful assistant.")
         .max_tokens(512)
@@ -70,11 +70,11 @@ def main():
 
     # ── JSON utilities: round-trip the events ─────────────────────────────
     # to_json serializes a Python object (list[dict]) to a JSON string
-    json_str = lh.to_json(events)
+    json_str = senza.to_json(events)
     print(f"Serialized {len(events)} events to {len(json_str)} bytes of JSON")
 
     # from_json parses it back
-    restored = lh.from_json(json_str)
+    restored = senza.from_json(json_str)
     print(f"Deserialized back to {len(restored)} events")
 
     # Verify round-trip integrity

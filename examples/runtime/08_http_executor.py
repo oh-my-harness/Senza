@@ -15,14 +15,15 @@ Run:
 import os
 import sys
 
-import senza as lh
+import senza
 
 
 def main():
     api_key = os.environ.get("OPENAI_API_KEY", "sk-demo-key")
-    provider = lh.create_openai_provider(api_key=api_key)
+    base_url = os.environ.get("OPENAI_API_BASE") or None
+    provider = senza.create_openai_provider(api_key=api_key, base_url=base_url)
 
-    http_exec = lh.create_http_executor(
+    http_exec = senza.create_http_executor(
         allowed_hosts=["httpbin.org"],
         allowed_schemes=["https"],
     )
@@ -44,9 +45,9 @@ def main():
         "edges": [],
     }
 
-    judge = lh.create_judge(lambda ctx: "abort:done")
+    judge = senza.create_judge(lambda ctx: "abort:done")
     engine = (
-        lh.WorkflowEngine(workflow, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), judge)
+        senza.WorkflowEngine(workflow, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), judge)
         .with_executor("http", http_exec)
     )
 

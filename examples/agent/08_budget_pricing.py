@@ -24,18 +24,18 @@ Run:
 import os
 import sys
 
-import senza as lh
+import senza
 
 
 def main():
     api_key = os.environ.get("OPENAI_API_KEY", "sk-demo-key")
     base_url = os.environ.get("OPENAI_API_BASE") or None
-    provider = lh.create_openai_provider(api_key=api_key, base_url=base_url)
+    provider = senza.create_openai_provider(api_key=api_key, base_url=base_url)
     model = os.environ.get("SENZA_MODEL", "gpt-4o")
 
     # ── Pricing: price per million tokens (USD) ─────────────────────────────
     # Fields default to 0.0 if omitted, so a minimal table is fine.
-    pricing = lh.create_pricing_provider({
+    pricing = senza.create_pricing_provider({
         model: {
             "input_per_mtok": 2.5,
             "output_per_mtok": 10.0,
@@ -44,7 +44,7 @@ def main():
         },
     })
     # Alternative: dynamic pricing via a callback
-    #   lh.create_pricing_provider_callback(
+    #   senza.create_pricing_provider_callback(
     #       lambda m, p: {"input_per_mtok": 2.5, "output_per_mtok": 10.0}
     #       if m == model else None)
 
@@ -57,10 +57,10 @@ def main():
         # Return True to let the agent continue despite the overrun.
         return False
 
-    budget_hook = lh.create_budget_exceeded_hook(on_budget_exceeded)
+    budget_hook = senza.create_budget_exceeded_hook(on_budget_exceeded)
 
     harness = (
-        lh.HarnessBuilder(model)
+        senza.HarnessBuilder(model)
         .provider("*", provider)
         .system_prompt("You are a concise, helpful assistant.")
         .pricing(pricing)

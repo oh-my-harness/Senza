@@ -2,16 +2,16 @@
 import json
 import tempfile
 
-import senza as lh
+import senza
 
 
 def _make_provider():
-    return lh.create_openai_provider(api_key="test-key")
+    return senza.create_openai_provider(api_key="test-key")
 
 
 def test_create_fs_tools_plugin_returns_plugin():
     """create_fs_tools_plugin() returns a Plugin named 'fs-tools'."""
-    plugin = lh.create_fs_tools_plugin()
+    plugin = senza.create_fs_tools_plugin()
     assert plugin is not None
     assert plugin.name == "fs-tools"
 
@@ -19,10 +19,10 @@ def test_create_fs_tools_plugin_returns_plugin():
 def test_fs_tools_plugin_usable_in_builder():
     """FsToolsPlugin is accepted by HarnessBuilder.plugin() and builds."""
     with tempfile.TemporaryDirectory() as td:
-        env = lh.create_os_env(td)
-        plugin = lh.create_fs_tools_plugin()
+        env = senza.create_os_env(td)
+        plugin = senza.create_fs_tools_plugin()
         harness = (
-            lh.HarnessBuilder("gpt-4o")
+            senza.HarnessBuilder("gpt-4o")
             .provider("gpt-*", _make_provider())
             .plugin(plugin)
             .env(env)
@@ -43,11 +43,11 @@ def test_fs_tools_plugin_not_double_registered():
     observable from Python (the plugin name exposed via the builder).
     """
     with tempfile.TemporaryDirectory() as td:
-        env = lh.create_os_env(td)
-        plugin = lh.create_fs_tools_plugin()
+        env = senza.create_os_env(td)
+        plugin = senza.create_fs_tools_plugin()
         # Single registration — the correct usage.
         harness_once = (
-            lh.HarnessBuilder("gpt-4o")
+            senza.HarnessBuilder("gpt-4o")
             .provider("gpt-*", _make_provider())
             .plugin(plugin)
             .env(env)
@@ -63,9 +63,9 @@ def test_fs_tools_plugin_builds_under_unsupported_env():
     the LLM loop — which cannot be driven from Python without a real
     provider, so this test pins the registration path, not execution.
     """
-    plugin = lh.create_fs_tools_plugin()
+    plugin = senza.create_fs_tools_plugin()
     harness = (
-        lh.HarnessBuilder("gpt-4o")
+        senza.HarnessBuilder("gpt-4o")
         .provider("gpt-*", _make_provider())
         .plugin(plugin)
         .build()
@@ -77,9 +77,9 @@ def test_fs_tools_plugin_builds_under_unsupported_env():
 def test_harness_builder_env_chains():
     """env() accepts an ExecutionEnv and returns the builder for chaining."""
     with tempfile.TemporaryDirectory() as td:
-        env = lh.create_os_env(td)
+        env = senza.create_os_env(td)
         builder = (
-            lh.HarnessBuilder("gpt-4o")
+            senza.HarnessBuilder("gpt-4o")
             .provider("gpt-*", _make_provider())
             .env(env)
         )
@@ -89,10 +89,10 @@ def test_harness_builder_env_chains():
 def test_harness_builder_env_then_build():
     """Builder with env + fs_tools_plugin builds successfully."""
     with tempfile.TemporaryDirectory() as td:
-        env = lh.create_os_env(td)
-        plugin = lh.create_fs_tools_plugin()
+        env = senza.create_os_env(td)
+        plugin = senza.create_fs_tools_plugin()
         harness = (
-            lh.HarnessBuilder("gpt-4o")
+            senza.HarnessBuilder("gpt-4o")
             .provider("gpt-*", _make_provider())
             .plugin(plugin)
             .env(env)
@@ -109,13 +109,13 @@ def test_fs_tools_plugin_with_workflow_engine():
         "edges": [],
     }
     with tempfile.TemporaryDirectory() as td:
-        env = lh.create_os_env(td)
-        plugin = lh.create_fs_tools_plugin()
-        engine = lh.WorkflowEngine(
+        env = senza.create_os_env(td)
+        plugin = senza.create_fs_tools_plugin()
+        engine = senza.WorkflowEngine(
             workflow,
             _make_provider(),
             "gpt-4o",
-            lh.create_judge(lambda ctx: "abort:done"),
+            senza.create_judge(lambda ctx: "abort:done"),
             env=env,
         )
         engine.with_step_plugin("s1", plugin)

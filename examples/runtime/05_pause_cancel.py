@@ -19,12 +19,13 @@ import sys
 import threading
 import time
 
-import senza as lh
+import senza
 
 
 def main():
     api_key = os.environ.get("OPENAI_API_KEY", "sk-demo-key")
-    provider = lh.create_openai_provider(api_key=api_key)
+    base_url = os.environ.get("OPENAI_API_BASE") or None
+    provider = senza.create_openai_provider(api_key=api_key, base_url=base_url)
 
     workflow = {
         "entry_step": "step1",
@@ -35,8 +36,8 @@ def main():
         "edges": [{"from": "step1", "to": "step2"}],
     }
 
-    judge = lh.create_judge(lambda ctx: "to:step2" if ctx.get("step_id") == "step1" else "abort:done")
-    engine = lh.WorkflowEngine(workflow, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), judge)
+    judge = senza.create_judge(lambda ctx: "to:step2" if ctx.get("step_id") == "step1" else "abort:done")
+    engine = senza.WorkflowEngine(workflow, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), judge)
 
     print(f"Task ID: {engine.task_id()}")
     print(f"Initial state: {engine.state()}")

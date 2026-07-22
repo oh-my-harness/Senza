@@ -15,7 +15,7 @@ import json
 import os
 import sys
 
-import senza as lh
+import senza
 
 SAMPLE_CODE = """
 def divide(a, b):
@@ -31,7 +31,8 @@ def process_items(items):
 
 def main():
     api_key = os.environ.get("OPENAI_API_KEY", "sk-demo-key")
-    provider = lh.create_openai_provider(api_key=api_key)
+    base_url = os.environ.get("OPENAI_API_BASE") or None
+    provider = senza.create_openai_provider(api_key=api_key, base_url=base_url)
 
     def read_code(args, ctx):
         """Tool: return the code to review."""
@@ -40,7 +41,7 @@ def main():
             "terminate": False,
         }
 
-    read_tool = lh.create_tool(
+    read_tool = senza.create_tool(
         name="read_code",
         description="Read the Python code file to review",
         parameters_schema=json.dumps({
@@ -51,7 +52,7 @@ def main():
     )
 
     harness = (
-        lh.HarnessBuilder(os.environ.get("SENZA_MODEL", "gpt-4o"))
+        senza.HarnessBuilder(os.environ.get("SENZA_MODEL", "gpt-4o"))
         .provider("*", provider)
         .system_prompt(
             "You are a code reviewer. Use the read_code tool to read the code, "

@@ -6,7 +6,7 @@ import threading
 import time
 
 import pytest
-import senza as lh
+import senza
 
 
 def _raise_sigint_after(delay: float):
@@ -22,11 +22,11 @@ def _raise_sigint_after(delay: float):
 
 
 def _make_provider():
-    return lh.create_openai_provider(api_key="test-key")
+    return senza.create_openai_provider(api_key="test-key")
 
 
 def _make_judge():
-    return lh.create_judge(lambda ctx: "abort:done")
+    return senza.create_judge(lambda ctx: "abort:done")
 
 
 def test_workflow_run_interrupted_by_sigint():
@@ -47,8 +47,8 @@ def test_workflow_run_interrupted_by_sigint():
         time.sleep(10)
         return {"output": "done"}
 
-    engine = lh.WorkflowEngine(workflow, _make_provider(), "gpt-4o", _make_judge())
-    engine.with_executor("slow_exec", lh.create_executor(slow_executor))
+    engine = senza.WorkflowEngine(workflow, _make_provider(), "gpt-4o", _make_judge())
+    engine.with_executor("slow_exec", senza.create_executor(slow_executor))
 
     t = _raise_sigint_after(0.5)
 
@@ -65,7 +65,7 @@ def test_collect_until_settled_interrupted_by_sigint():
     waiting for events.  The ``recv_event_with_signal_check`` helper should
     catch the signal within ~200 ms.
     """
-    harness = lh.HarnessBuilder("gpt-4o").provider("gpt-*", _make_provider()).build()
+    harness = senza.HarnessBuilder("gpt-4o").provider("gpt-*", _make_provider()).build()
 
     t = _raise_sigint_after(0.5)
 

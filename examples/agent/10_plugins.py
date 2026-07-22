@@ -31,7 +31,7 @@ import os
 import re
 import sys
 
-import senza as lh
+import senza
 
 
 # ── Plugin definition ────────────────────────────────────────────────────────
@@ -46,7 +46,7 @@ def run_query(args, ctx):
     }
 
 
-query_tool = lh.create_sync_tool(
+query_tool = senza.create_sync_tool(
     name="run_query",
     description="Execute a read-only SQL query against the database.",
     parameters_schema=json.dumps({
@@ -69,7 +69,7 @@ async def check_status(args, ctx):
     }
 
 
-status_tool = lh.create_tool(
+status_tool = senza.create_tool(
     name="check_db_status",
     description="Check the health and connection count of the database (async).",
     parameters_schema=json.dumps({
@@ -113,12 +113,12 @@ def query_guard(ctx):
     return "allow"
 
 
-guard_hook = lh.create_before_tool_call_hook(query_guard)
+guard_hook = senza.create_before_tool_call_hook(query_guard)
 
 
-def make_db_safety_plugin() -> "lh.Plugin":
+def make_db_safety_plugin() -> "senza.Plugin":
     """Create the reusable db-safety plugin (tools + hooks bundled)."""
-    return lh.create_plugin(
+    return senza.create_plugin(
         name="db-safety",
         tools=[query_tool, status_tool],
         hooks=[guard_hook],
@@ -133,7 +133,7 @@ def demo_agent_layer(provider, model):
     print("=" * 60)
 
     harness = (
-        lh.HarnessBuilder(model)
+        senza.HarnessBuilder(model)
         .provider("*", provider)
         .system_prompt(
             "You are a database assistant. Use run_query for SQL and "
@@ -176,10 +176,10 @@ def demo_workflow_layer(provider, model):
         ],
     }
 
-    judge = lh.create_judge(lambda ctx: "to:done" if ctx.get("step_id") == "query" else "done")
+    judge = senza.create_judge(lambda ctx: "to:done" if ctx.get("step_id") == "query" else "done")
 
     engine = (
-        lh.WorkflowEngine(
+        senza.WorkflowEngine(
             workflow_dict=workflow,
             provider=provider,
             model=model,
@@ -213,7 +213,7 @@ def _print_events(events):
 def main():
     api_key = os.environ.get("OPENAI_API_KEY", "sk-demo-key")
     base_url = os.environ.get("OPENAI_API_BASE") or None
-    provider = lh.create_openai_provider(api_key=api_key, base_url=base_url)
+    provider = senza.create_openai_provider(api_key=api_key, base_url=base_url)
     model = os.environ.get("SENZA_MODEL", "gpt-4o")
 
     demo_agent_layer(provider, model)

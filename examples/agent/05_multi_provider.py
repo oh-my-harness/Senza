@@ -10,19 +10,20 @@ Run:
 import os
 import sys
 
-import senza as lh
+import senza
 
 
 def main():
     openai_key = os.environ.get("OPENAI_API_KEY", "sk-demo-key")
     anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "sk-ant-demo")
 
-    openai_provider = lh.create_openai_provider(api_key=openai_key)
-    anthropic_provider = lh.create_anthropic_provider(api_key=anthropic_key)
+    openai_base_url = os.environ.get("OPENAI_API_BASE") or None
+    openai_provider = senza.create_openai_provider(api_key=openai_key, base_url=openai_base_url)
+    anthropic_provider = senza.create_anthropic_provider(api_key=anthropic_key)
 
     # Register both providers — model name determines routing
     harness = (
-        lh.HarnessBuilder(os.environ.get("SENZA_MODEL", "gpt-4o"))
+        senza.HarnessBuilder(os.environ.get("SENZA_MODEL", "gpt-4o"))
         .provider("gpt-*", openai_provider)
         .provider("claude-*", anthropic_provider)
         .system_prompt("You are a helpful assistant.")

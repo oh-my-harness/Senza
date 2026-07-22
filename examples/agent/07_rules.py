@@ -34,13 +34,13 @@ import json
 import os
 import sys
 
-import senza as lh
+import senza
 
 
 def main():
     api_key = os.environ.get("OPENAI_API_KEY", "sk-demo-key")
     base_url = os.environ.get("OPENAI_API_BASE") or None
-    provider = lh.create_openai_provider(api_key=api_key, base_url=base_url)
+    provider = senza.create_openai_provider(api_key=api_key, base_url=base_url)
 
     # ── Tools: one safe, two potentially dangerous ──────────────────────────
     def get_weather(args, ctx):
@@ -66,7 +66,7 @@ def main():
         }
 
     tools = [
-        lh.create_tool(
+        senza.create_tool(
             name="get_weather",
             description="Get current weather for a city",
             parameters_schema=json.dumps({
@@ -76,7 +76,7 @@ def main():
             }),
             callback=get_weather,
         ),
-        lh.create_tool(
+        senza.create_tool(
             name="transfer_money",
             description="Transfer money to a recipient",
             parameters_schema=json.dumps({
@@ -89,7 +89,7 @@ def main():
             }),
             callback=transfer_money,
         ),
-        lh.create_tool(
+        senza.create_tool(
             name="delete_file",
             description="Delete a file at the given path",
             parameters_schema=json.dumps({
@@ -103,24 +103,24 @@ def main():
 
     # ── Build the rule chain (first match wins) ─────────────────────────────
     chain = (
-        lh.create_rule_chain()
+        senza.create_rule_chain()
         # 1. delete_file: only allow paths under /tmp/
-        .rule("delete_file", lh.create_regex_field_predicate("path", r"^/tmp/"), "allow")
+        .rule("delete_file", senza.create_regex_field_predicate("path", r"^/tmp/"), "allow")
         # 2. transfer_money: only allow amounts in [0, 1000]
-        .rule("transfer_money", lh.create_number_range_predicate("amount", 0, 1000), "allow")
+        .rule("transfer_money", senza.create_number_range_predicate("amount", 0, 1000), "allow")
         # 3. get_weather: allow but throttle to 5 calls / 60s
-        .rule("get_weather", lh.create_rate_limit_predicate(5, 60), "allow")
+        .rule("get_weather", senza.create_rate_limit_predicate(5, 60), "allow")
         # 4. whitelisted tool whose condition failed above -> explicit deny
-        .rule("*", lh.create_contains_predicate(["get_weather", "transfer_money", "delete_file"]), "deny")
+        .rule("*", senza.create_contains_predicate(["get_weather", "transfer_money", "delete_file"]), "deny")
         # 5. anything not whitelisted -> deny
         .fallback("deny")
         .build()
     )
 
-    approval_hook = lh.create_rule_approval_hook(chain)
+    approval_hook = senza.create_rule_approval_hook(chain)
 
     harness = (
-        lh.HarnessBuilder(os.environ.get("SENZA_MODEL", "gpt-4o"))
+        senza.HarnessBuilder(os.environ.get("SENZA_MODEL", "gpt-4o"))
         .provider("*", provider)
         .system_prompt(
             "You are an assistant with three tools. When asked, call the "

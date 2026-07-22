@@ -4,7 +4,7 @@ Binding-surface tests only — behavioral propagation (total_cost != 0)
 is covered by the runtime crate's customize_builder tests. Senza does
 not expose a mock LLM provider to Python for WorkflowEngine (see spec).
 """
-import senza as lh
+import senza
 
 
 def _make_workflow():
@@ -16,15 +16,15 @@ def _make_workflow():
 
 
 def _make_provider():
-    return lh.create_openai_provider(api_key="test-key")
+    return senza.create_openai_provider(api_key="test-key")
 
 
 def _make_judge():
-    return lh.create_judge(lambda ctx: "abort:done")
+    return senza.create_judge(lambda ctx: "abort:done")
 
 
 def _make_pricing():
-    return lh.create_pricing_provider({
+    return senza.create_pricing_provider({
         "gpt-4o": {
             "input_per_mtok": 2.5,
             "output_per_mtok": 10.0,
@@ -36,20 +36,20 @@ def _make_pricing():
 
 def test_with_pricing_returns_self():
     """with_pricing() chains and returns self."""
-    engine = lh.WorkflowEngine(_make_workflow(), _make_provider(), "gpt-4o", _make_judge())
+    engine = senza.WorkflowEngine(_make_workflow(), _make_provider(), "gpt-4o", _make_judge())
     result = engine.with_pricing(_make_pricing())
     assert result is engine
 
 
 def test_with_pricing_has_docstring():
     """with_pricing is documented."""
-    assert lh.WorkflowEngine.with_pricing.__doc__ is not None
+    assert senza.WorkflowEngine.with_pricing.__doc__ is not None
 
 
 def test_with_pricing_chains_with_other_with_methods():
     """with_pricing composes with with_max_tokens on the shared customize chain."""
     engine = (
-        lh.WorkflowEngine(_make_workflow(), _make_provider(), "gpt-4o", _make_judge())
+        senza.WorkflowEngine(_make_workflow(), _make_provider(), "gpt-4o", _make_judge())
         .with_max_tokens(4096)
         .with_pricing(_make_pricing())
     )

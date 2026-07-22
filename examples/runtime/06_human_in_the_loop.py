@@ -14,17 +14,18 @@ import sys
 import threading
 import time
 
-import senza as lh
+import senza
 
 
 def main():
     api_key = os.environ.get("OPENAI_API_KEY", "sk-demo-key")
-    provider = lh.create_openai_provider(api_key=api_key)
+    base_url = os.environ.get("OPENAI_API_BASE") or None
+    provider = senza.create_openai_provider(api_key=api_key, base_url=base_url)
 
     # Create an event channel — the wait_for_external_event tool will be
     # available to the LLM. When it calls this tool, execution pauses until
     # handle.submit() is called from another thread.
-    handle, wait_tool = lh.create_event_channel("review-task")
+    handle, wait_tool = senza.create_event_channel("review-task")
 
     workflow = {
         "entry_step": "draft",
@@ -34,9 +35,9 @@ def main():
         "edges": [],
     }
 
-    judge = lh.create_judge(lambda ctx: "abort:done")
+    judge = senza.create_judge(lambda ctx: "abort:done")
     engine = (
-        lh.WorkflowEngine(workflow, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), judge)
+        senza.WorkflowEngine(workflow, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), judge)
         .with_external_tool(wait_tool)
     )
 

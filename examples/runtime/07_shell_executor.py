@@ -12,7 +12,7 @@ Run:
 import os
 import sys
 
-import senza as lh
+import senza
 
 
 # Command allowlist — only these commands can be executed by ShellExecutor.
@@ -21,7 +21,8 @@ ALLOWED_COMMANDS = ["echo", "python3", "date", "whoami"]
 
 def main():
     api_key = os.environ.get("OPENAI_API_KEY", "sk-demo-key")
-    provider = lh.create_openai_provider(api_key=api_key)
+    base_url = os.environ.get("OPENAI_API_BASE") or None
+    provider = senza.create_openai_provider(api_key=api_key, base_url=base_url)
 
     workflow = {
         "entry_step": "greet",
@@ -48,16 +49,16 @@ def main():
         "edges": [{"from": "greet", "to": "compute"}],
     }
 
-    judge = lh.create_judge(lambda ctx: "abort:done")
+    judge = senza.create_judge(lambda ctx: "abort:done")
 
     # Create an OS-backed ExecutionEnv so ShellExecutor can run real commands.
     # Without `env=...`, the engine uses UnsupportedEnv, whose execute_shell
     # always returns an error.
-    env = lh.create_os_env(working_dir=".")
+    env = senza.create_os_env(working_dir=".")
 
     engine = (
-        lh.WorkflowEngine(workflow, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), judge, env=env)
-        .with_executor("shell", lh.create_shell_executor(ALLOWED_COMMANDS))
+        senza.WorkflowEngine(workflow, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), judge, env=env)
+        .with_executor("shell", senza.create_shell_executor(ALLOWED_COMMANDS))
     )
 
     print("Running shell executor workflow...")

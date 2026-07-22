@@ -9,7 +9,7 @@ test; here we validate the Python binding surface and callback invocation.
 
 import threading
 
-import senza as lh
+import senza
 
 
 def _llm_workflow():
@@ -31,26 +31,26 @@ def _provider():
     # Point at an unreachable port so the LLM call fails fast, but only
     # *after* the engine has constructed the per-step harness — which is
     # when the with_step_builder callback runs.
-    return lh.create_openai_provider(
+    return senza.create_openai_provider(
         api_key="test-key",
         base_url="http://127.0.0.1:1",
     )
 
 
 def _judge():
-    return lh.create_judge(lambda ctx: "abort:done")
+    return senza.create_judge(lambda ctx: "abort:done")
 
 
 def test_with_step_builder_returns_self():
     """with_step_builder chains and returns the engine."""
-    engine = lh.WorkflowEngine(_llm_workflow(), _provider(), "gpt-4o", _judge())
+    engine = senza.WorkflowEngine(_llm_workflow(), _provider(), "gpt-4o", _judge())
     result = engine.with_step_builder("rtl_tx", lambda b: b.system_prompt("RTL"))
     assert result is engine
 
 
 def test_with_step_builder_has_docstring():
     """with_step_builder is documented."""
-    assert lh.WorkflowEngine.with_step_builder.__doc__ is not None
+    assert senza.WorkflowEngine.with_step_builder.__doc__ is not None
 
 
 def test_with_step_builder_callback_invoked():
@@ -61,7 +61,7 @@ def test_with_step_builder_callback_invoked():
         invoked["count"] += 1
         return builder.system_prompt("RTL_SYSTEM_PROMPT")
 
-    engine = lh.WorkflowEngine(_llm_workflow(), _provider(), "gpt-4o", _judge())
+    engine = senza.WorkflowEngine(_llm_workflow(), _provider(), "gpt-4o", _judge())
     engine.with_step_builder("rtl_tx", customize)
 
     # Run in a thread so we can observe the callback (run() blocks).

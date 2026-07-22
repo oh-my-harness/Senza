@@ -13,19 +13,19 @@ description: >-
 # Senza Agent — Single-Agent LLM Calls
 
 > SDK: `senza` (PyO3, built from this repo's `src/`)
-> Import as: `import senza as L`
+> Import as: `import senza`
 
 ## Core Pattern
 
 ```python
-import senza as L
+import senza
 
 # 1. Create provider
-provider = L.create_openai_provider(api_key="sk-...")
+provider = senza.create_openai_provider(api_key="sk-...")
 
 # 2. Build harness (fluent chain)
 harness = (
-    L.HarnessBuilder("gpt-4o")
+    senza.HarnessBuilder("gpt-4o")
     .provider("gpt-*", provider)
     .system_prompt("You are a helpful assistant.")
     .max_tokens(1024)
@@ -46,8 +46,8 @@ for e in events:
 
 | Function | Use case |
 |----------|----------|
-| `L.create_openai_provider(api_key, base_url=None, chat_path=None, thinking_scheme=None, parse_reasoning_content=True, tolerant_keepalive=True)` | OpenAI, DeepSeek, local models |
-| `L.create_anthropic_provider(api_key, base_url=None)` | Anthropic Claude |
+| `senza.create_openai_provider(api_key, base_url=None, chat_path=None, thinking_scheme=None, parse_reasoning_content=True, tolerant_keepalive=True)` | OpenAI, DeepSeek, local models |
+| `senza.create_anthropic_provider(api_key, base_url=None)` | Anthropic Claude |
 
 - `base_url`: omit or pass empty string for default endpoint.
 - `parse_reasoning_content`: set `True` for DeepSeek R-series reasoning parsing.
@@ -73,7 +73,7 @@ All methods return `self` for chaining. Call `.build()` last.
 ```python
 import json
 
-tool = L.create_tool(
+tool = senza.create_tool(
     name="search",
     description="Search the web",
     parameters_schema=json.dumps({
@@ -93,7 +93,7 @@ tool = L.create_tool(
 - Return dict: `{"content": [ContentBlock...], "terminate": bool}`. `terminate=True` stops the agent loop.
 - **Async tools**: pass an `async def` callback. It runs via `asyncio.run()` on a blocking thread.
 
-`L.create_sync_tool(...)` is an alias — same behavior, explicit sync.
+`senza.create_sync_tool(...)` is an alias — same behavior, explicit sync.
 
 ## AgentHarness Methods
 
@@ -129,11 +129,11 @@ for event in harness.events(timeout_ms=5000):
 ### Multiple providers (model routing)
 
 ```python
-openai = L.create_openai_provider(api_key="sk-...")
-anthropic = L.create_anthropic_provider(api_key="sk-ant-...")
+openai = senza.create_openai_provider(api_key="sk-...")
+anthropic = senza.create_anthropic_provider(api_key="sk-ant-...")
 
 harness = (
-    L.HarnessBuilder("gpt-4o")
+    senza.HarnessBuilder("gpt-4o")
     .provider("gpt-*", openai)
     .provider("claude-*", anthropic)
     .build()

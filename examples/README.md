@@ -57,4 +57,4 @@ python runtime/01_linear_workflow.py
 
 ## 导入
 
-所有示例使用 `import senza as lh`。
+所有示例使用 `import senza`。
