@@ -45,7 +45,7 @@ def main():
     print()
 
     # Switch to a different model and persona
-    harness.set_model("gpt-4o-mini")
+    harness.set_model(os.environ.get("SENZA_MODEL_2", os.environ.get("SENZA_MODEL", "gpt-4o-mini")))
     harness.set_system_prompt("You are a formal academic. Be precise and cite sources.")
     harness.set_temperature(0.3)
     harness.set_thinking_level("medium")

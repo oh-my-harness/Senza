@@ -161,19 +161,22 @@ def demo_workflow_layer(provider, model):
     print("=" * 60)
 
     workflow = {
+        "entry_step": "query",
         "steps": [
             {
                 "id": "query",
+                "name": "查询",
                 "prompt": "Run this query: SELECT * FROM users LIMIT 5",
-                "judge": {"type": "expr", "expr": "output"},
-                "edges": [{"condition": "*", "to": "done"}],
+                "allowed_tools": [],
             },
             {
                 "id": "done",
+                "name": "总结",
                 "prompt": "Summarize the query results in one sentence.",
-                "judge": {"type": "expr", "expr": "output"},
+                "allowed_tools": [],
             },
         ],
+        "edges": [{"from": "query", "to": "done"}],
     }
 
     judge = senza.create_judge(lambda ctx: "to:done" if ctx.get("step_id") == "query" else "done")

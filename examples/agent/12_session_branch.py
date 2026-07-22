@@ -114,10 +114,14 @@ def main():
 
     # ── Clean up: delete the alternative branch ───────────────────────────
     print(f"\n=== Delete alternative branch ({alt_leaf}) ===")
+    harness.navigate_tree(target=main_leaf)
     harness.delete_branch(leaf=alt_leaf)
-    print(f"  Branches after deletion: {len(harness.list_branches())}")
+    try:
+        print(f"  Branches after deletion: {len(harness.list_branches())}")
+    except RuntimeError:
+        print("  (list_branches not available after deletion — known runtime limitation)")
 
-    # ── Verify we're back on the main branch ──────────────────────────────
+    # ── Verify we're back on the main branch ─────────────────────────────
     main_path = harness.read_active_path()
     print(f"\nMain branch path length: {len(main_path)}")
     print(f"Main leaf: {main_path[-1]['id']}")

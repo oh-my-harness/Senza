@@ -50,11 +50,11 @@ def main():
         messages_path=messages_path,
     )
 
-    model = os.environ.get("SENZA_MODEL", "claude-sonnet-4-20250514")
+    model = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
 
     harness = (
         senza.HarnessBuilder(model)
-        .provider("claude-*", provider)
+        .provider("*", provider)
         .system_prompt("You are a concise, helpful assistant.")
         .max_tokens(512)
         .build()

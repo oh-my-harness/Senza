@@ -67,7 +67,15 @@ def main():
         ],
     }
 
-    judge = senza.create_judge(lambda ctx: f"to:{ctx.get('next_step', 'finalize')}" if ctx.get("next_step") else "done")
+    def judge_fn(ctx):
+        step_id = ctx.get("step_id", "")
+        if step_id == "draft":
+            return "to:review"
+        elif step_id == "review":
+            return "to:finalize"
+        return "done"
+
+    judge = senza.create_judge(judge_fn)
 
     # ── Hooks: log each LLM turn within the workflow ──────────────────────
     turn_counter = {"n": 0}
