@@ -189,6 +189,22 @@ for record in engine.step_history():
     print(f"{record['step_id']}: {r['output'][:80] if r else '(无结果)'}")
 ```
 
+> **Judge 返回值速查**
+>
+> Judge 是每个 LLM 步执行完后的路由决策函数，返回以下字符串之一：
+>
+> | 返回值 | 含义 |
+> |--------|------|
+> | `"to:<step_id>"` | 跳转到指定 step |
+> | `"retry"` | 重跑当前 step（计入 retry_count） |
+> | `"fail:<reason>"` | 标记工作流失败 |
+> | `"abort:<reason>"` | 结束工作流（视为成功完成） |
+> | `"done"` | 同 `abort:done`，结束工作流 |
+>
+> Judge callback 收到 `ctx: dict`，包含 `step_id`、`output`、`structured`、`step_count`、`retry_count` 等字段。详见 [API 速查](#judge-ctx-字段)。
+>
+> 如果只需要基于 `structured` 字段做条件路由，可以用声明式 edge condition，无需写 judge——在 edge 里写 `{"condition": {"op": "eq", "pointer": "/status", "value": "ok"}}`，引擎自动启用 `EdgeConditionJudge`。
+
 ### Runtime：崩溃恢复
 
 ```python
