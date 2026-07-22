@@ -37,7 +37,7 @@ provider = lh.create_openai_provider(api_key="sk-...")
 
 harness = (
     lh.HarnessBuilder("gpt-4o")
-    .provider("gpt-*", provider)
+    .provider("*", provider)
     .system_prompt("你是一个有用的助手。")
     .max_tokens(512)
     .build()
@@ -71,12 +71,43 @@ tool = lh.create_tool(
 
 harness = (
     lh.HarnessBuilder("gpt-4o")
-    .provider("gpt-*", provider)
+    .provider("*", provider)
     .tool(tool)
     .build()
 )
 harness.prompt("东京天气怎么样？")
 ```
+
+### Agent：异步流式输出
+
+Senza 提供模块级 async generator 函数，支持在 asyncio 事件循环中流式消费事件：
+
+```python
+import asyncio
+import senza as lh
+
+async def main():
+    provider = lh.create_openai_provider(api_key="sk-...")
+    harness = (
+        lh.HarnessBuilder("gpt-4o")
+        .provider("*", provider)
+        .system_prompt("你是一个有用的助手。")
+        .max_tokens(256)
+        .build()
+    )
+
+    # stream_prompt: 发送 prompt 并 async yield 事件
+    async for event in lh.stream_prompt(harness, "用一句话解释闭包。", timeout_ms=30000):
+        if event["type"] == "text_delta":
+            print(event.get("text", ""), end="", flush=True)
+
+    # stream_events: 仅订阅事件流（需另起线程调用 prompt）
+    # stream_run: 工作流事件流
+
+asyncio.run(main())
+```
+
+> **提示**：异步流式方法是模块级函数（`senza.stream_prompt`、`senza.stream_events`、`senza.stream_run`），不是 `AgentHarness` 的方法。
 
 ### Runtime：多步工作流
 
@@ -146,7 +177,7 @@ lh.create_anthropic_provider(api_key, base_url=None, messages_path=None)
 | 方法 | 说明 |
 |------|------|
 | `HarnessBuilder(model)` | 创建 builder |
-| `.provider(pattern, provider)` | 注册 LLM provider（glob 匹配） |
+| `.provider(pattern, provider)` | 注册 LLM provider（glob 匹配模型名，`"*"` 匹配所有） |
 | `.system_prompt(text)` | 设置系统提示 |
 | `.max_tokens(n)` / `.temperature(t)` | LLM 参数 |
 | `.thinking_level(level)` | 设置 thinking level |
@@ -286,7 +317,7 @@ provider = lh.create_openai_provider(api_key="sk-...")
 
 harness = (
     lh.HarnessBuilder("gpt-4o")
-    .provider("gpt-*", provider)
+    .provider("*", provider)
     .plugin(lh.create_fs_tools_plugin())  # 注册 bash/read/write/edit
     .env(lh.create_os_env("."))           # 提供真实文件系统 + shell
     .system_prompt("你是一个能读写文件的助手。")

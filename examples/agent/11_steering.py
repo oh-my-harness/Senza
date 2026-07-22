@@ -47,7 +47,7 @@ def main():
     # ── Context manager: __enter__ / __exit__ for clean lifecycle ──────────
     with (
         lh.HarnessBuilder(model)
-        .provider("gpt-*", provider)
+        .provider("*", provider)
         .system_prompt("You are a research assistant. Answer clearly and concisely.")
         .max_tokens(512)
         .build()

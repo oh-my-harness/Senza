@@ -61,7 +61,7 @@ def main():
 
     harness = (
         lh.HarnessBuilder(model)
-        .provider("gpt-*", provider)
+        .provider("*", provider)
         .system_prompt("You are a concise, helpful assistant.")
         .pricing(pricing)
         # $0.001 — intentionally tiny so the hook fires during the demo.

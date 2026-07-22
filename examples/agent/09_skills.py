@@ -111,7 +111,7 @@ def main():
         # Use .disable_skill_read_tool() to opt out.
         harness = (
             lh.HarnessBuilder(os.environ.get("SENZA_MODEL", "gpt-4o"))
-            .provider("gpt-*", provider)
+            .provider("*", provider)
             .system_prompt(
                 "You are an incident-response assistant. You have access to "
                 "skills. When a skill is relevant, use the skill_read tool to "

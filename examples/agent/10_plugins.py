@@ -134,7 +134,7 @@ def demo_agent_layer(provider, model):
 
     harness = (
         lh.HarnessBuilder(model)
-        .provider("gpt-*", provider)
+        .provider("*", provider)
         .system_prompt(
             "You are a database assistant. Use run_query for SQL and "
             "check_db_status for health checks."

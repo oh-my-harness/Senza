@@ -121,7 +121,7 @@ def main():
 
     harness = (
         lh.HarnessBuilder(os.environ.get("SENZA_MODEL", "gpt-4o"))
-        .provider("gpt-*", provider)
+        .provider("*", provider)
         .system_prompt(
             "You are an assistant with three tools. When asked, call the "
             "relevant tools. If a tool is denied, report that to the user."

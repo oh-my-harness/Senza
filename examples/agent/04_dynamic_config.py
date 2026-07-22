@@ -23,7 +23,7 @@ def main():
 
     harness = (
         lh.HarnessBuilder(os.environ.get("SENZA_MODEL", "gpt-4o"))
-        .provider("gpt-*", provider)
+        .provider("*", provider)
         .system_prompt("You are a helpful assistant.")
         .max_tokens(256)
         .build()

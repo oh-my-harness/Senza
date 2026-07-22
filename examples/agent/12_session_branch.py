@@ -39,7 +39,7 @@ def main():
 
     harness = (
         lh.HarnessBuilder(model)
-        .provider("gpt-*", provider)
+        .provider("*", provider)
         .system_prompt("You are a project planning assistant. Be concise.")
         .max_tokens(512)
         .build()
