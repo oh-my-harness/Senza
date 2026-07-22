@@ -17,14 +17,19 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
+            can_test: true
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
+            can_test: false
           - os: macos-14
             target: aarch64-apple-darwin
+            can_test: true
           - os: macos-13
             target: x86_64-apple-darwin
+            can_test: true
           - os: windows-latest
             target: x86_64-pc-windows-msvc
+            can_test: true
 
     runs-on: ${{ matrix.os }}
 
@@ -101,12 +106,14 @@ jobs:
           path: ${{ env.WHEEL }}
 
       - name: Install wheel and verify import
+        if: matrix.can_test
         shell: bash
         run: |
           pip install ${{ env.WHEEL }}
           python -c "import senza; print('version:', senza.version()); print(repr(senza.HarnessBuilder('gpt-4o')))"
 
       - name: Check stubs
+        if: matrix.can_test
         shell: bash
         run: python scripts/check_stubs.py
 
