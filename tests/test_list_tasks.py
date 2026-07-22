@@ -29,26 +29,47 @@ def test_list_tasks_returns_tasks():
         task1_dir = os.path.join(d, "task-aaa")
         os.makedirs(task1_dir)
         with open(os.path.join(task1_dir, "workflow.json"), "w") as f:
-            json.dump({
-                "status": "succeeded",
-                "current_step": "step3",
-                "step_history": [
-                    {"step_id": "s1", "started_at": "2026-07-21T10:00:00Z", "ended_at": "2026-07-21T10:05:00Z", "transition": {"to": "s2"}},
-                    {"step_id": "s2", "started_at": "2026-07-21T10:05:00Z", "ended_at": "2026-07-21T10:15:00Z", "transition": {"to": "s3"}},
-                    {"step_id": "s3", "started_at": "2026-07-21T10:15:00Z", "ended_at": "2026-07-21T10:30:00Z", "transition": {"abort": {"reason": "done"}}}
-                ],
-                "started_at": "2026-07-21T10:00:00Z",
-                "ended_at": "2026-07-21T10:30:00Z",
-            }, f)
+            json.dump(
+                {
+                    "status": "succeeded",
+                    "current_step": "step3",
+                    "step_history": [
+                        {
+                            "step_id": "s1",
+                            "started_at": "2026-07-21T10:00:00Z",
+                            "ended_at": "2026-07-21T10:05:00Z",
+                            "transition": {"to": "s2"},
+                        },
+                        {
+                            "step_id": "s2",
+                            "started_at": "2026-07-21T10:05:00Z",
+                            "ended_at": "2026-07-21T10:15:00Z",
+                            "transition": {"to": "s3"},
+                        },
+                        {
+                            "step_id": "s3",
+                            "started_at": "2026-07-21T10:15:00Z",
+                            "ended_at": "2026-07-21T10:30:00Z",
+                            "transition": {"abort": {"reason": "done"}},
+                        },
+                    ],
+                    "started_at": "2026-07-21T10:00:00Z",
+                    "ended_at": "2026-07-21T10:30:00Z",
+                },
+                f,
+            )
 
         task2_dir = os.path.join(d, "task-bbb")
         os.makedirs(task2_dir)
         with open(os.path.join(task2_dir, "workflow.json"), "w") as f:
-            json.dump({
-                "status": "running",
-                "current_step": "step1",
-                "step_history": [],
-            }, f)
+            json.dump(
+                {
+                    "status": "running",
+                    "current_step": "step1",
+                    "step_history": [],
+                },
+                f,
+            )
 
         tasks = senza.WorkflowEngine.list_tasks(d)
         assert len(tasks) == 2
@@ -95,22 +116,28 @@ def test_list_tasks_sorted_by_started_at_desc():
         old_dir = os.path.join(d, "task-old")
         os.makedirs(old_dir)
         with open(os.path.join(old_dir, "workflow.json"), "w") as f:
-            json.dump({
-                "status": "succeeded",
-                "current_step": "s1",
-                "step_history": [],
-                "started_at": "2026-07-21T08:00:00Z",
-            }, f)
+            json.dump(
+                {
+                    "status": "succeeded",
+                    "current_step": "s1",
+                    "step_history": [],
+                    "started_at": "2026-07-21T08:00:00Z",
+                },
+                f,
+            )
 
         new_dir = os.path.join(d, "task-new")
         os.makedirs(new_dir)
         with open(os.path.join(new_dir, "workflow.json"), "w") as f:
-            json.dump({
-                "status": "succeeded",
-                "current_step": "s1",
-                "step_history": [],
-                "started_at": "2026-07-21T10:00:00Z",
-            }, f)
+            json.dump(
+                {
+                    "status": "succeeded",
+                    "current_step": "s1",
+                    "step_history": [],
+                    "started_at": "2026-07-21T10:00:00Z",
+                },
+                f,
+            )
 
         tasks = senza.WorkflowEngine.list_tasks(d)
         assert len(tasks) == 2

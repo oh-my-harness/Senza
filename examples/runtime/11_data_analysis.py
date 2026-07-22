@@ -11,9 +11,9 @@ Prerequisites:
 Run:
   python examples/templates/02_data_analysis.py
 """
+
 import json
 import os
-import sys
 
 import senza
 
@@ -35,7 +35,7 @@ def main():
             {
                 "id": "analyze",
                 "name": "数据分析",
-                "prompt": "分析以下销售数据，找出趋势和异常。返回 JSON：{\"summary\": \"一句话总结\", \"anomaly\": \"异常描述或null\"}",
+                "prompt": '分析以下销售数据，找出趋势和异常。返回 JSON：{"summary": "一句话总结", "anomaly": "异常描述或null"}',
                 "allowed_tools": [],
                 "structured": True,
             },
@@ -69,7 +69,9 @@ def main():
         }
 
     engine = (
-        senza.WorkflowEngine(workflow, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), senza.create_judge(judge))
+        senza.WorkflowEngine(
+            workflow, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), senza.create_judge(judge)
+        )
         .with_executor("transform", senza.create_executor(transform_executor))
         .with_max_tokens(512)
     )

@@ -27,7 +27,6 @@ import socketserver
 import sys
 import threading
 import webbrowser
-from pathlib import Path
 from typing import Any
 
 from . import read_sessions, viewer_html

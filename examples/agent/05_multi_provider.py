@@ -7,8 +7,8 @@ Demonstrates:
 Run:
   OPENAI_API_KEY=sk-... ANTHROPIC_API_KEY=sk-ant-... python 05_multi_provider.py
 """
+
 import os
-import sys
 
 import senza
 
@@ -20,7 +20,9 @@ def main():
     openai_base_url = os.environ.get("OPENAI_API_BASE") or None
     anthropic_base_url = os.environ.get("ANTHROPIC_API_BASE") or None
     openai_provider = senza.create_openai_provider(api_key=openai_key, base_url=openai_base_url)
-    anthropic_provider = senza.create_anthropic_provider(api_key=anthropic_key, base_url=anthropic_base_url)
+    anthropic_provider = senza.create_anthropic_provider(
+        api_key=anthropic_key, base_url=anthropic_base_url
+    )
 
     openai_model = os.environ.get("OPENAI_MODEL", "gpt-4o")
     anthropic_model = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")

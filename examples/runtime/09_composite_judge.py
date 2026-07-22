@@ -15,7 +15,7 @@ pattern demonstrable end-to-end.
 Run:
   OPENAI_API_KEY=sk-... python 09_composite_judge.py
 """
-import json
+
 import os
 import re
 
@@ -31,7 +31,12 @@ def main():
         "entry_step": "writer",
         "steps": [
             {"id": "writer", "name": "写作", "prompt": "写一句关于猫的故事。", "allowed_tools": []},
-            {"id": "reviewer", "name": "审阅", "prompt": "给这个故事打分 1-5，输出 JSON {\"score\": N}。", "allowed_tools": []},
+            {
+                "id": "reviewer",
+                "name": "审阅",
+                "prompt": '给这个故事打分 1-5，输出 JSON {"score": N}。',
+                "allowed_tools": [],
+            },
             # parse_score is an executor step: it takes the reviewer's
             # text output and returns a structured {"score": N} dict so
             # the declarative condition edges below can match on /score.
@@ -43,8 +48,16 @@ def main():
             {"from": "reviewer", "to": "parse_score"},
             # Declarative edges for parse_score (no .on() handler needed):
             # conditions read parse_score's structured {"score": N}.
-            {"from": "parse_score", "to": "finalizer", "condition": {"op": "gte", "pointer": "/score", "value": 3}},
-            {"from": "parse_score", "to": "writer", "condition": {"op": "lt", "pointer": "/score", "value": 3}},
+            {
+                "from": "parse_score",
+                "to": "finalizer",
+                "condition": {"op": "gte", "pointer": "/score", "value": 3},
+            },
+            {
+                "from": "parse_score",
+                "to": "writer",
+                "condition": {"op": "lt", "pointer": "/score", "value": 3},
+            },
         ],
     }
 

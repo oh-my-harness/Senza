@@ -1,4 +1,5 @@
 """Smoke tests for PricingProvider exposure (G2)."""
+
 import senza
 
 
@@ -8,20 +9,23 @@ def _make_provider():
 
 def test_create_pricing_provider():
     """create_pricing_provider accepts a dict table."""
-    pricing = senza.create_pricing_provider({
-        "gpt-4o": {
-            "input_per_mtok": 2.5,
-            "output_per_mtok": 10.0,
-            "cache_read_per_mtok": 1.25,
-            "cache_write_per_mtok": 2.5,
-        },
-    })
+    pricing = senza.create_pricing_provider(
+        {
+            "gpt-4o": {
+                "input_per_mtok": 2.5,
+                "output_per_mtok": 10.0,
+                "cache_read_per_mtok": 1.25,
+                "cache_write_per_mtok": 2.5,
+            },
+        }
+    )
     assert pricing is not None
     assert type(pricing).__name__ == "PricingProvider"
 
 
 def test_create_pricing_provider_callback():
     """create_pricing_provider_callback accepts a callable."""
+
     def get_price(model, provider):
         if model == "gpt-4o":
             return {
@@ -44,7 +48,9 @@ def test_create_pricing_provider_callback_returns_none():
 
 def test_builder_pricing_chains():
     """builder.pricing() chains and returns self."""
-    pricing = senza.create_pricing_provider({"gpt-4o": {"input_per_mtok": 2.5, "output_per_mtok": 10.0}})
+    pricing = senza.create_pricing_provider(
+        {"gpt-4o": {"input_per_mtok": 2.5, "output_per_mtok": 10.0}}
+    )
     builder = senza.HarnessBuilder("gpt-4o").provider("gpt-*", _make_provider())
     result = builder.pricing(pricing)
     assert result is builder
@@ -52,12 +58,11 @@ def test_builder_pricing_chains():
 
 def test_builder_pricing_then_build():
     """builder with pricing set can build successfully."""
-    pricing = senza.create_pricing_provider({"gpt-4o": {"input_per_mtok": 2.5, "output_per_mtok": 10.0}})
+    pricing = senza.create_pricing_provider(
+        {"gpt-4o": {"input_per_mtok": 2.5, "output_per_mtok": 10.0}}
+    )
     harness = (
-        senza.HarnessBuilder("gpt-4o")
-        .provider("gpt-*", _make_provider())
-        .pricing(pricing)
-        .build()
+        senza.HarnessBuilder("gpt-4o").provider("gpt-*", _make_provider()).pricing(pricing).build()
     )
     assert harness is not None
     usage = harness.usage()

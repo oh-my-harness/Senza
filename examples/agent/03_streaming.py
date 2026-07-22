@@ -11,8 +11,8 @@ collect events while the main thread drives the prompt.
 Run:
   python 03_streaming.py
 """
+
 import os
-import sys
 import threading
 
 import senza

@@ -30,6 +30,7 @@ Prerequisites:
 Run:
   python 07_rules.py
 """
+
 import json
 import os
 import sys
@@ -69,34 +70,40 @@ def main():
         senza.create_tool(
             name="get_weather",
             description="Get current weather for a city",
-            parameters_schema=json.dumps({
-                "type": "object",
-                "properties": {"city": {"type": "string"}},
-                "required": ["city"],
-            }),
+            parameters_schema=json.dumps(
+                {
+                    "type": "object",
+                    "properties": {"city": {"type": "string"}},
+                    "required": ["city"],
+                }
+            ),
             callback=get_weather,
         ),
         senza.create_tool(
             name="transfer_money",
             description="Transfer money to a recipient",
-            parameters_schema=json.dumps({
-                "type": "object",
-                "properties": {
-                    "amount": {"type": "number"},
-                    "recipient": {"type": "string"},
-                },
-                "required": ["amount", "recipient"],
-            }),
+            parameters_schema=json.dumps(
+                {
+                    "type": "object",
+                    "properties": {
+                        "amount": {"type": "number"},
+                        "recipient": {"type": "string"},
+                    },
+                    "required": ["amount", "recipient"],
+                }
+            ),
             callback=transfer_money,
         ),
         senza.create_tool(
             name="delete_file",
             description="Delete a file at the given path",
-            parameters_schema=json.dumps({
-                "type": "object",
-                "properties": {"path": {"type": "string"}},
-                "required": ["path"],
-            }),
+            parameters_schema=json.dumps(
+                {
+                    "type": "object",
+                    "properties": {"path": {"type": "string"}},
+                    "required": ["path"],
+                }
+            ),
             callback=delete_file,
         ),
     ]
@@ -111,7 +118,11 @@ def main():
         # 3. get_weather: allow but throttle to 5 calls / 60s
         .rule("get_weather", senza.create_rate_limit_predicate(5, 60), "allow")
         # 4. whitelisted tool whose condition failed above -> explicit deny
-        .rule("*", senza.create_contains_predicate(["get_weather", "transfer_money", "delete_file"]), "deny")
+        .rule(
+            "*",
+            senza.create_contains_predicate(["get_weather", "transfer_money", "delete_file"]),
+            "deny",
+        )
         # 5. anything not whitelisted -> deny
         .fallback("deny")
         .build()
@@ -134,8 +145,7 @@ def main():
 
     print("Prompting: the model will try a rule-violating transfer and delete...\n")
     events = harness.prompt_and_collect(
-        "Transfer 5000 to Alice, delete /etc/passwd, and tell me the "
-        "weather in Paris.",
+        "Transfer 5000 to Alice, delete /etc/passwd, and tell me the weather in Paris.",
         timeout_ms=30000,
     )
 

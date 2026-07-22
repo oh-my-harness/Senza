@@ -10,13 +10,9 @@ return value, plus a round-trip integration test using the real Rust
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 
-import pytest
-
-from senza import read_sessions, viewer_html
-from senza import viewer
+from senza import read_sessions, viewer, viewer_html
 
 
 def _write_session(dir_path: Path, meta: dict, entries: list[str] | None = None) -> None:
@@ -41,17 +37,19 @@ def _base_meta(id: str = "s1", **overrides) -> dict:
 
 
 def _entry(id: str, parent_id: str | None, role: str = "user") -> str:
-    return json.dumps({
-        "id": id,
-        "parent_id": parent_id,
-        "timestamp": "2026-01-01T00:00:00Z",
-        "payload": {
-            "entry_type": "message",
-            "role": role,
-            "content": [{"type": "text", "text": f"hello {id}"}],
+    return json.dumps(
+        {
+            "id": id,
+            "parent_id": parent_id,
             "timestamp": "2026-01-01T00:00:00Z",
-        },
-    })
+            "payload": {
+                "entry_type": "message",
+                "role": role,
+                "content": [{"type": "text", "text": f"hello {id}"}],
+                "timestamp": "2026-01-01T00:00:00Z",
+            },
+        }
+    )
 
 
 # ── Rust-backed read_sessions integration ────────────────────────────────────
@@ -101,14 +99,27 @@ def test_rust_read_sessions_computes_branches(tmp_path: Path) -> None:
 def test_rust_read_sessions_non_message_entries(tmp_path: Path) -> None:
     """read_sessions (Rust) includes config entries and extracts leaf labels."""
     entries = [
-        json.dumps({
-            "id": "e1", "parent_id": None, "timestamp": "2026-01-01T00:00:00Z",
-            "payload": {"entry_type": "model_change", "to": "gpt-4o", "provider": "openai", "model_id": None},
-        }),
-        json.dumps({
-            "id": "e2", "parent_id": "e1", "timestamp": "2026-01-01T00:00:01Z",
-            "payload": {"entry_type": "label", "name": "checkpoint-1"},
-        }),
+        json.dumps(
+            {
+                "id": "e1",
+                "parent_id": None,
+                "timestamp": "2026-01-01T00:00:00Z",
+                "payload": {
+                    "entry_type": "model_change",
+                    "to": "gpt-4o",
+                    "provider": "openai",
+                    "model_id": None,
+                },
+            }
+        ),
+        json.dumps(
+            {
+                "id": "e2",
+                "parent_id": "e1",
+                "timestamp": "2026-01-01T00:00:01Z",
+                "payload": {"entry_type": "label", "name": "checkpoint-1"},
+            }
+        ),
     ]
     _write_session(tmp_path, _base_meta(active_cursor="e2"), entries)
     data = read_sessions(str(tmp_path))

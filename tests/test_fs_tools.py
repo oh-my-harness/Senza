@@ -1,5 +1,5 @@
 """Smoke tests for FsToolsPlugin and HarnessBuilder.env (runtime-tools integration)."""
-import json
+
 import tempfile
 
 import senza
@@ -65,10 +65,7 @@ def test_fs_tools_plugin_builds_under_unsupported_env():
     """
     plugin = senza.create_fs_tools_plugin()
     harness = (
-        senza.HarnessBuilder("gpt-4o")
-        .provider("gpt-*", _make_provider())
-        .plugin(plugin)
-        .build()
+        senza.HarnessBuilder("gpt-4o").provider("gpt-*", _make_provider()).plugin(plugin).build()
     )
     assert harness is not None
     assert harness.phase() == "idle"
@@ -78,11 +75,7 @@ def test_harness_builder_env_chains():
     """env() accepts an ExecutionEnv and returns the builder for chaining."""
     with tempfile.TemporaryDirectory() as td:
         env = senza.create_os_env(td)
-        builder = (
-            senza.HarnessBuilder("gpt-4o")
-            .provider("gpt-*", _make_provider())
-            .env(env)
-        )
+        builder = senza.HarnessBuilder("gpt-4o").provider("gpt-*", _make_provider()).env(env)
         assert builder is not None
 
 

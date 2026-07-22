@@ -9,11 +9,10 @@ Demonstrates:
 Run:
   python 07_shell_executor.py
 """
+
 import os
-import sys
 
 import senza
-
 
 # Command allowlist — only these commands can be executed by ShellExecutor.
 ALLOWED_COMMANDS = ["echo", "python3", "date", "whoami"]
@@ -56,10 +55,9 @@ def main():
     # always returns an error.
     env = senza.create_os_env(working_dir=".")
 
-    engine = (
-        senza.WorkflowEngine(workflow, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), judge, env=env)
-        .with_executor("shell", senza.create_shell_executor(ALLOWED_COMMANDS))
-    )
+    engine = senza.WorkflowEngine(
+        workflow, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), judge, env=env
+    ).with_executor("shell", senza.create_shell_executor(ALLOWED_COMMANDS))
 
     print("Running shell executor workflow...")
     engine.run()

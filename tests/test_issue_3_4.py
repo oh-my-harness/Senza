@@ -10,12 +10,8 @@ Issue #3: with_max_retries semantics were undocumented and the judge ctx
          semantics; judge ctx now includes retry_count.
 """
 
-import os
-import tempfile
-
 import pytest
 import senza
-
 
 # ── #4: create_os_env + env= parameter ──────────────────────────────────────
 
@@ -82,16 +78,13 @@ def test_shell_executor_runs_real_command_with_os_env():
     }
     judge = senza.create_judge(lambda ctx: "abort:done")
     env = senza.create_os_env(working_dir=".")
-    engine = (
-        senza.WorkflowEngine(
-            workflow,
-            senza.create_openai_provider(api_key="test-key"),
-            "gpt-4o",
-            judge,
-            env=env,
-        )
-        .with_executor("shell", senza.create_shell_executor(["echo"]))
-    )
+    engine = senza.WorkflowEngine(
+        workflow,
+        senza.create_openai_provider(api_key="test-key"),
+        "gpt-4o",
+        judge,
+        env=env,
+    ).with_executor("shell", senza.create_shell_executor(["echo"]))
     engine.run()
     history = engine.step_history()
     assert len(history) == 1
@@ -123,15 +116,12 @@ def test_shell_executor_without_env_fails():
     }
     judge = senza.create_judge(lambda ctx: "abort:done")
     # No env= → UnsupportedEnv → execute_shell errors.
-    engine = (
-        senza.WorkflowEngine(
-            workflow,
-            senza.create_openai_provider(api_key="test-key"),
-            "gpt-4o",
-            judge,
-        )
-        .with_executor("shell", senza.create_shell_executor(["echo"]))
-    )
+    engine = senza.WorkflowEngine(
+        workflow,
+        senza.create_openai_provider(api_key="test-key"),
+        "gpt-4o",
+        judge,
+    ).with_executor("shell", senza.create_shell_executor(["echo"]))
     with pytest.raises(RuntimeError):
         engine.run()
 
@@ -177,6 +167,8 @@ def _make_engine(judge, *, max_retries=3):
         .with_executor("shell", senza.create_shell_executor(["echo"]))
         .with_max_retries(max_retries)
     )
+
+
 def test_judge_ctx_exposes_retry_count():
     """Judge callback ctx contains retry_count (#3).
 

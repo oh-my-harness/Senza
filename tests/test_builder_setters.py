@@ -1,4 +1,5 @@
 """Smoke tests for newly exposed HarnessBuilder setters (G6)."""
+
 import senza
 
 

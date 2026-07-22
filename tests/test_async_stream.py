@@ -5,11 +5,8 @@ async generators that yield event dicts.
 """
 
 import asyncio
-import json
 
-import pytest
 import senza
-
 
 # ── stream_events ────────────────────────────────────────────────────────────
 

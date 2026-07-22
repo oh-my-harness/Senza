@@ -8,9 +8,8 @@ Demonstrates:
 Run:
   python 06_human_in_the_loop.py
 """
-import json
+
 import os
-import sys
 import threading
 import time
 
@@ -30,16 +29,20 @@ def main():
     workflow = {
         "entry_step": "draft",
         "steps": [
-            {"id": "draft", "name": "Draft", "prompt": "Draft a short email to a client about a project delay. Then call wait_for_external_event to get approval.", "allowed_tools": ["wait_for_external_event"]},
+            {
+                "id": "draft",
+                "name": "Draft",
+                "prompt": "Draft a short email to a client about a project delay. Then call wait_for_external_event to get approval.",
+                "allowed_tools": ["wait_for_external_event"],
+            },
         ],
         "edges": [],
     }
 
     judge = senza.create_judge(lambda ctx: "abort:done")
-    engine = (
-        senza.WorkflowEngine(workflow, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), judge)
-        .with_external_tool(wait_tool)
-    )
+    engine = senza.WorkflowEngine(
+        workflow, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), judge
+    ).with_external_tool(wait_tool)
 
     # Simulate a human reviewer responding after 3 seconds
     def human_review():

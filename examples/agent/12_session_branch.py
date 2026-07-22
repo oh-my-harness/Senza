@@ -25,8 +25,8 @@ Prerequisites:
 Run:
   python 12_session_branch.py
 """
+
 import os
-import sys
 
 import senza
 

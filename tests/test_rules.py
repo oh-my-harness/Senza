@@ -1,4 +1,5 @@
 """Smoke tests for Rules approval system exposure (G3)."""
+
 import senza
 
 
@@ -30,12 +31,7 @@ def test_create_rate_limit_predicate():
 def test_rule_chain_builder_chains():
     """RuleChainBuilder chains rule() and fallback()."""
     p = senza.create_contains_predicate(["search"])
-    chain = (
-        senza.create_rule_chain()
-        .rule("search", p, "allow")
-        .fallback("deny")
-        .build()
-    )
+    chain = senza.create_rule_chain().rule("search", p, "allow").fallback("deny").build()
     assert chain is not None
     assert type(chain).__name__ == "RuleChain"
 
@@ -50,12 +46,7 @@ def test_rule_chain_builder_wildcard():
 def test_create_rule_approval_hook():
     """create_rule_approval_hook returns a Hook."""
     p = senza.create_contains_predicate(["search"])
-    chain = (
-        senza.create_rule_chain()
-        .rule("search", p, "allow")
-        .fallback("deny")
-        .build()
-    )
+    chain = senza.create_rule_chain().rule("search", p, "allow").fallback("deny").build()
     hook = senza.create_rule_approval_hook(chain)
     assert hook is not None
     assert type(hook).__name__ == "Hook"
@@ -64,18 +55,8 @@ def test_create_rule_approval_hook():
 def test_rule_approval_hook_on_harness():
     """Rule approval hook can be registered on a harness via builder.hooks()."""
     p = senza.create_contains_predicate(["search"])
-    chain = (
-        senza.create_rule_chain()
-        .rule("search", p, "allow")
-        .fallback("deny")
-        .build()
-    )
+    chain = senza.create_rule_chain().rule("search", p, "allow").fallback("deny").build()
     hook = senza.create_rule_approval_hook(chain)
     provider = senza.create_openai_provider(api_key="test-key")
-    harness = (
-        senza.HarnessBuilder("gpt-4o")
-        .provider("gpt-*", provider)
-        .hooks([hook])
-        .build()
-    )
+    harness = senza.HarnessBuilder("gpt-4o").provider("gpt-*", provider).hooks([hook]).build()
     assert harness is not None

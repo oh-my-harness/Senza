@@ -10,10 +10,10 @@ When the installed wheel lacks `senza.Agent`, tests that require it are
 skipped automatically so that `pytest tests/` against a production
 wheel reports a clean skip rather than a failure.
 """
+
 from __future__ import annotations
 
 import pytest
-
 import senza
 
 # `senza.Agent` is registered only under the `test-utils` feature. Its

@@ -41,9 +41,9 @@ trap 'mv "$CARGO_TOML.bak" "$CARGO_TOML" 2>/dev/null || true' EXIT
 perl -pi -e "s/PLACEHOLDER/$SHA/g" "$CARGO_TOML"
 
 cd "$REPO_ROOT"
-# Default: run all four stages
+# Default: run all five stages
 if [ "$#" -eq 0 ]; then
-    STAGES=("fmt" "clippy" "test" "pytest")
+    STAGES=("fmt" "pyfmt" "clippy" "test" "pytest")
 else
     STAGES=("$@")
 fi
@@ -54,6 +54,12 @@ for stage in "${STAGES[@]}"; do
             echo ""
             echo "==> cargo fmt --check ..."
             cargo fmt --check
+            ;;
+        pyfmt)
+            echo ""
+            echo "==> ruff format --check + ruff check ..."
+            "$PYTHON" -m ruff format --check examples/ tests/ senza-pkg/senza/viewer.py
+            "$PYTHON" -m ruff check examples/ tests/ senza-pkg/senza/viewer.py
             ;;
         clippy)
             echo ""
@@ -95,9 +101,8 @@ for stage in "${STAGES[@]}"; do
             fi
             ;;
         *)
-            echo "ERROR: unknown stage '$stage' (use: fmt, clippy, test, pytest)" >&2
+            echo "ERROR: unknown stage '$stage' (use: fmt, pyfmt, clippy, test, pytest)" >&2
             exit 1
-            ;;
     esac
 done
 

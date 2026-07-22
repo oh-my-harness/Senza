@@ -1,6 +1,7 @@
 """Tests for Plugin wrapper."""
 
 import json
+
 import senza
 
 
@@ -19,9 +20,7 @@ def test_create_plugin_with_tools_and_hooks():
     def my_hook(ctx):
         pass
 
-    tool = senza.create_tool(
-        "echo", "Echo", json.dumps({"type": "object"}), echo
-    )
+    tool = senza.create_tool("echo", "Echo", json.dumps({"type": "object"}), echo)
     hook = senza.create_before_turn_hook(my_hook)
 
     plugin = senza.create_plugin("full-plugin", tools=[tool], hooks=[hook])
@@ -56,9 +55,7 @@ def test_create_plugin_multiple_hook_types():
     h2 = senza.create_after_turn_hook(after_turn_cb)
     h3 = senza.create_should_stop_hook(should_stop_cb)
 
-    plugin = senza.create_plugin(
-        "multi-hooks", tools=None, hooks=[h1, h2, h3]
-    )
+    plugin = senza.create_plugin("multi-hooks", tools=None, hooks=[h1, h2, h3])
     assert plugin is not None
 
 

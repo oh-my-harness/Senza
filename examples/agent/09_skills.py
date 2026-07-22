@@ -32,7 +32,7 @@ Prerequisites:
 Run:
   python 09_skills.py
 """
-import json
+
 import os
 import sys
 import tempfile
@@ -47,7 +47,8 @@ def create_skill_dir(root: str) -> str:
     os.makedirs(skill_dir, exist_ok=True)
 
     with open(os.path.join(skill_dir, "SKILL.md"), "w") as f:
-        f.write(textwrap.dedent("""\
+        f.write(
+            textwrap.dedent("""\
             ---
             name: deploy-rollback
             description: Procedures for rolling back a failed production deployment safely.
@@ -59,10 +60,12 @@ def create_skill_dir(root: str) -> str:
             When the user asks about rolling back a deployment, read the
             full runbook via `skill_read` with `skill_name="deploy-rollback"`
             and `path="runbook.md"` before giving instructions.
-        """))
+        """)
+        )
 
     with open(os.path.join(skill_dir, "runbook.md"), "w") as f:
-        f.write(textwrap.dedent("""\
+        f.write(
+            textwrap.dedent("""\
             # Rollback Runbook
 
             ## Step 1 — Assess
@@ -81,7 +84,8 @@ def create_skill_dir(root: str) -> str:
             ## Step 4 — Post-mortem
             - File an incident report within 24 hours.
             - Tag the bad revision in the artifact registry to prevent re-deploy.
-        """))
+        """)
+        )
 
     return root
 
@@ -126,8 +130,7 @@ def main():
         print("(The model should call skill_read to fetch the runbook)\n")
 
         events = harness.prompt_and_collect(
-            "We deployed v2.3 to the checkout service and error rates "
-            "spiked. How do I roll back?",
+            "We deployed v2.3 to the checkout service and error rates spiked. How do I roll back?",
             timeout_ms=60000,
         )
 
@@ -147,8 +150,7 @@ def main():
         if "skill_read" in tool_calls:
             print("[OK] model used skill_read to fetch the runbook")
         else:
-            print("[NOTE] model did not call skill_read "
-                  "(may depend on the model's behavior)")
+            print("[NOTE] model did not call skill_read (may depend on the model's behavior)")
         print(f"\nResponse:\n{text}")
 
         # ── Inspect conversation messages ─────────────────────────────────

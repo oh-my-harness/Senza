@@ -32,8 +32,8 @@ Prerequisites:
 Run:
   python 11_steering.py
 """
+
 import os
-import sys
 
 import senza
 
@@ -52,7 +52,6 @@ def main():
         .max_tokens(512)
         .build()
     ) as harness:
-
         # ── Turn 1: initial question ──────────────────────────────────────
         print("=== Turn 1: initial question ===")
         harness.prompt("What are the main trade-offs between SQL and NoSQL databases?")
@@ -97,8 +96,7 @@ def main():
         print("\n=== Summary ===")
         usage = harness.usage()
         print(f"  Total messages: {harness.message_count()}")
-        print(f"  Tokens: {usage['total_input_tokens']} in / "
-              f"{usage['total_output_tokens']} out")
+        print(f"  Tokens: {usage['total_input_tokens']} in / {usage['total_output_tokens']} out")
 
 
 def _last_text(harness) -> str:

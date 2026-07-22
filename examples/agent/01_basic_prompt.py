@@ -13,6 +13,7 @@ Prerequisites:
 Run:
   python 01_basic_prompt.py
 """
+
 import os
 import sys
 
@@ -34,7 +35,9 @@ def main():
     )
 
     print("Sending prompt...")
-    events = harness.prompt_and_collect("Explain what a closure is in one sentence.", timeout_ms=30000)
+    events = harness.prompt_and_collect(
+        "Explain what a closure is in one sentence.", timeout_ms=30000
+    )
 
     text = ""
     for event in events:

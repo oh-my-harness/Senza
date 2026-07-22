@@ -11,6 +11,7 @@ Prerequisites:
 Run:
   python examples/templates/03_rag_qa.py
 """
+
 import json
 import os
 import sys
@@ -48,13 +49,15 @@ def main():
     search_tool = senza.create_tool(
         name="search_kb",
         description="Search the knowledge base for relevant information. Pass a keyword or topic.",
-        parameters_schema=json.dumps({
-            "type": "object",
-            "properties": {
-                "query": {"type": "string", "description": "Search keyword or topic"},
-            },
-            "required": ["query"],
-        }),
+        parameters_schema=json.dumps(
+            {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search keyword or topic"},
+                },
+                "required": ["query"],
+            }
+        ),
         callback=search_kb,
     )
 
@@ -78,9 +81,9 @@ def main():
     ]
 
     for question in questions:
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"Q: {question}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         events = harness.prompt_and_collect(question, timeout_ms=30000)
 

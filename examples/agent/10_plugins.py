@@ -26,6 +26,7 @@ Prerequisites:
 Run:
   python 10_plugins.py
 """
+
 import json
 import os
 import re
@@ -33,8 +34,8 @@ import sys
 
 import senza
 
-
 # ── Plugin definition ────────────────────────────────────────────────────────
+
 
 # A sync tool (create_sync_tool is an explicit alias for create_tool;
 # create_tool auto-detects async def callbacks — use whichever reads best).
@@ -49,13 +50,15 @@ def run_query(args, ctx):
 query_tool = senza.create_sync_tool(
     name="run_query",
     description="Execute a read-only SQL query against the database.",
-    parameters_schema=json.dumps({
-        "type": "object",
-        "properties": {
-            "sql": {"type": "string", "description": "SQL statement to execute"},
-        },
-        "required": ["sql"],
-    }),
+    parameters_schema=json.dumps(
+        {
+            "type": "object",
+            "properties": {
+                "sql": {"type": "string", "description": "SQL statement to execute"},
+            },
+            "required": ["sql"],
+        }
+    ),
     callback=run_query,
 )
 
@@ -72,10 +75,12 @@ async def check_status(args, ctx):
 status_tool = senza.create_tool(
     name="check_db_status",
     description="Check the health and connection count of the database (async).",
-    parameters_schema=json.dumps({
-        "type": "object",
-        "properties": {},
-    }),
+    parameters_schema=json.dumps(
+        {
+            "type": "object",
+            "properties": {},
+        }
+    ),
     callback=check_status,
 )
 
@@ -92,7 +97,7 @@ def query_guard(ctx):
         upper = sql.upper().strip()
         # Block DROP / TRUNCATE / DELETE without WHERE
         if re.search(r"\b(DROP|TRUNCATE)\b", upper):
-            print(f"  [plugin hook] BLOCKED destructive statement")
+            print("  [plugin hook] BLOCKED destructive statement")
             return {
                 "action": "deny",
                 "result": {
@@ -101,7 +106,7 @@ def query_guard(ctx):
                 },
             }
         if re.search(r"\bDELETE\b", upper) and "WHERE" not in upper:
-            print(f"  [plugin hook] BLOCKED DELETE without WHERE")
+            print("  [plugin hook] BLOCKED DELETE without WHERE")
             return {
                 "action": "deny",
                 "result": {
@@ -127,6 +132,7 @@ def make_db_safety_plugin() -> "senza.Plugin":
 
 # ── Agent-layer usage ────────────────────────────────────────────────────────
 
+
 def demo_agent_layer(provider, model):
     print("=" * 60)
     print("Agent layer: HarnessBuilder.plugin()")
@@ -147,13 +153,12 @@ def demo_agent_layer(provider, model):
     print(f"\nPlugin name: {make_db_safety_plugin().name}")
 
     print("\nAsking the model to check DB status (async tool)...")
-    events = harness.prompt_and_collect(
-        "Check the database status for me.", timeout_ms=30000
-    )
+    events = harness.prompt_and_collect("Check the database status for me.", timeout_ms=30000)
     _print_events(events)
 
 
 # ── Workflow-layer usage ─────────────────────────────────────────────────────
+
 
 def demo_workflow_layer(provider, model):
     print("\n" + "=" * 60)

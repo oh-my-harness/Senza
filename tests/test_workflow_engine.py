@@ -1,7 +1,7 @@
 """Tests for PyWorkflowEngine wrapper."""
 
 import json
-import pytest
+
 import senza
 
 
@@ -81,6 +81,7 @@ def test_workflow_engine_with_max_tokens():
     result = engine.with_max_tokens(4096)
     assert result is engine
 
+
 def test_workflow_engine_with_step_plugin():
     """with_step_plugin() accepts a step_id and plugin."""
     plugin = senza.create_plugin("my_plugin")
@@ -104,7 +105,6 @@ def test_workflow_engine_executor_step_dict():
     }
     engine = senza.WorkflowEngine(workflow, _make_provider(), "gpt-4o", _make_judge())
     assert engine.task_id().startswith("task-")
-
 
 
 def test_workflow_engine_with_external_tool():

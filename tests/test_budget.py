@@ -1,4 +1,5 @@
 """Smoke tests for Budget control exposure (G1)."""
+
 import senza
 
 
@@ -15,8 +16,10 @@ def test_create_budget_exceeded_hook():
 
 def test_create_budget_exceeded_hook_async():
     """create_budget_exceeded_hook accepts an async callback."""
+
     async def on_exceed(cost, limit):
         return True
+
     hook = senza.create_budget_exceeded_hook(on_exceed)
     assert hook is not None
 
@@ -40,20 +43,12 @@ def test_builder_budget_then_build():
     """builder with budget set can build successfully."""
     hook = senza.create_budget_exceeded_hook(lambda cost, limit: False)
     harness = (
-        senza.HarnessBuilder("gpt-4o")
-        .provider("gpt-*", _make_provider())
-        .budget(5.0, hook)
-        .build()
+        senza.HarnessBuilder("gpt-4o").provider("gpt-*", _make_provider()).budget(5.0, hook).build()
     )
     assert harness is not None
 
 
 def test_builder_budget_surveillance_build():
     """builder with surveillance budget (no hook) can build."""
-    harness = (
-        senza.HarnessBuilder("gpt-4o")
-        .provider("gpt-*", _make_provider())
-        .budget(5.0)
-        .build()
-    )
+    harness = senza.HarnessBuilder("gpt-4o").provider("gpt-*", _make_provider()).budget(5.0).build()
     assert harness is not None

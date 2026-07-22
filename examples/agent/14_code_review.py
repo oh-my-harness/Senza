@@ -11,6 +11,7 @@ Prerequisites:
 Run:
   python examples/templates/01_code_review.py
 """
+
 import json
 import os
 import sys
@@ -44,10 +45,12 @@ def main():
     read_tool = senza.create_tool(
         name="read_code",
         description="Read the Python code file to review",
-        parameters_schema=json.dumps({
-            "type": "object",
-            "properties": {},
-        }),
+        parameters_schema=json.dumps(
+            {
+                "type": "object",
+                "properties": {},
+            }
+        ),
         callback=read_code,
     )
 

@@ -23,7 +23,7 @@ ensure_venv
 
 # Ensure build/test deps are present in the venv.
 echo "==> Ensuring build/test deps ..."
-"$PYTHON" -m pip install --quiet --upgrade maturin pytest
+"$PYTHON" -m pip install --quiet --upgrade maturin pytest ruff
 
 # ── Build wheel ──────────────────────────────────────────────────────
 echo ""

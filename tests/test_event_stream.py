@@ -1,7 +1,6 @@
 """Tests for PyEventIterator — event stream from broadcast::Receiver → Python iterator."""
 
 import threading
-import time
 
 import senza
 

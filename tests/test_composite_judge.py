@@ -1,7 +1,5 @@
 """Tests for CompositeJudge — per-step routing handler dispatch."""
 
-import json
-
 import senza
 
 
@@ -60,10 +58,15 @@ def test_composite_judge_with_edge_fallback():
         "edges": [
             {"from": "custom", "to": "auto"},
             {
-                "from": "auto", "to": "done",
+                "from": "auto",
+                "to": "done",
                 "condition": {"op": "eq", "pointer": "/status", "value": "ok"},
             },
-            {"from": "auto", "to": "custom", "condition": {"op": "ne", "pointer": "/status", "value": "ok"}},
+            {
+                "from": "auto",
+                "to": "custom",
+                "condition": {"op": "ne", "pointer": "/status", "value": "ok"},
+            },
         ],
     }
 

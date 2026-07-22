@@ -9,7 +9,6 @@ import asyncio
 import json
 import threading
 
-import pytest
 import senza
 
 

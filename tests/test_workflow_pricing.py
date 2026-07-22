@@ -4,6 +4,7 @@ Binding-surface tests only — behavioral propagation (total_cost != 0)
 is covered by the runtime crate's customize_builder tests. Senza does
 not expose a mock LLM provider to Python for WorkflowEngine (see spec).
 """
+
 import senza
 
 
@@ -24,14 +25,16 @@ def _make_judge():
 
 
 def _make_pricing():
-    return senza.create_pricing_provider({
-        "gpt-4o": {
-            "input_per_mtok": 2.5,
-            "output_per_mtok": 10.0,
-            "cache_read_per_mtok": 1.25,
-            "cache_write_per_mtok": 2.5,
-        },
-    })
+    return senza.create_pricing_provider(
+        {
+            "gpt-4o": {
+                "input_per_mtok": 2.5,
+                "output_per_mtok": 10.0,
+                "cache_read_per_mtok": 1.25,
+                "cache_write_per_mtok": 2.5,
+            },
+        }
+    )
 
 
 def test_with_pricing_returns_self():

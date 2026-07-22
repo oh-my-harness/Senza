@@ -12,8 +12,8 @@ status, the step will fail. This example uses httpbin.org for testing.
 Run:
   python 08_http_executor.py
 """
+
 import os
-import sys
 
 import senza
 
@@ -46,10 +46,9 @@ def main():
     }
 
     judge = senza.create_judge(lambda ctx: "abort:done")
-    engine = (
-        senza.WorkflowEngine(workflow, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), judge)
-        .with_executor("http", http_exec)
-    )
+    engine = senza.WorkflowEngine(
+        workflow, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), judge
+    ).with_executor("http", http_exec)
 
     print("Running HTTP executor workflow...")
     try:

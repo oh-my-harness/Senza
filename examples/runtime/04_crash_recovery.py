@@ -8,8 +8,8 @@ Demonstrates:
 Run:
   python 04_crash_recovery.py
 """
+
 import os
-import sys
 import tempfile
 
 import senza
@@ -34,10 +34,9 @@ def main():
     with tempfile.TemporaryDirectory() as store_dir:
         # Phase 1: Create and run the workflow with persistence
         print("=== Phase 1: Initial run ===")
-        engine = (
-            senza.WorkflowEngine(workflow, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), judge)
-            .with_task_store(store_dir)
-        )
+        engine = senza.WorkflowEngine(
+            workflow, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), judge
+        ).with_task_store(store_dir)
         task_id = engine.task_id()
         print(f"Task ID: {task_id}")
 
@@ -51,7 +50,9 @@ def main():
 
         # Phase 2: Simulate a crash — create a NEW engine from the store
         print("\n=== Phase 2: Restore from TaskStore ===")
-        restored = senza.WorkflowEngine.restore(store_dir, task_id, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), judge)
+        restored = senza.WorkflowEngine.restore(
+            store_dir, task_id, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), judge
+        )
         print(f"Restored task ID: {restored.task_id()}")
         assert restored.task_id() == task_id, "task_id should match"
         print(f"Restored state: {restored.state()}")

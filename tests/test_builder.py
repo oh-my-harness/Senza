@@ -1,8 +1,8 @@
 """Tests for HarnessBuilder wrapper."""
+
 import json
 
 import pytest
-
 import senza
 
 
@@ -42,9 +42,7 @@ def test_builder_with_tool():
     def echo(args, ctx):
         return {"content": [], "terminate": False}
 
-    tool = senza.create_tool(
-        "echo", "Echo", json.dumps({"type": "object"}), echo
-    )
+    tool = senza.create_tool("echo", "Echo", json.dumps({"type": "object"}), echo)
     builder = senza.HarnessBuilder("claude-3-5-sonnet")
     result = builder.tool(tool)
     assert result is builder
@@ -60,12 +58,11 @@ def test_builder_with_plugin():
 
 def test_builder_chaining():
     """All fluent methods chain together."""
+
     def echo(args, ctx):
         return {"content": [], "terminate": False}
 
-    tool = senza.create_tool(
-        "echo", "Echo", json.dumps({"type": "object"}), echo
-    )
+    tool = senza.create_tool("echo", "Echo", json.dumps({"type": "object"}), echo)
     plugin = senza.create_plugin("p1", tools=[tool])
 
     builder = (

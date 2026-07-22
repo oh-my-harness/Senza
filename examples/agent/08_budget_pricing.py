@@ -21,6 +21,7 @@ Prerequisites:
 Run:
   python 08_budget_pricing.py
 """
+
 import os
 import sys
 
@@ -35,14 +36,16 @@ def main():
 
     # ── Pricing: price per million tokens (USD) ─────────────────────────────
     # Fields default to 0.0 if omitted, so a minimal table is fine.
-    pricing = senza.create_pricing_provider({
-        model: {
-            "input_per_mtok": 2.5,
-            "output_per_mtok": 10.0,
-            "cache_read_per_mtok": 1.25,
-            "cache_write_per_mtok": 2.5,
-        },
-    })
+    pricing = senza.create_pricing_provider(
+        {
+            model: {
+                "input_per_mtok": 2.5,
+                "output_per_mtok": 10.0,
+                "cache_read_per_mtok": 1.25,
+                "cache_write_per_mtok": 2.5,
+            },
+        }
+    )
     # Alternative: dynamic pricing via a callback
     #   senza.create_pricing_provider_callback(
     #       lambda m, p: {"input_per_mtok": 2.5, "output_per_mtok": 10.0}
@@ -50,9 +53,11 @@ def main():
 
     # ── Budget exceeded hook: log and stop ──────────────────────────────────
     def on_budget_exceeded(cost, limit):
-        print(f"\n  [BUDGET EXCEEDED] limit=${limit:.4f} "
-              f"spent=${cost['total_cost']:.4f} "
-              f"(in={cost['total_input_tokens']} out={cost['total_output_tokens']})")
+        print(
+            f"\n  [BUDGET EXCEEDED] limit=${limit:.4f} "
+            f"spent=${cost['total_cost']:.4f} "
+            f"(in={cost['total_input_tokens']} out={cost['total_output_tokens']})"
+        )
         # Return False to stop the run and mark it failed.
         # Return True to let the agent continue despite the overrun.
         return False
@@ -71,9 +76,7 @@ def main():
     )
 
     print("Prompting with a $0.001 budget (expect the hook to fire)...\n")
-    events = harness.prompt_and_collect(
-        "Explain recursion in three sentences.", timeout_ms=30000
-    )
+    events = harness.prompt_and_collect("Explain recursion in three sentences.", timeout_ms=30000)
 
     text = ""
     budget_hit = False
@@ -94,8 +97,10 @@ def main():
         print(f"\nResponse:\n{text}")
 
     usage = harness.usage()
-    print(f"\nFinal cost: ${usage.get('total_cost', 0):.6f} "
-          f"(in={usage['total_input_tokens']} out={usage['total_output_tokens']})")
+    print(
+        f"\nFinal cost: ${usage.get('total_cost', 0):.6f} "
+        f"(in={usage['total_input_tokens']} out={usage['total_output_tokens']})"
+    )
 
 
 if __name__ == "__main__":

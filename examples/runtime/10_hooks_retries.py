@@ -26,8 +26,8 @@ Prerequisites:
 Run:
   python 10_hooks_retries.py
 """
+
 import os
-import sys
 import tempfile
 
 import senza

@@ -1,17 +1,18 @@
 """Tests for check_stubs.py signature parsing and comparison."""
+
 import sys
 import textwrap
 from pathlib import Path
 
 # Make scripts/ importable
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
-from check_stubs import FuncSig, parse_pyi_signatures
+from check_stubs import FuncSig, compare_signatures, parse_pyi_signatures
 
 
 def test_parse_module_level_function():
-    pyi = textwrap.dedent('''
+    pyi = textwrap.dedent("""
         def create_tool(name: str, callback: Callable[..., Any]) -> Tool: ...
-    ''')
+    """)
     sigs = parse_pyi_signatures.from_string(pyi)
     assert "create_tool" in sigs
     assert sigs["create_tool"].params == ["name", "callback"]
@@ -19,13 +20,13 @@ def test_parse_module_level_function():
 
 
 def test_parse_function_with_defaults():
-    pyi = textwrap.dedent('''
+    pyi = textwrap.dedent("""
         def create_openai_provider(
             api_key: str,
             base_url: Optional[str] = ...,
             parse_reasoning_content: bool = ...,
         ) -> Provider: ...
-    ''')
+    """)
     sigs = parse_pyi_signatures.from_string(pyi)
     sig = sigs["create_openai_provider"]
     assert sig.params == ["api_key", "base_url", "parse_reasoning_content"]
@@ -33,19 +34,16 @@ def test_parse_function_with_defaults():
 
 
 def test_parse_class_method():
-    pyi = textwrap.dedent('''
+    pyi = textwrap.dedent("""
         class HarnessBuilder:
             def provider(self, pattern: str, provider: Provider) -> HarnessBuilder: ...
             def build(self) -> AgentHarness: ...
-    ''')
+    """)
     sigs = parse_pyi_signatures.from_string(pyi)
     assert "HarnessBuilder.provider" in sigs
     assert sigs["HarnessBuilder.provider"].params == ["self", "pattern", "provider"]
     assert "HarnessBuilder.build" in sigs
     assert sigs["HarnessBuilder.build"].params == ["self"]
-
-
-from check_stubs import compare_signatures, introspect_runtime_signatures, FuncSig
 
 
 def test_compare_missing_in_pyi():

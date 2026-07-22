@@ -10,8 +10,8 @@ Demonstrates the AgentHarness runtime methods:
 Run:
   python 04_dynamic_config.py
 """
+
 import os
-import sys
 
 import senza
 

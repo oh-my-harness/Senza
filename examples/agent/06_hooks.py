@@ -30,6 +30,7 @@ Prerequisites:
 Run:
   python 06_hooks.py
 """
+
 import json
 import os
 import sys
@@ -53,11 +54,13 @@ def main():
     weather_tool = senza.create_tool(
         name="get_weather",
         description="Get current weather for a city",
-        parameters_schema=json.dumps({
-            "type": "object",
-            "properties": {"city": {"type": "string", "description": "City name"}},
-            "required": ["city"],
-        }),
+        parameters_schema=json.dumps(
+            {
+                "type": "object",
+                "properties": {"city": {"type": "string", "description": "City name"}},
+                "required": ["city"],
+            }
+        ),
         callback=get_weather,
     )
 
@@ -117,9 +120,7 @@ def main():
     )
 
     print("Prompting (watch the hook trace below)...\n")
-    events = harness.prompt_and_collect(
-        "What's the weather in Tokyo?", timeout_ms=30000
-    )
+    events = harness.prompt_and_collect("What's the weather in Tokyo?", timeout_ms=30000)
 
     text = ""
     for event in events:

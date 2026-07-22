@@ -8,8 +8,8 @@ Demonstrates:
 Run:
   OPENAI_API_KEY=sk-... python 03_executor_steps.py
 """
+
 import os
-import sys
 
 import senza
 
@@ -22,7 +22,12 @@ def main():
     workflow = {
         "entry_step": "generate",
         "steps": [
-            {"id": "generate", "name": "Generate", "prompt": "Generate a random number between 1 and 100. Reply with just the number.", "allowed_tools": []},
+            {
+                "id": "generate",
+                "name": "Generate",
+                "prompt": "Generate a random number between 1 and 100. Reply with just the number.",
+                "allowed_tools": [],
+            },
             {"id": "process", "name": "Process", "executor": "double_it"},
         ],
         "edges": [
@@ -48,10 +53,9 @@ def main():
             return "to:process"
         return "abort:done"
 
-    engine = (
-        senza.WorkflowEngine(workflow, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), senza.create_judge(judge))
-        .with_executor("double_it", senza.create_executor(double_executor))
-    )
+    engine = senza.WorkflowEngine(
+        workflow, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), senza.create_judge(judge)
+    ).with_executor("double_it", senza.create_executor(double_executor))
 
     print("Running mixed LLM + executor workflow...")
     engine.run()

@@ -2,7 +2,6 @@
 
 import senza
 
-
 # ── PyJudge creation tests ───────────────────────────────────────────────────
 
 
@@ -42,9 +41,7 @@ def test_create_executor():
 
 def test_create_executor_with_lambda():
     """create_executor accepts a lambda callback."""
-    executor = senza.create_executor(
-        lambda ctx: {"output": "hello", "structured": {"ok": True}}
-    )
+    executor = senza.create_executor(lambda ctx: {"output": "hello", "structured": {"ok": True}})
     assert executor is not None
 
 
@@ -58,9 +55,7 @@ def test_create_executor_with_lambda():
 def test_judge_and_executor_together():
     """Both a judge and executor can be created in the same session."""
     judge = senza.create_judge(lambda ctx: "retry")
-    executor = senza.create_executor(
-        lambda ctx: {"output": "result", "structured": None}
-    )
+    executor = senza.create_executor(lambda ctx: {"output": "result", "structured": None})
     assert judge is not None
     assert executor is not None
 

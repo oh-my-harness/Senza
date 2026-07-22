@@ -14,8 +14,8 @@ in-progress LLM call — it takes effect at the next step boundary.
 Run:
   python 05_pause_cancel.py
 """
+
 import os
-import sys
 import threading
 import time
 
@@ -30,14 +30,28 @@ def main():
     workflow = {
         "entry_step": "step1",
         "steps": [
-            {"id": "step1", "name": "Step 1", "prompt": "Write a short paragraph about cats.", "allowed_tools": []},
-            {"id": "step2", "name": "Step 2", "prompt": "Write a short paragraph about dogs.", "allowed_tools": []},
+            {
+                "id": "step1",
+                "name": "Step 1",
+                "prompt": "Write a short paragraph about cats.",
+                "allowed_tools": [],
+            },
+            {
+                "id": "step2",
+                "name": "Step 2",
+                "prompt": "Write a short paragraph about dogs.",
+                "allowed_tools": [],
+            },
         ],
         "edges": [{"from": "step1", "to": "step2"}],
     }
 
-    judge = senza.create_judge(lambda ctx: "to:step2" if ctx.get("step_id") == "step1" else "abort:done")
-    engine = senza.WorkflowEngine(workflow, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), judge)
+    judge = senza.create_judge(
+        lambda ctx: "to:step2" if ctx.get("step_id") == "step1" else "abort:done"
+    )
+    engine = senza.WorkflowEngine(
+        workflow, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), judge
+    )
 
     print(f"Task ID: {engine.task_id()}")
     print(f"Initial state: {engine.state()}")

@@ -24,3 +24,15 @@ classifiers = [
 [tool.maturin]
 python-source = "senza-pkg"
 features = ["pyo3/extension-module", "pyo3/abi3-py39", "pyo3/experimental-inspect"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

@@ -1,11 +1,12 @@
 """Tests for newly exposed WorkflowEngine and AgentHarness methods."""
-import json
+
 import tempfile
+
 import pytest
 import senza
 
-
 # ── WorkflowEngine new methods ──────────────────────────────────────────────
+
 
 def _make_workflow():
     return {
@@ -14,8 +15,10 @@ def _make_workflow():
         "edges": [],
     }
 
+
 def _make_provider():
     return senza.create_openai_provider(api_key="test-key")
+
 
 def _make_judge():
     return senza.create_judge(lambda ctx: "abort:done")
@@ -67,10 +70,9 @@ def test_workflow_engine_checkpoint():
 def test_workflow_engine_with_task_store():
     """with_task_store() chains and returns self."""
     with tempfile.TemporaryDirectory() as d:
-        engine = (
-            senza.WorkflowEngine(_make_workflow(), _make_provider(), "gpt-4o", _make_judge())
-            .with_task_store(d)
-        )
+        engine = senza.WorkflowEngine(
+            _make_workflow(), _make_provider(), "gpt-4o", _make_judge()
+        ).with_task_store(d)
         assert engine is not None
         assert engine.task_id().startswith("task-")
 
@@ -91,7 +93,9 @@ def test_workflow_engine_restore_classmethod():
     # Calling restore on a non-existent task should raise KeyError
     with tempfile.TemporaryDirectory() as d:
         with pytest.raises(KeyError, match="workflow not found"):
-            senza.WorkflowEngine.restore(d, "task-nonexistent", _make_provider(), "gpt-4o", _make_judge())
+            senza.WorkflowEngine.restore(
+                d, "task-nonexistent", _make_provider(), "gpt-4o", _make_judge()
+            )
 
 
 def test_workflow_engine_restore_from_step_classmethod():
@@ -103,6 +107,7 @@ def test_workflow_engine_restore_from_step_classmethod():
             senza.WorkflowEngine.restore_from_step(
                 d, "task-nonexistent", "step1", _make_provider(), "gpt-4o", _make_judge()
             )
+
 
 def test_workflow_engine_chained_build():
     """Full builder chain with all new methods."""
@@ -124,6 +129,7 @@ def test_workflow_engine_chained_build():
 
 
 # ── AgentHarness new methods ────────────────────────────────────────────────
+
 
 def _make_harness():
     provider = senza.create_openai_provider(api_key="test-key")
@@ -207,6 +213,7 @@ def test_harness_set_model():
 
 # ── Context manager + docstrings ────────────────────────────────────────────
 
+
 def test_harness_context_manager():
     """AgentHarness supports `with` statement."""
     provider = senza.create_openai_provider(api_key="test-key")
@@ -226,11 +233,7 @@ def test_harness_context_manager():
 def test_harness_context_manager_no_suppress():
     """Context manager does not suppress exceptions."""
     provider = senza.create_openai_provider(api_key="test-key")
-    harness = (
-        senza.HarnessBuilder("gpt-4o")
-        .provider("gpt-*", provider)
-        .build()
-    )
+    harness = senza.HarnessBuilder("gpt-4o").provider("gpt-*", provider).build()
     with pytest.raises(ValueError, match="test error"):
         with harness:
             raise ValueError("test error")

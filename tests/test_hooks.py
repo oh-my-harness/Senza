@@ -1,9 +1,6 @@
 """Tests for hook context converters and hook creation."""
 
-import json
-
 import senza
-
 
 # ── Module surface tests ────────────────────────────────────────────────────
 
@@ -181,7 +178,6 @@ def test_create_before_provider_request_hook_accepts_async_callback():
 
     hook = senza.create_before_provider_request_hook(my_async_hook)
     assert hook is not None
-
 
 
 # ── create_should_stop_hook tests ───────────────────────────────────────────

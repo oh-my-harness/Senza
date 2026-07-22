@@ -1,5 +1,7 @@
 """Smoke tests for Skills loading exposure (G4)."""
+
 import os
+
 import senza
 
 
@@ -52,12 +54,7 @@ def test_builder_skill_then_build(tmp_path):
     _write_skill_md(str(tmp_path), name="my-skill")
     skills = senza.load_skills(str(tmp_path))
     provider = senza.create_openai_provider(api_key="test-key")
-    harness = (
-        senza.HarnessBuilder("gpt-4o")
-        .provider("gpt-*", provider)
-        .skills(skills)
-        .build()
-    )
+    harness = senza.HarnessBuilder("gpt-4o").provider("gpt-*", provider).skills(skills).build()
     assert harness is not None
 
 

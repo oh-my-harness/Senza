@@ -1,5 +1,7 @@
 """Integration test: full SDK flow."""
+
 import json
+
 import senza
 
 
@@ -14,8 +16,12 @@ def test_workflow_engine_full_construction():
     judge = senza.create_judge(lambda ctx: "abort:done")
     engine = senza.WorkflowEngine(workflow, provider, "gpt-4o", judge)
 
-    tool = senza.create_tool("echo", "Echo", json.dumps({"type": "object", "properties": {}}),
-        lambda args, ctx: {"content": [], "terminate": False})
+    tool = senza.create_tool(
+        "echo",
+        "Echo",
+        json.dumps({"type": "object", "properties": {}}),
+        lambda args, ctx: {"content": [], "terminate": False},
+    )
     engine.with_tool(tool)
 
     executor = senza.create_executor(lambda ctx: {"output": "done"})

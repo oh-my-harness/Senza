@@ -12,8 +12,8 @@ Demonstrates:
 Run:
   python 02_conditional_routing.py
 """
+
 import os
-import sys
 
 import senza
 
@@ -26,9 +26,24 @@ def main():
     workflow = {
         "entry_step": "classify",
         "steps": [
-            {"id": "classify", "name": "Classify", "prompt": "Is this urgent? Reply only 'yes' or 'no': A customer is locked out.", "allowed_tools": []},
-            {"id": "urgent", "name": "Urgent Handler", "prompt": "Handle this urgent issue: customer locked out. Acknowledge in one sentence.", "allowed_tools": []},
-            {"id": "normal", "name": "Normal Handler", "prompt": "Queue this for later: customer locked out. Acknowledge in one sentence.", "allowed_tools": []},
+            {
+                "id": "classify",
+                "name": "Classify",
+                "prompt": "Is this urgent? Reply only 'yes' or 'no': A customer is locked out.",
+                "allowed_tools": [],
+            },
+            {
+                "id": "urgent",
+                "name": "Urgent Handler",
+                "prompt": "Handle this urgent issue: customer locked out. Acknowledge in one sentence.",
+                "allowed_tools": [],
+            },
+            {
+                "id": "normal",
+                "name": "Normal Handler",
+                "prompt": "Queue this for later: customer locked out. Acknowledge in one sentence.",
+                "allowed_tools": [],
+            },
         ],
         "edges": [
             {"from": "classify", "to": "urgent"},
@@ -47,7 +62,9 @@ def main():
         return "abort:done"
 
     judge_obj = senza.create_judge(judge)
-    engine = senza.WorkflowEngine(workflow, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), judge_obj)
+    engine = senza.WorkflowEngine(
+        workflow, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), judge_obj
+    )
 
     print(f"Task ID: {engine.task_id()}")
     print("Running conditional workflow...")

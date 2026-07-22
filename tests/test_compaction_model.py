@@ -1,4 +1,5 @@
 """Smoke tests for compaction_model builder method (G5)."""
+
 import senza
 
 

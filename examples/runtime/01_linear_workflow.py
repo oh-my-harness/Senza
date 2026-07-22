@@ -9,8 +9,8 @@ Demonstrates the minimal WorkflowEngine flow:
 Run:
   python 01_linear_workflow.py
 """
+
 import os
-import sys
 
 import senza
 
@@ -23,8 +23,18 @@ def main():
     workflow = {
         "entry_step": "writer",
         "steps": [
-            {"id": "writer", "name": "Writer", "prompt": "Write a one-sentence story about a cat.", "allowed_tools": []},
-            {"id": "reviewer", "name": "Reviewer", "prompt": "Review this story and rate it 1-5: ", "allowed_tools": []},
+            {
+                "id": "writer",
+                "name": "Writer",
+                "prompt": "Write a one-sentence story about a cat.",
+                "allowed_tools": [],
+            },
+            {
+                "id": "reviewer",
+                "name": "Reviewer",
+                "prompt": "Review this story and rate it 1-5: ",
+                "allowed_tools": [],
+            },
         ],
         "edges": [
             {"from": "writer", "to": "reviewer"},
@@ -38,7 +48,9 @@ def main():
         return "abort:done"
 
     judge_obj = senza.create_judge(judge)
-    engine = senza.WorkflowEngine(workflow, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), judge_obj)
+    engine = senza.WorkflowEngine(
+        workflow, provider, os.environ.get("SENZA_MODEL", "gpt-4o"), judge_obj
+    )
 
     print(f"Task ID: {engine.task_id()}")
     print(f"Initial state: {engine.state()}")
