@@ -200,8 +200,136 @@ jobs:
       - name: Check stubs
         run: python scripts/check_stubs.py
 
+  # ── Android cross-compile (arm64 + x86_64) ─────────────────────────────────
+  # Builds Senza wheels for Android, used by Lumo's Chaquopy integration.
+  # These wheels are not published to PyPI (no Android runner on PyPI);
+  # they go only to GitHub Releases.
+  android:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-linux-android
+            abi_tag: arm64_v8a
+          - target: x86_64-linux-android
+            abi_tag: x86_64
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Senza repo
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install maturin
+        run: pip install maturin
+
+      - name: Read runtime pin
+        id: rev
+        shell: bash
+        run: |
+          SHA=$(cat senza-pkg/runtime.lock)
+          echo "rev=$SHA" >> $GITHUB_OUTPUT
+
+      - name: Inject rev into Cargo.toml
+        shell: bash
+        run: perl -pi -e "s/PLACEHOLDER/${{ steps.rev.outputs.rev }}/g" Cargo.toml
+
+      - name: Configure git credentials for private crate deps
+        shell: bash
+        run: |
+          git config --global credential.helper store
+          echo "https://x-access-token:${{ secrets.RUNTIME_PAT }}@github.com" > ~/.git-credentials
+          mkdir -p ~/.cargo
+          printf '[net]\ngit-fetch-with-cli = true\n' > ~/.cargo/config.toml
+
+      - name: Set up Android NDK
+        uses: nttld/setup-ndk@v1
+        id: setup_ndk
+        with:
+          ndk-version: r27c
+
+      - name: Create Python stubs in NDK sysroot
+        shell: bash
+        env:
+          NDK_HOME: ${{ steps.setup_ndk.outputs.ndk-path }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          SYSROOT="$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+          case "$TARGET" in
+            aarch64-linux-android) LIB_DIR="$SYSROOT/usr/lib/aarch64-linux-android" ;;
+            x86_64-linux-android)  LIB_DIR="$SYSROOT/usr/lib/x86_64-linux-android" ;;
+          esac
+          # Empty static lib stub — lets the linker find -lpython3
+          touch /tmp/empty.c
+          "$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar" rcs "$LIB_DIR/libpython3.a" /tmp/empty.c
+          # Minimal .so stub — lets the linker find -lpython3.12
+          "$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/${TARGET}24-clang" -shared -x c -o "$LIB_DIR/libpython3.12.so" /dev/null
+          echo "Created Python stubs in $LIB_DIR"
+
+      - name: Write .cargo/config.toml
+        shell: bash
+        env:
+          NDK_HOME: ${{ steps.setup_ndk.outputs.ndk-path }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          TOOLCHAIN="$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64"
+          mkdir -p .cargo
+          cat > .cargo/config.toml << EOF
+          [net]
+          git-fetch-with-cli = true
+
+          [target.${TARGET}]
+          linker = "$TOOLCHAIN/bin/${TARGET}24-clang"
+          ar = "$TOOLCHAIN/bin/llvm-ar"
+          rustflags = ["-C", "link-arg=-lpython3.12"]
+          EOF
+
+      - name: Build wheel
+        shell: bash
+        env:
+          NDK_HOME: ${{ steps.setup_ndk.outputs.ndk-path }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          TOOLCHAIN="$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64"
+          TARGET_US="${TARGET//-/_}"
+          export "CC_${TARGET_US}=$TOOLCHAIN/bin/${TARGET}24-clang"
+          export "CXX_${TARGET_US}=$TOOLCHAIN/bin/${TARGET}24-clang++"
+          export "AR_${TARGET_US}=$TOOLCHAIN/bin/llvm-ar"
+          export PYO3_PYTHON=python3
+          python3 -m maturin build --release --target "$TARGET"
+
+      - name: Locate wheel
+        shell: bash
+        env:
+          ABI_TAG: ${{ matrix.abi_tag }}
+        run: |
+          wheels=(target/wheels/senza*${ABI_TAG}*.whl)
+          [ -e "${wheels[0]}" ] || { echo "No wheel found"; ls -la target/wheels/; exit 1; }
+          echo "WHEEL=${wheels[0]}" >> $GITHUB_ENV
+
+      - name: Copy wheel to dist
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp ${{ env.WHEEL }} dist/
+
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-android-${{ matrix.abi_tag }}
+          path: dist/*.whl
+
   release:
-    needs: [build, test]
+    needs: [build, test, android]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
 
@@ -222,10 +350,12 @@ jobs:
           files: dist/*.whl
           generate_release_notes: true
 
-      - name: Publish to PyPI
+      - name: Publish to PyPI (exclude Android wheels)
         run: |
           pip install twine
-          twine upload dist/*.whl
+          # Android wheels go to GitHub Releases only, not PyPI
+          shopt -s extglob
+          twine upload dist/!(*android*).whl
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
