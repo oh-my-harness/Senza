@@ -58,9 +58,16 @@ jobs:
           echo "rev=$SHA" >> $GITHUB_OUTPUT
           echo "Pinned runtime SHA: $SHA"
 
-      - name: Inject rev into Cargo.toml
+      - name: Inject rev and version into Cargo.toml
         shell: bash
-        run: perl -pi -e "s/PLACEHOLDER/${{ steps.rev.outputs.rev }}/g" Cargo.toml
+        run: |
+          perl -pi -e "s/PLACEHOLDER/${{ steps.rev.outputs.rev }}/g" Cargo.toml
+          # Extract version from git tag (e.g. refs/tags/v1.0.3 → 1.0.3)
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+            sed -i -E '0,/^version = ".*"/s//version = "'"$VERSION"'"/' Cargo.toml
+            echo "Injected version $VERSION from tag"
+          fi
 
       - name: Configure git credentials for private crate deps
         shell: bash
@@ -160,9 +167,15 @@ jobs:
           SHA=$(cat senza-pkg/runtime.lock)
           echo "rev=$SHA" >> $GITHUB_OUTPUT
 
-      - name: Inject rev into Cargo.toml
+      - name: Inject rev and version into Cargo.toml
         shell: bash
-        run: perl -pi -e "s/PLACEHOLDER/${{ steps.rev.outputs.rev }}/g" Cargo.toml
+        run: |
+          perl -pi -e "s/PLACEHOLDER/${{ steps.rev.outputs.rev }}/g" Cargo.toml
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+            sed -i -E '0,/^version = ".*"/s//version = "'"$VERSION"'"/' Cargo.toml
+            echo "Injected version $VERSION from tag"
+          fi
 
       - name: Configure git credentials for private crate deps
         shell: bash
@@ -239,9 +252,15 @@ jobs:
           SHA=$(cat senza-pkg/runtime.lock)
           echo "rev=$SHA" >> $GITHUB_OUTPUT
 
-      - name: Inject rev into Cargo.toml
+      - name: Inject rev and version into Cargo.toml
         shell: bash
-        run: perl -pi -e "s/PLACEHOLDER/${{ steps.rev.outputs.rev }}/g" Cargo.toml
+        run: |
+          perl -pi -e "s/PLACEHOLDER/${{ steps.rev.outputs.rev }}/g" Cargo.toml
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+            sed -i -E '0,/^version = ".*"/s//version = "'"$VERSION"'"/' Cargo.toml
+            echo "Injected version $VERSION from tag"
+          fi
 
       - name: Configure git credentials for private crate deps
         shell: bash
