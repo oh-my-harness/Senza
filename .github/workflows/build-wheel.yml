@@ -290,7 +290,7 @@ jobs:
           [target.${TARGET}]
           linker = "$TOOLCHAIN/bin/${TARGET}24-clang"
           ar = "$TOOLCHAIN/bin/llvm-ar"
-          rustflags = ["-C", "link-arg=-lpython3.12"]
+          rustflags = ["-C", "link-arg=-Wl,--no-as-needed", "-C", "link-arg=-lpython3.12"]
           EOF
 
       - name: Build wheel

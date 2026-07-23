@@ -62,12 +62,12 @@ mkdir -p "$REPO_ROOT/.cargo"
     echo '[target.aarch64-linux-android]'
     echo "linker = \"$NDK_TOOLCHAIN/bin/aarch64-linux-android24-clang\""
     echo "ar = \"$NDK_TOOLCHAIN/bin/llvm-ar\""
-    echo 'rustflags = ["-C", "link-arg=-lpython3.12"]'
+    echo 'rustflags = ["-C", "link-arg=-Wl,--no-as-needed", "-C", "link-arg=-lpython3.12"]'
     echo ''
     echo '[target.x86_64-linux-android]'
     echo "linker = \"$NDK_TOOLCHAIN/bin/x86_64-linux-android24-clang\""
     echo "ar = \"$NDK_TOOLCHAIN/bin/llvm-ar\""
-    echo 'rustflags = ["-C", "link-arg=-lpython3.12"]'
+    echo 'rustflags = ["-C", "link-arg=-Wl,--no-as-needed", "-C", "link-arg=-lpython3.12"]'
 } > "$REPO_ROOT/.cargo/config.toml"
 
 cd "$REPO_ROOT"
