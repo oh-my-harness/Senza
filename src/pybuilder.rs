@@ -7,6 +7,7 @@
 //! `build()` 释放 GIL 后用全局 tokio runtime 执行 async `HarnessBuilder::build`，
 //! 返回 `PyAgentHarness`（包装真实 `AgentHarness`）。
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use llm_harness_agent::ModelInfo;
@@ -14,6 +15,7 @@ use llm_harness_agent::{Plugin, Skill};
 use llm_harness_loop::config::RetryConfig;
 use llm_harness_loop::final_answer::FinalAnswerMode;
 use llm_harness_runtime::builder::HarnessBuilder;
+use llm_harness_runtime_mcp::builder::HarnessBuilderMcpExt;
 use llm_harness_types::{ExecutionEnv, StreamOptions, Tool, UnsupportedEnv};
 use pyo3::prelude::*;
 
@@ -29,6 +31,7 @@ use crate::pyresponseformat::PyResponseFormat;
 use crate::pyskills::PySkill;
 use crate::pytool::PyToolWrapper;
 
+use crate::pymcp::{PyMcpManager, PyMcpServerConfig};
 use crate::pyworkflow::PyEnvWrapper;
 /// Python 侧的 `HarnessBuilder`。
 ///
@@ -39,6 +42,12 @@ pub struct PyHarnessBuilder {
     builder: Option<HarnessBuilder>,
     /// 可选执行环境；`build()` 时注入。`None` → `UnsupportedEnv`（默认）。
     env: Option<Arc<dyn ExecutionEnv>>,
+    /// MCP server 配置列表（name, config），在 build() 时提升为 McpHarnessBuilder。
+    mcp_servers: Vec<(String, llm_harness_runtime_mcp::config::McpServerConfig)>,
+    /// MCP 配置文件路径列表，在 build() 时异步读取。
+    mcp_config_files: Vec<PathBuf>,
+    /// 外部 McpManager（高级 API），在 build() 时注入。
+    mcp_manager: Option<Arc<llm_harness_runtime_mcp::manager::McpManager>>,
 }
 #[pymethods]
 impl PyHarnessBuilder {
@@ -47,6 +56,9 @@ impl PyHarnessBuilder {
         Self {
             builder: Some(HarnessBuilder::new(model)),
             env: None,
+            mcp_servers: Vec::new(),
+            mcp_config_files: Vec::new(),
+            mcp_manager: None,
         }
     }
 
@@ -415,10 +427,55 @@ impl PyHarnessBuilder {
         slf
     }
 
+    /// 添加一个 MCP server。
+    ///
+    /// 配置在 `build()` 时生效。可多次调用添加多个 server。
+    /// ```python
+    /// builder = HarnessBuilder("model").mcp_server("fs", McpServerConfig.stdio(...))
+    /// ```
+    #[pyo3(text_signature = "($self, name, config)")]
+    fn mcp_server<'a>(
+        mut slf: PyRefMut<'a, Self>,
+        name: String,
+        config: &PyMcpServerConfig,
+    ) -> PyRefMut<'a, Self> {
+        slf.mcp_servers.push((name, config.inner.clone()));
+        slf
+    }
+
+    /// 指定 mcp.json 配置文件路径。
+    /// 文件在 `build()` 时异步读取。可多次调用指定多个文件。
+    #[pyo3(text_signature = "($self, path)")]
+    fn mcp_config_file<'a>(mut slf: PyRefMut<'a, Self>, path: &str) -> PyRefMut<'a, Self> {
+        slf.mcp_config_files.push(PathBuf::from(path));
+        slf
+    }
+
+    /// 传入已创建的 McpManager（高级 API）。
+    /// 用外部 manager 手动管理 MCP server 生命周期。
+    #[pyo3(text_signature = "($self, manager)")]
+    fn with_mcp_manager<'a>(
+        mut slf: PyRefMut<'a, Self>,
+        manager: &PyMcpManager,
+    ) -> PyRefMut<'a, Self> {
+        slf.mcp_manager = Some(manager.inner.clone());
+        slf
+    }
+
     /// 返回 builder 状态摘要。
     fn __repr__(&self) -> String {
         match &self.builder {
-            Some(_) => "HarnessBuilder(pending)".to_string(),
+            Some(_) => {
+                let mcp_flag = if !self.mcp_servers.is_empty()
+                    || !self.mcp_config_files.is_empty()
+                    || self.mcp_manager.is_some()
+                {
+                    ", mcp"
+                } else {
+                    ""
+                };
+                format!("HarnessBuilder(pending{mcp_flag})")
+            }
             None => "HarnessBuilder(consumed)".to_string(),
         }
     }
@@ -439,10 +496,34 @@ impl PyHarnessBuilder {
             .take()
             .unwrap_or_else(|| Arc::new(UnsupportedEnv::new()));
         let rt = runtime(py);
-        let harness = crate::pyerror::detach_catch_panic_result(py, move || {
-            rt.block_on(async move { builder.build(env).await })
-        })?;
-        Py::new(py, PyAgentHarness::new(Arc::new(harness)))
+
+        let has_mcp = !self.mcp_servers.is_empty()
+            || !self.mcp_config_files.is_empty()
+            || self.mcp_manager.is_some();
+
+        if has_mcp {
+            // 提升为 McpHarnessBuilder 并追加 MCP 配置。
+            let mut mcp_builder = builder.with_mcp();
+            for (name, config) in std::mem::take(&mut self.mcp_servers) {
+                mcp_builder = mcp_builder.mcp_server(name, config);
+            }
+            for path in std::mem::take(&mut self.mcp_config_files) {
+                mcp_builder = mcp_builder.mcp_config_file(path);
+            }
+            if let Some(manager) = self.mcp_manager.take() {
+                mcp_builder = mcp_builder.with_mcp_manager(manager);
+            }
+
+            let mcp_harness = crate::pyerror::detach_catch_panic_result(py, move || {
+                rt.block_on(async move { mcp_builder.build(env).await })
+            })?;
+            Py::new(py, PyAgentHarness::new_mcp(Arc::new(mcp_harness)))
+        } else {
+            let harness = crate::pyerror::detach_catch_panic_result(py, move || {
+                rt.block_on(async move { builder.build(env).await })
+            })?;
+            Py::new(py, PyAgentHarness::new_base(Arc::new(harness)))
+        }
     }
 }
 
@@ -459,6 +540,9 @@ impl PyHarnessBuilder {
         Self {
             builder: Some(b),
             env: None,
+            mcp_servers: Vec::new(),
+            mcp_config_files: Vec::new(),
+            mcp_manager: None,
         }
     }
 }

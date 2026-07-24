@@ -18,14 +18,14 @@ use std::sync::Arc;
 
 use futures::future::BoxFuture;
 use llm_harness_types::{
-    AfterProviderResponseHook, AfterToolCallCtx, AfterToolCallDecision, AfterToolCallHook,
-    AfterTurnCtx, AfterTurnHook, AgentContext, AgentError, AgentMessage, AssistantMessage,
-    BeforeCompactCtx, BeforeCompactDecision, BeforeCompactHook, BeforeProviderRequestHook,
-    BeforeRunCtx, BeforeRunHook, BeforeRunResult, BeforeToolCallCtx, BeforeToolCallDecision,
-    BeforeToolCallHook, BeforeTurnCtx, BeforeTurnHook, CompactionResult, ContentBlock,
-    NextTurnDirective, PrepareNextTurnCtx, PrepareNextTurnHook, ProviderResponseInfo,
-    ShouldStopCtx, ShouldStopHook, StopReason, StreamOptions, ToolError, ToolResult,
-    ToolResultPatch, TransformContextHook,
+    AfterProviderResponseCtx, AfterProviderResponseHook, AfterToolCallCtx, AfterToolCallDecision,
+    AfterToolCallHook, AfterTurnCtx, AfterTurnHook, AgentContext, AgentError, AgentMessage,
+    AssistantMessage, BeforeCompactCtx, BeforeCompactDecision, BeforeCompactHook,
+    BeforeProviderRequestCtx, BeforeProviderRequestHook, BeforeRunCtx, BeforeRunHook,
+    BeforeRunResult, BeforeToolCallCtx, BeforeToolCallDecision, BeforeToolCallHook, BeforeTurnCtx,
+    BeforeTurnHook, CompactionResult, ContentBlock, NextTurnDirective, PrepareNextTurnCtx,
+    PrepareNextTurnHook, RunContext, ShouldStopCtx, ShouldStopHook, StopReason, ToolError,
+    ToolResult, ToolResultPatch, TransformContextCtx, TransformContextHook,
 };
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
@@ -91,6 +91,11 @@ pub fn agent_context_to_dict(py: Python<'_>, ctx: &AgentContext) -> PyResult<Py<
     Ok(dict.into_any().unbind())
 }
 
+/// 从 RunContext 提取 run_id 和 started_at 字符串。
+fn run_context_fields(run: &RunContext) -> (String, String) {
+    (run.id().to_string(), run.started_at().to_rfc3339())
+}
+
 // ── BeforeTurnHook ──────────────────────────────────────────────────────────
 
 /// Python callable 包装为 `BeforeTurnHook`。
@@ -121,6 +126,7 @@ impl BeforeTurnHook for PyBeforeTurnHook {
         let turn_index = ctx.turn_index;
         let model = ctx.snapshot.model.clone();
         let system_prompt = ctx.snapshot.system_prompt.clone();
+        let (run_id, started_at) = run_context_fields(ctx.run);
 
         Box::pin(async move {
             let result = tokio::task::spawn_blocking(move || {
@@ -132,6 +138,8 @@ impl BeforeTurnHook for PyBeforeTurnHook {
                         Some(s) => dict.set_item("system_prompt", s)?,
                         None => dict.set_item("system_prompt", py.None())?,
                     }
+                    dict.set_item("run_id", &run_id)?;
+                    dict.set_item("started_at", &started_at)?;
                     call_callback_with_mode(py, &cb, (dict,), is_async)?;
                     Ok::<_, PyErr>(())
                 })
@@ -172,6 +180,7 @@ impl AfterTurnHook for PyAfterTurnHook {
         let is_async = self.is_async;
         let turn_index = ctx.turn_index;
         let new_messages = ctx.new_messages.to_vec();
+        let (run_id, started_at) = run_context_fields(ctx.run);
 
         Box::pin(async move {
             let result = tokio::task::spawn_blocking(move || {
@@ -179,6 +188,8 @@ impl AfterTurnHook for PyAfterTurnHook {
                     let dict = PyDict::new(py);
                     dict.set_item("turn_index", turn_index)?;
                     dict.set_item("new_messages", agent_messages_to_list(py, &new_messages)?)?;
+                    dict.set_item("run_id", &run_id)?;
+                    dict.set_item("started_at", &started_at)?;
                     call_callback_with_mode(py, &cb, (dict,), is_async)?;
                     Ok::<_, PyErr>(())
                 })
@@ -224,6 +235,7 @@ impl BeforeRunHook for PyBeforeRunHook {
         let prompt_text = ctx.prompt_text.to_string();
         let initial_messages = ctx.initial_messages.clone();
         let system_prompt = ctx.system_prompt.clone();
+        let (run_id, started_at) = run_context_fields(ctx.run);
 
         Box::pin(async move {
             let result = tokio::task::spawn_blocking(move || {
@@ -238,6 +250,8 @@ impl BeforeRunHook for PyBeforeRunHook {
                         Some(s) => dict.set_item("system_prompt", s)?,
                         None => dict.set_item("system_prompt", py.None())?,
                     }
+                    dict.set_item("run_id", &run_id)?;
+                    dict.set_item("started_at", &started_at)?;
                     let raw = call_callback_with_mode(py, &cb, (dict,), is_async)?;
                     if raw.is_none() {
                         return Ok::<BeforeRunResult, PyErr>(BeforeRunResult {
@@ -301,15 +315,18 @@ impl PyAfterProviderResponseHook {
 }
 
 impl AfterProviderResponseHook for PyAfterProviderResponseHook {
-    fn after_response<'a>(&'a self, info: &'a ProviderResponseInfo) -> BoxFuture<'a, ()> {
+    fn after_response<'a>(&'a self, ctx: AfterProviderResponseCtx<'a>) -> BoxFuture<'a, ()> {
         let cb = Arc::clone(&self.callback);
         let is_async = self.is_async;
+        let info = ctx.info;
         let status_code = info.status_code;
         let response_headers = info.response_headers.clone();
         let usage = info.usage.clone();
         let latency_ms = info.latency_ms;
         let model = info.model.clone();
         let provider = info.provider.clone();
+        let (run_id, started_at) = run_context_fields(ctx.run);
+        let turn_index = ctx.turn_index;
 
         Box::pin(async move {
             let result = tokio::task::spawn_blocking(move || {
@@ -349,6 +366,9 @@ impl AfterProviderResponseHook for PyAfterProviderResponseHook {
                         Some(p) => dict.set_item("provider", p)?,
                         None => dict.set_item("provider", py.None())?,
                     }
+                    dict.set_item("run_id", &run_id)?;
+                    dict.set_item("started_at", &started_at)?;
+                    dict.set_item("turn_index", turn_index)?;
                     call_callback_with_mode(py, &cb, (dict,), is_async)?;
                     Ok::<_, PyErr>(())
                 })
@@ -384,15 +404,18 @@ impl PyBeforeProviderRequestHook {
 }
 
 impl BeforeProviderRequestHook for PyBeforeProviderRequestHook {
-    fn before_request<'a>(&'a self, opts: &'a mut StreamOptions) -> BoxFuture<'a, ()> {
+    fn before_request<'a>(&'a self, ctx: BeforeProviderRequestCtx<'a>) -> BoxFuture<'a, ()> {
         let cb = Arc::clone(&self.callback);
         let is_async = self.is_async;
+        let opts = ctx.options;
         let timeout_ms = opts.timeout_ms;
         let max_retries = opts.max_retries;
         let max_retry_delay_ms = opts.max_retry_delay_ms;
         let headers = opts.headers.clone();
         let metadata = opts.metadata.clone();
         let cache_config = opts.cache_config.clone();
+        let (run_id, started_at) = run_context_fields(ctx.run);
+        let turn_index = ctx.turn_index;
 
         Box::pin(async move {
             let result = tokio::task::spawn_blocking(move || {
@@ -423,6 +446,9 @@ impl BeforeProviderRequestHook for PyBeforeProviderRequestHook {
                         Some(c) => dict.set_item("cache_config", value_to_pyobject(py, c)?)?,
                         None => dict.set_item("cache_config", py.None())?,
                     }
+                    dict.set_item("run_id", &run_id)?;
+                    dict.set_item("started_at", &started_at)?;
+                    dict.set_item("turn_index", turn_index)?;
                     call_callback_with_mode(py, &cb, (dict,), is_async)?;
                     Ok::<_, PyErr>(())
                 })
@@ -471,6 +497,7 @@ impl BeforeToolCallHook for PyBeforeToolCallHook {
         let turn_index = ctx.turn_index;
         let assistant_json: Value =
             serde_json::to_value(ctx.assistant_message).unwrap_or(Value::Null);
+        let (run_id, started_at) = run_context_fields(ctx.run);
 
         Box::pin(async move {
             let result = tokio::task::spawn_blocking(move || {
@@ -481,6 +508,8 @@ impl BeforeToolCallHook for PyBeforeToolCallHook {
                     dict.set_item("args", value_to_pyobject(py, &args)?)?;
                     dict.set_item("turn_index", turn_index)?;
                     dict.set_item("assistant_message", value_to_pyobject(py, &assistant_json)?)?;
+                    dict.set_item("run_id", &run_id)?;
+                    dict.set_item("started_at", &started_at)?;
                     let raw = call_callback_with_mode(py, &cb, (dict,), is_async)?;
                     parse_before_tool_call_decision(&raw)
                 })
@@ -626,6 +655,7 @@ impl AfterToolCallHook for PyAfterToolCallHook {
             }
             Err(e) => Value::String(e.to_string()),
         };
+        let (run_id, started_at) = run_context_fields(ctx.run);
 
         Box::pin(async move {
             let decision = tokio::task::spawn_blocking(move || {
@@ -638,6 +668,8 @@ impl AfterToolCallHook for PyAfterToolCallHook {
                     dict.set_item("assistant_message", value_to_pyobject(py, &assistant_json)?)?;
                     dict.set_item("result_ok", result_is_ok)?;
                     dict.set_item("result", value_to_pyobject(py, &result_value)?)?;
+                    dict.set_item("run_id", &run_id)?;
+                    dict.set_item("started_at", &started_at)?;
                     let raw = call_callback_with_mode(py, &cb, (dict,), is_async)?;
                     parse_after_tool_call_decision(&raw)
                 })
@@ -730,6 +762,7 @@ impl ShouldStopHook for PyShouldStopHook {
         let stop_reason = stop_reason_to_str(ctx.stop_reason);
         let last_assistant_json: Value =
             serde_json::to_value(ctx.last_assistant).unwrap_or(Value::Null);
+        let (run_id, started_at) = run_context_fields(ctx.run);
 
         Box::pin(async move {
             let result = tokio::task::spawn_blocking(move || {
@@ -741,6 +774,8 @@ impl ShouldStopHook for PyShouldStopHook {
                         "last_assistant",
                         value_to_pyobject(py, &last_assistant_json)?,
                     )?;
+                    dict.set_item("run_id", &run_id)?;
+                    dict.set_item("started_at", &started_at)?;
                     let raw = call_callback_with_mode(py, &cb, (dict,), is_async)?;
                     let should: bool = raw.extract()?;
                     Ok::<_, PyErr>(should)
@@ -935,12 +970,13 @@ impl PyTransformContextHook {
 impl TransformContextHook for PyTransformContextHook {
     fn transform<'a>(
         &'a self,
-        ctx: AgentContext,
+        ctx: TransformContextCtx<'a>,
     ) -> BoxFuture<'a, Result<AgentContext, AgentError>> {
         let cb = Arc::clone(&self.callback);
         let is_async = self.is_async;
-        let system_prompt = ctx.system_prompt.clone();
-        let messages = ctx.messages.clone();
+        let system_prompt = ctx.context.system_prompt.clone();
+        let messages = ctx.context.messages.clone();
+        let (run_id, started_at) = run_context_fields(ctx.run);
 
         Box::pin(async move {
             let result = tokio::task::spawn_blocking(move || {
@@ -952,6 +988,9 @@ impl TransformContextHook for PyTransformContextHook {
                             messages,
                         },
                     )?;
+                    let dict_bound = dict.bind(py).cast::<PyDict>()?;
+                    dict_bound.set_item("run_id", &run_id)?;
+                    dict_bound.set_item("started_at", &started_at)?;
                     let raw = call_callback_with_mode(py, &cb, (dict,), is_async)?;
                     // 期望返回 dict（转换后的 context）
                     let result_dict = raw.cast::<PyDict>()?;
@@ -1045,6 +1084,7 @@ impl PrepareNextTurnHook for PyPrepareNextTurnHook {
                 )
             })
             .collect();
+        let (run_id, started_at) = run_context_fields(ctx.run);
 
         Box::pin(async move {
             let result = tokio::task::spawn_blocking(move || {
@@ -1067,6 +1107,8 @@ impl PrepareNextTurnHook for PyPrepareNextTurnHook {
                         results_list.append(pair)?;
                     }
                     dict.set_item("last_tool_results", results_list)?;
+                    dict.set_item("run_id", &run_id)?;
+                    dict.set_item("started_at", &started_at)?;
                     let raw = call_callback_with_mode(py, &cb, (dict,), is_async)?;
                     // 返回 None 表示沿用当前值
                     if raw.is_none() {

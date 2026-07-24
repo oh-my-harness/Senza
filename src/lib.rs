@@ -16,6 +16,7 @@ pub mod pyharness;
 pub mod pyhooks;
 pub mod pylogging;
 pub mod pyloop;
+pub mod pymcp;
 pub mod pyplugin;
 pub mod pypricing;
 pub mod pyprovider;
@@ -116,6 +117,8 @@ fn senza(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<pyharness::PyHarnessEventIterator>()?;
     m.add_class::<pyworkflow::PyWorkflowEngine>()?;
     m.add_class::<pyworkflow::PyWorkflowEventIterator>()?;
+    m.add_class::<pymcp::PyMcpServerConfig>()?;
+    m.add_class::<pymcp::PyMcpManager>()?;
     Ok(())
 }
 

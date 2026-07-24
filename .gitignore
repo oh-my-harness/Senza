@@ -4,6 +4,7 @@ __pycache__/
 .pytest_cache/
 *.pyc
 docs/superpowers
+.superpowers/
 .cargo/config.toml
 target
 .venv/

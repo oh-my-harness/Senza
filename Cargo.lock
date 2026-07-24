@@ -654,7 +654,7 @@ checksum = "92daf443525c4cce67b150400bc2316076100ce0b3686209eb8cf3c31612e6f0"
 [[package]]
 name = "llm-harness-agent"
 version = "0.3.0"
-source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=f0d034295ea97bddc69d9fa34f4bc73fac64d46c#f0d034295ea97bddc69d9fa34f4bc73fac64d46c"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=1ac46e2ec6664bdc9d57428a7d1d95f576bacf75#1ac46e2ec6664bdc9d57428a7d1d95f576bacf75"
 dependencies = [
  "anyhow",
  "chrono",
@@ -672,7 +672,7 @@ dependencies = [
 [[package]]
 name = "llm-harness-loop"
 version = "0.3.0"
-source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=f0d034295ea97bddc69d9fa34f4bc73fac64d46c#f0d034295ea97bddc69d9fa34f4bc73fac64d46c"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=1ac46e2ec6664bdc9d57428a7d1d95f576bacf75#1ac46e2ec6664bdc9d57428a7d1d95f576bacf75"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -689,7 +689,7 @@ dependencies = [
 
 [[package]]
 name = "llm-harness-py"
-version = "1.0.0"
+version = "1.0.3"
 dependencies = [
  "anyhow",
  "base64",
@@ -698,6 +698,7 @@ dependencies = [
  "llm-harness-agent",
  "llm-harness-loop",
  "llm-harness-runtime",
+ "llm-harness-runtime-mcp",
  "llm-harness-runtime-sandbox-os",
  "llm-harness-runtime-tools",
  "llm-harness-types",
@@ -717,7 +718,7 @@ dependencies = [
 [[package]]
 name = "llm-harness-runtime"
 version = "0.3.0"
-source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=f0d034295ea97bddc69d9fa34f4bc73fac64d46c#f0d034295ea97bddc69d9fa34f4bc73fac64d46c"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=1ac46e2ec6664bdc9d57428a7d1d95f576bacf75#1ac46e2ec6664bdc9d57428a7d1d95f576bacf75"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -741,9 +742,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "llm-harness-runtime-mcp"
+version = "0.3.0"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=1ac46e2ec6664bdc9d57428a7d1d95f576bacf75#1ac46e2ec6664bdc9d57428a7d1d95f576bacf75"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "base64",
+ "futures",
+ "llm-harness-agent",
+ "llm-harness-runtime",
+ "llm-harness-types",
+ "parking_lot",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "llm-harness-runtime-sandbox-os"
 version = "0.3.0"
-source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=f0d034295ea97bddc69d9fa34f4bc73fac64d46c#f0d034295ea97bddc69d9fa34f4bc73fac64d46c"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=1ac46e2ec6664bdc9d57428a7d1d95f576bacf75#1ac46e2ec6664bdc9d57428a7d1d95f576bacf75"
 dependencies = [
  "anyhow",
  "chrono",
@@ -759,7 +783,7 @@ dependencies = [
 [[package]]
 name = "llm-harness-runtime-tools"
 version = "0.3.0"
-source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=f0d034295ea97bddc69d9fa34f4bc73fac64d46c#f0d034295ea97bddc69d9fa34f4bc73fac64d46c"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=1ac46e2ec6664bdc9d57428a7d1d95f576bacf75#1ac46e2ec6664bdc9d57428a7d1d95f576bacf75"
 dependencies = [
  "futures",
  "llm-harness-agent",
@@ -774,7 +798,7 @@ dependencies = [
 [[package]]
 name = "llm-harness-types"
 version = "0.3.0"
-source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=f0d034295ea97bddc69d9fa34f4bc73fac64d46c#f0d034295ea97bddc69d9fa34f4bc73fac64d46c"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=1ac46e2ec6664bdc9d57428a7d1d95f576bacf75#1ac46e2ec6664bdc9d57428a7d1d95f576bacf75"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1327,7 +1351,7 @@ dependencies = [
 [[package]]
 name = "session-viewer"
 version = "0.3.0"
-source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=f0d034295ea97bddc69d9fa34f4bc73fac64d46c#f0d034295ea97bddc69d9fa34f4bc73fac64d46c"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=1ac46e2ec6664bdc9d57428a7d1d95f576bacf75#1ac46e2ec6664bdc9d57428a7d1d95f576bacf75"
 dependencies = [
  "anyhow",
  "chrono",

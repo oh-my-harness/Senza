@@ -7,7 +7,7 @@ use llm_harness_loop::test_utils::{NoOpEnv, test_assistant_message};
 use pyo3::types::PyDictMethods;
 use std::sync::Arc;
 
-use llm_harness_types::{ContentBlock, ToolContext};
+use llm_harness_types::{ContentBlock, RunContext, RunRequest, ToolContext};
 use tokio_util::sync::CancellationToken;
 
 /// 验证 async Python callback 在 tokio runtime 内执行不死锁。
@@ -38,6 +38,7 @@ async fn async_pytool_executes_without_deadlock() {
     });
 
     let ctx = ToolContext {
+        run: Arc::new(RunContext::new(RunRequest::default())),
         env: env.clone(),
         abort: CancellationToken::new(),
         tool_use_id: "test-async-1".into(),

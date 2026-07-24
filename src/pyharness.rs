@@ -16,6 +16,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use llm_harness_agent::{AgentHarness, AgentHarnessEvent};
+use llm_harness_runtime_mcp::builder::McpAgentHarness;
 use llm_harness_types::{HarnessPhase, ThinkingLevel, Tool};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
@@ -344,15 +345,46 @@ async fn recv_event_with_signal_check(
     }
 }
 
+/// 内部 harness 引用：普通或 MCP。
+///
+/// `Mcp` 变体通过 `Deref` 链（`Arc<McpAgentHarness>` → `McpAgentHarness` →
+/// `AgentHarness`）暴露所有 `AgentHarness` 方法。
+#[derive(Clone)]
+pub(crate) enum HarnessRef {
+    Base(Arc<AgentHarness>),
+    Mcp(Arc<McpAgentHarness>),
+}
+
+impl std::ops::Deref for HarnessRef {
+    type Target = AgentHarness;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            HarnessRef::Base(h) => h,
+            HarnessRef::Mcp(h) => h,
+        }
+    }
+}
+
 /// Python 侧的 `AgentHarness` 包装类。
 #[pyclass(name = "AgentHarness")]
 pub struct PyAgentHarness {
-    pub(crate) harness: Arc<AgentHarness>,
+    pub(crate) harness: HarnessRef,
 }
 
 impl PyAgentHarness {
-    pub fn new(harness: Arc<AgentHarness>) -> Self {
-        Self { harness }
+    /// 创建普通 harness 包装。
+    pub fn new_base(harness: Arc<AgentHarness>) -> Self {
+        Self {
+            harness: HarnessRef::Base(harness),
+        }
+    }
+
+    /// 创建 MCP harness 包装。
+    pub fn new_mcp(mcp_harness: Arc<McpAgentHarness>) -> Self {
+        Self {
+            harness: HarnessRef::Mcp(mcp_harness),
+        }
     }
 }
 
@@ -938,6 +970,25 @@ impl PyAgentHarness {
     /// ```
     fn __enter__(slf: Py<Self>) -> Py<Self> {
         slf
+    }
+
+    /// 关闭 MCP runtime（仅 MCP harness 有效）。
+    ///
+    /// 断开所有 MCP server 连接。对普通 harness 无操作。
+    fn shutdown(&self, py: Python<'_>) -> PyResult<()> {
+        if let HarnessRef::Mcp(mcp_harness) = &self.harness {
+            let mcp_harness = mcp_harness.clone();
+            let rt = runtime(py);
+            crate::pyerror::detach_catch_panic_result(py, move || {
+                rt.block_on(async move {
+                    mcp_harness
+                        .shutdown()
+                        .await
+                        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+                })
+            })?;
+        }
+        Ok(())
     }
 
     /// Context manager exit: aborts any in-progress prompt and returns.

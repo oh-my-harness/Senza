@@ -10,6 +10,8 @@ use futures::future::BoxFuture;
 use llm_harness_types::{
     ContentBlock, Tool, ToolContext, ToolError, ToolExecutionMode, ToolResult,
 };
+#[cfg(feature = "test-utils")]
+use llm_harness_types::{RunContext, RunRequest};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use serde_json::Value;
@@ -260,6 +262,7 @@ impl PyToolWrapper {
 fn build_test_ctx() -> ToolContext {
     use llm_harness_loop::test_utils::{NoOpEnv, test_assistant_message};
     ToolContext {
+        run: Arc::new(RunContext::new(RunRequest::default())),
         env: Arc::new(NoOpEnv),
         abort: CancellationToken::new(),
         tool_use_id: "test".into(),

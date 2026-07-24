@@ -11,13 +11,14 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 pyo3 = { version = "0.29", features = ["macros", "py-clone"] }
-llm-harness-types   = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "PLACEHOLDER" }
-llm-harness-loop    = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "PLACEHOLDER" }
-llm-harness-agent   = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "PLACEHOLDER" }
-llm-harness-runtime = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "PLACEHOLDER" }
-llm-harness-runtime-sandbox-os = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "PLACEHOLDER" }
-llm-harness-runtime-tools = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "PLACEHOLDER" }
-session-viewer     = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "PLACEHOLDER" }
+llm-harness-types   = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "1ac46e2ec6664bdc9d57428a7d1d95f576bacf75" }
+llm-harness-loop    = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "1ac46e2ec6664bdc9d57428a7d1d95f576bacf75" }
+llm-harness-agent   = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "1ac46e2ec6664bdc9d57428a7d1d95f576bacf75" }
+llm-harness-runtime = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "1ac46e2ec6664bdc9d57428a7d1d95f576bacf75" }
+llm-harness-runtime-sandbox-os = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "1ac46e2ec6664bdc9d57428a7d1d95f576bacf75" }
+llm-harness-runtime-tools = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "1ac46e2ec6664bdc9d57428a7d1d95f576bacf75" }
+llm-harness-runtime-mcp = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "1ac46e2ec6664bdc9d57428a7d1d95f576bacf75" }
+session-viewer     = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "1ac46e2ec6664bdc9d57428a7d1d95f576bacf75" }
 parking_lot = "0.12"
 chrono = "0.4"
 serde_json = "1"
@@ -33,7 +34,7 @@ tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter", "regist
 [dev-dependencies]
 pyo3 = { version = "0.29", features = ["macros", "py-clone", "auto-initialize"] }
 tempfile = "3"
-llm-harness-loop = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "PLACEHOLDER", features = ["test-utils"] }
+llm-harness-loop = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "1ac46e2ec6664bdc9d57428a7d1d95f576bacf75", features = ["test-utils"] }
 
 [features]
 # extension-module is intentionally NOT in default: it must be off for

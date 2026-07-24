@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use llm_harness_loop::test_utils::{NoOpEnv, test_assistant_message};
-use llm_harness_types::{ContentBlock, ToolContext};
+use llm_harness_types::{ContentBlock, RunContext, RunRequest, ToolContext};
 use tokio_util::sync::CancellationToken;
 
 #[tokio::test]
@@ -37,6 +37,7 @@ async fn pytool_executes_sync_callback() {
 
     // 验证 tool.execute 可在 async 上下文调用
     let ctx = ToolContext {
+        run: Arc::new(RunContext::new(RunRequest::default())),
         env: env.clone(),
         abort: CancellationToken::new(),
         tool_use_id: "test-1".into(),
