@@ -20,7 +20,8 @@ use llm_harness_runtime::workflow::error::WorkflowError;
 use llm_harness_runtime::workflow::executor::{ExecutorCtx, StepExecutor};
 use llm_harness_runtime::workflow::judge::{EdgeConditionJudge, StepCtx, StepTransitionJudge};
 use llm_harness_runtime::workflow::model::{
-    Edge, EdgeCondition, Step, StepRecord, StepResult, Transition, Workflow, WorkflowStatus,
+    Edge, EdgeCondition, LoopConfig, Step, StepRecord, StepResult, Transition, Workflow,
+    WorkflowStatus,
 };
 use llm_harness_types::{AgentError, CostAggregate, ExecutionEnv, Tool, UnsupportedEnv};
 use pyo3::prelude::*;
@@ -472,6 +473,17 @@ pub struct PyExecutorWrapper {
 /// }
 /// ```
 fn dict_to_workflow(dict: &Bound<'_, PyDict>) -> PyResult<Workflow> {
+    // Support two input formats:
+    //   1. "steps" + "edges" + "entry_step" (native Workflow dict)
+    //   2. "stages" (declarative pipeline YAML, each stage has next_on_* routes)
+    // Format 2 is converted to steps + edges internally, eliminating the need
+    // for Python-side PipelineConfig + pipeline_to_workflow_dict converter.
+    if let Some(stages_val) = dict.get_item("stages")? {
+        if !stages_val.is_none() {
+            return stages_to_workflow(dict);
+        }
+    }
+
     let entry_step: String = dict
         .get_item("entry_step")?
         .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("missing 'entry_step'"))?
@@ -563,6 +575,166 @@ fn dict_to_workflow(dict: &Bound<'_, PyDict>) -> PyResult<Workflow> {
             condition,
         });
     }
+
+    Ok(Workflow {
+        entry_step,
+        steps,
+        edges,
+    })
+}
+
+/// Convert a declarative "stages" pipeline dict to a Workflow.
+///
+/// Each stage is a dict with:
+///   - "name": step id (also used as name)
+///   - "type": "tool" | "agent" | "checker" | "terminal"
+///   - "tool": executor name (for tool/checker types)
+///   - "prompt_template": prompt text (for agent type)
+///   - "next_on_*": route keys → target stage name
+///   - "loop": { max_iterations, target_stage } (optional)
+///   - "exit_code": int (for terminal type)
+///   - "message": string (for terminal type)
+///
+/// Non-terminal stages become executor steps (sharing a single executor name
+/// dispatched by step_id). Terminal stages are excluded from steps/edges;
+/// the judge handles them via abort/fail transitions. next_on_* keys pointing
+/// to terminal stages are also excluded from edges.
+fn stages_to_workflow(dict: &Bound<'_, PyDict>) -> PyResult<Workflow> {
+    let stages_val = dict
+        .get_item("stages")?
+        .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("missing 'stages'"))?;
+    let stages_seq = stages_val.cast::<pyo3::types::PyList>()?;
+
+    // Reserved keys in a stage dict that are not route keys.
+    let reserved: std::collections::HashSet<&str> = [
+        "name",
+        "type",
+        "tool",
+        "prompt_template",
+        "output_key",
+        "outputs",
+        "message",
+        "exit_code",
+        "loop",
+    ]
+    .into_iter()
+    .collect();
+
+    // First pass: collect all stage names and identify terminal stages.
+    let mut stage_names: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut terminal_stages: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for item in stages_seq.iter() {
+        let stage_dict = item.cast::<PyDict>()?;
+        let name: String = stage_dict
+            .get_item("name")?
+            .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("missing stage 'name'"))?
+            .extract()?;
+        let stage_type: String = stage_dict
+            .get_item("type")?
+            .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("missing stage 'type'"))?
+            .extract()?;
+        stage_names.insert(name.clone());
+        if stage_type == "terminal" {
+            terminal_stages.insert(name);
+        }
+    }
+
+    let mut steps = Vec::new();
+    let mut edges = Vec::new();
+    let mut entry_step: Option<String> = None;
+
+    for item in stages_seq.iter() {
+        let stage_dict = item.cast::<PyDict>()?;
+        let name: String = stage_dict
+            .get_item("name")?
+            .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("missing stage 'name'"))?
+            .extract()?;
+        let stage_type: String = stage_dict
+            .get_item("type")?
+            .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("missing stage 'type'"))?
+            .extract()?;
+
+        if entry_step.is_none() {
+            entry_step = Some(name.clone());
+        }
+
+        if stage_type == "terminal" {
+            // Terminal stages are not added as steps; they are handled
+            // by the judge when a route points to them.
+            continue;
+        }
+
+        // All non-terminal stages become executor steps.
+        let executor_name: String = stage_dict
+            .get_item("tool")?
+            .map(|v| v.extract::<String>())
+            .transpose()?
+            .unwrap_or_else(|| "eda_executor".to_string());
+
+        let mut step = Step::executor(name.clone(), name.clone(), executor_name, None);
+
+        // Attach loop config if present.
+        if let Some(loop_val) = stage_dict.get_item("loop")? {
+            if !loop_val.is_none() {
+                let loop_dict = loop_val.cast::<PyDict>()?;
+                let max_iterations: u32 = loop_dict
+                    .get_item("max_iterations")?
+                    .ok_or_else(|| {
+                        pyo3::exceptions::PyKeyError::new_err("missing 'max_iterations'")
+                    })?
+                    .extract()?;
+                let target_stage: Option<String> = loop_dict
+                    .get_item("target_stage")?
+                    .filter(|v| !v.is_none())
+                    .map(|v| v.extract())
+                    .transpose()?;
+
+                let mut policy = step.policy().cloned().unwrap_or_default();
+                policy.r#loop = Some(LoopConfig {
+                    max_iterations,
+                    target_stage,
+                    exit_route: None, // resolved from next_on_* edges below
+                });
+                step = step.with_policy(policy);
+            }
+        }
+
+        steps.push(step);
+
+        // Collect next_on_* routes as edges.
+        for key in stage_dict.keys()?.iter() {
+            let key_str: String = key.extract()?;
+            if reserved.contains(key_str.as_str()) {
+                continue;
+            }
+            // This is a next_on_* route key.
+            let target: String = stage_dict
+                .get_item(&key_str)?
+                .ok_or_else(|| {
+                    pyo3::exceptions::PyKeyError::new_err(format!("missing route value for '{key_str}'"))
+                })?
+                .extract()?;
+
+            // Skip edges to terminal stages (handled by judge).
+            if terminal_stages.contains(&target) {
+                continue;
+            }
+
+            // Strip "next_on_" prefix to get the route label.
+            let label = key_str
+                .strip_prefix("next_on_")
+                .unwrap_or(&key_str);
+
+            edges.push(Edge {
+                from: name.clone(),
+                to: target,
+                condition: Some(EdgeCondition::Label(label.to_string())),
+            });
+        }
+    }
+
+    let entry_step = entry_step
+        .ok_or_else(|| pyo3::exceptions::PyValueError::new_err("no stages defined"))?;
 
     Ok(Workflow {
         entry_step,
