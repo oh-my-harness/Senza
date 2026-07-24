@@ -224,8 +224,8 @@ fn create_judge<'py>(
 /// engine = senza.WorkflowEngine(workflow, provider, model, judge)
 /// ```
 ///
-/// 未注册 `.on()` 的 step 会依次尝试：用户 fallback → 声明式 Expr 边 → Abort。
-/// 如果 workflow 有 Expr 条件边，引擎会自动注入 EdgeConditionJudge 作为 fallback。
+/// 未注册 `.on()` 的 step 会依次尝试：用户 fallback → 声明式边 (Expr/Label) → Abort。
+/// 如果 workflow 有声明式条件边 (Expr 或 Label)，引擎会自动注入 EdgeConditionJudge 作为 fallback。
 #[pyfunction]
 fn create_composite_judge<'py>(
     py: Python<'py>,

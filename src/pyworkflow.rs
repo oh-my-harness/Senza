@@ -248,7 +248,7 @@ pub struct PyJudgeWrapper {
 /// Python 多 handler 分发 judge。
 ///
 /// 内部维护 `HashMap<step_id, callback>` + 可选 fallback callback。
-/// 未注册的 step 如果 workflow 有声明式 Expr 边，引擎会自动注入 `EdgeConditionJudge`
+/// 未注册的 step 如果 workflow 有声明式边 (Expr 或 Label)，引擎会自动注入 `EdgeConditionJudge`
 /// 作为 edge_fallback。
 pub struct PyCompositeJudgeInner {
     handlers: std::sync::Mutex<HashMap<String, Arc<Py<PyAny>>>>,
@@ -596,9 +596,10 @@ fn dict_to_workflow(dict: &Bound<'_, PyDict>) -> PyResult<Workflow> {
 ///   - "message": string (for terminal type)
 ///
 /// Non-terminal stages become executor steps (sharing a single executor name
-/// dispatched by step_id). Terminal stages are excluded from steps/edges;
-/// the judge handles them via abort/fail transitions. next_on_* keys pointing
-/// to terminal stages are also excluded from edges.
+/// dispatched by step_id). Terminal stages become `Step::Terminal` entries
+/// (exit_code 0 → Abort/success, non-zero → Fail). Edges to terminal stages
+/// are included so the `EdgeConditionJudge` can route to them; `run_step`
+/// then short-circuits the terminal step without invoking any executor or LLM.
 fn stages_to_workflow(dict: &Bound<'_, PyDict>) -> PyResult<Workflow> {
     let stages_val = dict
         .get_item("stages")?
@@ -620,25 +621,6 @@ fn stages_to_workflow(dict: &Bound<'_, PyDict>) -> PyResult<Workflow> {
     .into_iter()
     .collect();
 
-    // First pass: collect all stage names and identify terminal stages.
-    let mut stage_names: std::collections::HashSet<String> = std::collections::HashSet::new();
-    let mut terminal_stages: std::collections::HashSet<String> = std::collections::HashSet::new();
-    for item in stages_seq.iter() {
-        let stage_dict = item.cast::<PyDict>()?;
-        let name: String = stage_dict
-            .get_item("name")?
-            .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("missing stage 'name'"))?
-            .extract()?;
-        let stage_type: String = stage_dict
-            .get_item("type")?
-            .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("missing stage 'type'"))?
-            .extract()?;
-        stage_names.insert(name.clone());
-        if stage_type == "terminal" {
-            terminal_stages.insert(name);
-        }
-    }
-
     let mut steps = Vec::new();
     let mut edges = Vec::new();
     let mut entry_step: Option<String> = None;
@@ -659,8 +641,23 @@ fn stages_to_workflow(dict: &Bound<'_, PyDict>) -> PyResult<Workflow> {
         }
 
         if stage_type == "terminal" {
-            // Terminal stages are not added as steps; they are handled
-            // by the judge when a route points to them.
+            let exit_code: i32 = stage_dict
+                .get_item("exit_code")?
+                .filter(|v| !v.is_none())
+                .map(|v| v.extract())
+                .transpose()?
+                .unwrap_or(0);
+            let message: Option<String> = stage_dict
+                .get_item("message")?
+                .filter(|v| !v.is_none())
+                .map(|v| v.extract())
+                .transpose()?;
+            steps.push(Step::terminal(
+                name.clone(),
+                name.clone(),
+                exit_code,
+                message,
+            ));
             continue;
         }
 
@@ -711,19 +708,14 @@ fn stages_to_workflow(dict: &Bound<'_, PyDict>) -> PyResult<Workflow> {
             let target: String = stage_dict
                 .get_item(&key_str)?
                 .ok_or_else(|| {
-                    pyo3::exceptions::PyKeyError::new_err(format!("missing route value for '{key_str}'"))
+                    pyo3::exceptions::PyKeyError::new_err(format!(
+                        "missing route value for '{key_str}'"
+                    ))
                 })?
                 .extract()?;
 
-            // Skip edges to terminal stages (handled by judge).
-            if terminal_stages.contains(&target) {
-                continue;
-            }
-
             // Strip "next_on_" prefix to get the route label.
-            let label = key_str
-                .strip_prefix("next_on_")
-                .unwrap_or(&key_str);
+            let label = key_str.strip_prefix("next_on_").unwrap_or(&key_str);
 
             edges.push(Edge {
                 from: name.clone(),
@@ -733,8 +725,8 @@ fn stages_to_workflow(dict: &Bound<'_, PyDict>) -> PyResult<Workflow> {
         }
     }
 
-    let entry_step = entry_step
-        .ok_or_else(|| pyo3::exceptions::PyValueError::new_err("no stages defined"))?;
+    let entry_step =
+        entry_step.ok_or_else(|| pyo3::exceptions::PyValueError::new_err("no stages defined"))?;
 
     Ok(Workflow {
         entry_step,
@@ -944,12 +936,15 @@ fn extract_judge(
     if let Ok(composite) = judge.extract::<PyRef<PyCompositeJudge>>() {
         let inner = composite.inner();
         // Auto-inject EdgeConditionJudge as fallback for unregistered steps
-        // if the workflow has Expr edges.
-        let has_expr_edges = workflow
-            .edges
-            .iter()
-            .any(|e| matches!(e.condition, Some(EdgeCondition::Expr(_))));
-        if has_expr_edges {
+        // if the workflow has declarative edges (Expr or Label). Label edges
+        // are produced by stages_to_workflow() for declarative pipelines.
+        let has_declarative_edges = workflow.edges.iter().any(|e| {
+            matches!(
+                e.condition,
+                Some(EdgeCondition::Expr(_)) | Some(EdgeCondition::Label(_))
+            )
+        });
+        if has_declarative_edges {
             inner.set_edge_fallback(EdgeConditionJudge::from_workflow(workflow));
         }
         return Ok(inner as Arc<dyn StepTransitionJudge>);
