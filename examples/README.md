@@ -19,6 +19,9 @@
 | `11_steering.py` | 多轮对话：`steer`/`follow_up`/`next_turn`/`continue_run` + 队列管理 + 上下文管理器 |
 | `12_session_branch.py` | 会话树：`fork_branch`/`navigate_tree`/`list_branches`/`generate_branch_summary` |
 | `13_anthropic_standalone.py` | Anthropic provider 独立示例 + `version`/`to_json`/`from_json` 工具函数 |
+| `14_code_review.py` | 代码审查 agent：自定义工具读取代码 + 结构化输出 |
+| `15_rag_qa.py` | RAG 问答 agent：知识库检索工具 + 工具增强问答 |
+| `16_mcp_blender.py` | MCP 工具服务器：`McpServerConfig.stdio` + `mcp_server` + `McpManager` 生命周期（blender-mcp） |
 
 ## Runtime 层（`runtime/`）
 
@@ -36,6 +39,7 @@
 | `08_http_executor.py` | `create_http_executor` + httpbin.org 测试 |
 | `09_composite_judge.py` | `create_composite_judge` 按节点路由 + 声明式边 fallback |
 | `10_hooks_retries.py` | `with_hooks` + `with_max_retries` + `restore_from_step` 按步恢复 |
+| `11_data_analysis.py` | 数据分析流水线：LLM 步骤 + executor 步骤 + 共享上下文 |
 
 ## 运行
 
@@ -53,6 +57,12 @@ export OPENAI_API_KEY=sk-...
 # 从本目录运行
 python agent/01_basic_prompt.py
 python runtime/01_linear_workflow.py
+
+# MCP 示例（16_mcp_blender.py）额外需要：
+#   - Blender 运行中，已安装 blender-mcp addon 并点 "Connect to Claude"
+#   - uvx 在 PATH 上（pip install uv）
+#   - OPENAI_MODEL 环境变量（或 SENZA_MODEL）
+python agent/16_mcp_blender.py
 ```
 
 ## 导入
