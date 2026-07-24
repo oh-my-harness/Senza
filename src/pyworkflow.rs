@@ -616,6 +616,7 @@ fn stages_to_workflow(dict: &Bound<'_, PyDict>) -> PyResult<Workflow> {
         "outputs",
         "message",
         "exit_code",
+        "executor",
         "loop",
     ]
     .into_iter()
@@ -662,8 +663,13 @@ fn stages_to_workflow(dict: &Bound<'_, PyDict>) -> PyResult<Workflow> {
         }
 
         // All non-terminal stages become executor steps.
+        // Use "executor" field if present (per-stage executor override);
+        // otherwise default to "eda_executor" (single shared executor that
+        // dispatches by step_id). The "tool" field is domain-specific (used
+        // by the executor callback to select a tool), NOT the executor name.
         let executor_name: String = stage_dict
-            .get_item("tool")?
+            .get_item("executor")?
+            .filter(|v| !v.is_none())
             .map(|v| v.extract::<String>())
             .transpose()?
             .unwrap_or_else(|| "eda_executor".to_string());
