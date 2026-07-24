@@ -702,7 +702,7 @@ fn stages_to_workflow(dict: &Bound<'_, PyDict>) -> PyResult<Workflow> {
         steps.push(step);
 
         // Collect next_on_* routes as edges.
-        for key in stage_dict.keys()?.iter() {
+        for key in stage_dict.keys().iter() {
             let key_str: String = key.extract()?;
             if reserved.contains(key_str.as_str()) {
                 continue;
