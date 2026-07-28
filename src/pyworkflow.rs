@@ -20,8 +20,8 @@ use llm_harness_runtime::workflow::error::WorkflowError;
 use llm_harness_runtime::workflow::executor::{ExecutorCtx, StepExecutor};
 use llm_harness_runtime::workflow::judge::{EdgeConditionJudge, StepCtx, StepTransitionJudge};
 use llm_harness_runtime::workflow::model::{
-    Edge, EdgeCondition, LoopConfig, Step, StepRecord, StepResult, Transition, Workflow,
-    WorkflowStatus,
+    Edge, EdgeCondition, LoopConfig, Step, StepExecutionPolicy, StepRecord, StepResult,
+    Transition, Workflow, WorkflowStatus,
 };
 use llm_harness_types::{AgentError, CostAggregate, ExecutionEnv, Tool, UnsupportedEnv};
 use pyo3::prelude::*;
@@ -456,6 +456,31 @@ pub struct PyExecutorWrapper {
     pub executor: Arc<dyn StepExecutor>,
 }
 
+/// Parse optional `policy` key from a step dict into `StepExecutionPolicy`.
+///
+/// Expected format:
+/// ```python
+/// {"policy": {"max_attempts": 3, "retry_backoff_ms": 2000, "timeout_ms": 120000}}
+/// ```
+fn parse_step_policy(step_dict: &Bound<'_, PyDict>) -> PyResult<Option<StepExecutionPolicy>> {
+    let policy_val = match step_dict.get_item("policy")? {
+        Some(v) if !v.is_none() => v,
+        _ => return Ok(None),
+    };
+    let policy_dict = policy_val.cast::<PyDict>()?;
+    let mut policy = StepExecutionPolicy::default();
+    if let Some(v) = policy_dict.get_item("max_attempts")?.filter(|v| !v.is_none()) {
+        policy.max_attempts = Some(v.extract::<u32>()?);
+    }
+    if let Some(v) = policy_dict.get_item("retry_backoff_ms")?.filter(|v| !v.is_none()) {
+        policy.retry_backoff_ms = Some(v.extract::<u64>()?);
+    }
+    if let Some(v) = policy_dict.get_item("timeout_ms")?.filter(|v| !v.is_none()) {
+        policy.timeout_ms = Some(v.extract::<u64>()?);
+    }
+    Ok(Some(policy))
+}
+
 // ── dict_to_workflow ────────────────────────────────────────────────────────
 
 /// 将 Python dict 解析为 `Workflow` 结构。
@@ -515,7 +540,11 @@ fn dict_to_workflow(dict: &Bound<'_, PyDict>) -> PyResult<Workflow> {
                 .filter(|v| !v.is_none())
                 .map(|v| pyobject_to_value(&v))
                 .transpose()?;
-            steps.push(Step::executor(id, name, executor_name, config));
+            let mut step = Step::executor(id, name, executor_name, config);
+            if let Some(policy) = parse_step_policy(&step_dict)? {
+                step = step.with_policy(policy);
+            }
+            steps.push(step);
         } else {
             // LLM step
             let prompt: String = step_dict
@@ -531,7 +560,11 @@ fn dict_to_workflow(dict: &Bound<'_, PyDict>) -> PyResult<Workflow> {
                 .get_item("structured")?
                 .filter(|v| !v.is_none())
                 .and_then(|v| v.extract::<bool>().ok());
-            steps.push(Step::llm(id, name, prompt, allowed_tools).with_structured(structured));
+            let mut step = Step::llm(id, name, prompt, allowed_tools).with_structured(structured);
+            if let Some(policy) = parse_step_policy(&step_dict)? {
+                step = step.with_policy(policy);
+            }
+            steps.push(step);
         }
     }
 
