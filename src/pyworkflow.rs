@@ -2073,3 +2073,174 @@ impl PyWorkflowEventIterator {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{dict_to_workflow, parse_step_policy};
+    use llm_harness_runtime::workflow::model::{Step, StepExecutionPolicy, Workflow};
+    use pyo3::types::PyDictMethods;
+    use pyo3::{Py, Python};
+
+    /// Build an owned Python dict via inline source.
+    /// The source must bind a variable named `d` to the desired dict.
+    fn make_dict(source: &str) -> Py<pyo3::types::PyDict> {
+        Python::attach(|py| {
+            let locals = pyo3::types::PyDict::new(py);
+            py.run(std::ffi::CString::new(source).unwrap().as_c_str(), None, Some(&locals))
+                .unwrap();
+            let obj = locals.get_item("d").unwrap().expect("missing 'd' in source");
+            obj.cast::<pyo3::types::PyDict>().unwrap().clone().unbind()
+        })
+    }
+
+    fn policy_of(step: &Step) -> Option<&StepExecutionPolicy> {
+        step.policy()
+    }
+
+    /// Parse a step-level dict's policy via the real code path.
+    fn parse_policy(source: &str) -> Option<StepExecutionPolicy> {
+        let dict = make_dict(source);
+        Python::attach(|py| parse_step_policy(&dict.bind(py))).unwrap()
+    }
+
+    /// Parse a full workflow dict via the real code path.
+    fn parse_workflow(source: &str) -> Workflow {
+        let dict = make_dict(source);
+        Python::attach(|py| dict_to_workflow(&dict.bind(py))).unwrap()
+    }
+
+    /// Parse a step-level dict's policy, expecting an error.
+    fn parse_policy_err(source: &str) -> String {
+        let dict = make_dict(source);
+        Python::attach(|py| {
+            match parse_step_policy(&dict.bind(py)) {
+                Ok(v) => format!("expected error, got Ok({:?})", v),
+                Err(e) => e.to_string(),
+            }
+        })
+    }
+
+    // ── parse_step_policy unit tests ─────────────────────────────────────
+
+    #[test]
+    fn parse_step_policy_full() {
+        let policy = parse_policy(
+            r#"d = {"policy": {"max_attempts": 3, "retry_backoff_ms": 2000, "timeout_ms": 120000}}"#,
+        ).unwrap();
+        assert_eq!(policy.max_attempts, Some(3));
+        assert_eq!(policy.retry_backoff_ms, Some(2000));
+        assert_eq!(policy.timeout_ms, Some(120000));
+    }
+
+    #[test]
+    fn parse_step_policy_partial_only_sets_provided_fields() {
+        let policy = parse_policy(r#"d = {"policy": {"timeout_ms": 5000}}"#).unwrap();
+        assert_eq!(policy.timeout_ms, Some(5000));
+        assert_eq!(policy.max_attempts, None);
+        assert_eq!(policy.retry_backoff_ms, None);
+    }
+
+    #[test]
+    fn parse_step_policy_explicit_none_is_absent() {
+        let opt = parse_policy(r#"d = {"policy": None}"#);
+        assert!(opt.is_none(), "explicit None should be treated as absent");
+    }
+
+    #[test]
+    fn parse_step_policy_missing_key_is_none() {
+        let opt = parse_policy(r#"d = {"id": "s1"}"#);
+        assert!(opt.is_none(), "missing 'policy' key should yield None");
+    }
+
+    #[test]
+    fn parse_step_policy_partial_with_none_values() {
+        let policy = parse_policy(
+            r#"d = {"policy": {"max_attempts": None, "timeout_ms": 5000}}"#,
+        ).unwrap();
+        assert_eq!(policy.max_attempts, None);
+        assert_eq!(policy.timeout_ms, Some(5000));
+    }
+
+    #[test]
+    fn parse_step_policy_non_dict_value_errors() {
+        let msg = parse_policy_err(r#"d = {"policy": 3}"#);
+        assert!(!msg.starts_with("expected error"), "non-dict policy must raise: {msg}");
+    }
+
+    #[test]
+    fn parse_step_policy_wrong_field_type_errors() {
+        let msg = parse_policy_err(r#"d = {"policy": {"max_attempts": "lots"}}"#);
+        assert!(!msg.starts_with("expected error"), "wrong field type must raise: {msg}");
+    }
+
+    // ── dict_to_workflow integration tests ───────────────────────────────
+
+    #[test]
+    fn dict_to_workflow_applies_policy_to_llm_step() {
+        let wf = parse_workflow(
+            r#"d = {
+                "entry_step": "s1",
+                "steps": [
+                    {"id": "s1", "name": "S1", "prompt": "hi", "policy": {"max_attempts": 3, "timeout_ms": 10000}},
+                ],
+                "edges": [],
+            }"#,
+        );
+        let step = wf.steps.iter().find(|s| s.id() == "s1").expect("step s1");
+        let policy = policy_of(step).expect("policy should be set");
+        assert_eq!(policy.max_attempts, Some(3));
+        assert_eq!(policy.timeout_ms, Some(10000));
+        assert_eq!(policy.retry_backoff_ms, None);
+    }
+
+    #[test]
+    fn dict_to_workflow_applies_policy_to_executor_step() {
+        let wf = parse_workflow(
+            r#"d = {
+                "entry_step": "s1",
+                "steps": [
+                    {"id": "s1", "name": "S1", "executor": "sh", "executor_config": {"cmd": "echo"}, "policy": {"max_attempts": 5, "retry_backoff_ms": 500}},
+                ],
+                "edges": [],
+            }"#,
+        );
+        let step = wf.steps.iter().find(|s| s.id() == "s1").expect("step s1");
+        let policy = policy_of(step).expect("policy should be set");
+        assert_eq!(policy.max_attempts, Some(5));
+        assert_eq!(policy.retry_backoff_ms, Some(500));
+        assert_eq!(policy.timeout_ms, None);
+    }
+
+    #[test]
+    fn dict_to_workflow_no_policy_preserves_default() {
+        let wf = parse_workflow(
+            r#"d = {
+                "entry_step": "s1",
+                "steps": [
+                    {"id": "s1", "name": "S1", "prompt": "hi"},
+                ],
+                "edges": [],
+            }"#,
+        );
+        let step = wf.steps.iter().find(|s| s.id() == "s1").expect("step s1");
+        assert!(policy_of(step).is_none(), "absent policy must leave step.policy() as None");
+    }
+
+    #[test]
+    fn dict_to_workflow_partial_policy_on_llm_step() {
+        let wf = parse_workflow(
+            r#"d = {
+                "entry_step": "s1",
+                "steps": [
+                    {"id": "s1", "name": "S1", "prompt": "hi", "policy": {"max_attempts": 2}},
+                ],
+                "edges": [],
+            }"#,
+        );
+        let step = wf.steps.iter().find(|s| s.id() == "s1").expect("step s1");
+        let policy = policy_of(step).expect("policy should be set");
+        assert_eq!(policy.max_attempts, Some(2));
+        assert_eq!(policy.timeout_ms, None);
+        assert_eq!(policy.retry_backoff_ms, None);
+    }
+}
