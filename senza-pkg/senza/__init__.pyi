@@ -172,6 +172,20 @@ def create_plugin(
 
 def create_fs_tools_plugin() -> Plugin: ...
 
+# ── Knowledge ────────────────────────────────────────────────────────────────
+
+class KnowledgeSource:
+    """Opaque knowledge source handle (from create_local_knowledge_source)."""
+
+def create_local_knowledge_source(
+    path: str,
+    source_id: str,
+    name: Optional[str] = None,
+    description: Optional[str] = None,
+    domains: Optional[list[str]] = None,
+    max_document_bytes: int = 1048576,
+) -> KnowledgeSource: ...
+
 # ── Strategy plugins ──────────────────────────────────────────────────────────
 
 def create_safety_defaults_plugin() -> Plugin: ...
