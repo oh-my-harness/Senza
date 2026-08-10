@@ -82,6 +82,7 @@ fn senza(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
         strategy::pyprojectinstr::create_project_instruction_plugin,
         m
     )?)?;
+    m.add_function(wrap_pyfunction!(strategy::pyaudit::create_audit_plugin, m)?)?;
     m.add_function(wrap_pyfunction!(create_before_turn_hook, m)?)?;
     m.add_class::<crate::core::pyeventstream::PyEventStreamHandle>()?;
     m.add_class::<crate::core::pyeventstream::PyWaitForExternalEventTool>()?;
