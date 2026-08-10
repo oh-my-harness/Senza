@@ -7,3 +7,4 @@ pub mod pyprojectinstr;
 pub mod pysafety;
 pub mod pysourcetag;
 pub mod pystatuspanel;
+pub mod pytoolguard;
