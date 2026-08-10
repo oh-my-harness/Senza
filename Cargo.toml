@@ -22,7 +22,7 @@ session-viewer     = { git = "https://github.com/oh-my-harness/llm-harness-runti
 llm-harness-strategy = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "5eae99ed1c42dd558529bede9957518ba15eef5c" }
 llm-harness-runtime-knowledge = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "5eae99ed1c42dd558529bede9957518ba15eef5c" }
 llm-harness-runtime-knowledge-local = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "5eae99ed1c42dd558529bede9957518ba15eef5c" }
-llm-harness-runtime-session-recall = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "5eae99ed1c42dd558529bede9957518ba15eef5c" }
+llm-harness-runtime-session-recall = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "5eae99ed1c42dd558529bede9957518ba15eef5c", features = ["sqlite"] }
 llm-harness-runtime-memory = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "5eae99ed1c42dd558529bede9957518ba15eef5c" }
 llm-harness-runtime-audit-jsonl = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "5eae99ed1c42dd558529bede9957518ba15eef5c" }
 llm-harness-runtime-trace-otel = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "5eae99ed1c42dd558529bede9957518ba15eef5c" }
