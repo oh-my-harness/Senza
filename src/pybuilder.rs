@@ -421,8 +421,11 @@ impl PyHarnessBuilder {
         exceeded_hook: Option<&Bound<'_, PyBudgetExceededHook>>,
     ) -> PyRefMut<'a, Self> {
         if let Some(b) = slf.builder.take() {
+            let ledger = llm_harness_runtime::control::cost::UsageLedger::default();
+            let cost_state = ledger.shared_state();
             let hook = exceeded_hook.map(|h| h.borrow().hook.clone());
-            slf.builder = Some(b.budget(limit, hook));
+            let adapter = llm_harness_strategy::BudgetControlAdapter::new(cost_state, limit, hook);
+            slf.builder = Some(b.usage_ledger(ledger).should_stop_hook(Arc::new(adapter)));
         }
         slf
     }

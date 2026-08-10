@@ -12,6 +12,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "ambient-authority"
+version = "0.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9d4ee0d472d1cd2e28c97dfa124b3d8d992e10eb0a035f33f5d12e3a177ba3b"
+
+[[package]]
 name = "android_system_properties"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -105,6 +111,36 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
+name = "cap-primitives"
+version = "3.4.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6cf3aea8a5081171859ef57bc1606b1df6999df4f1110f8eef68b30098d1d3a"
+dependencies = [
+ "ambient-authority",
+ "fs-set-times",
+ "io-extras",
+ "io-lifetimes",
+ "ipnet",
+ "maybe-owned",
+ "rustix",
+ "rustix-linux-procfs",
+ "windows-sys 0.52.0",
+ "winx",
+]
+
+[[package]]
+name = "cap-std"
+version = "3.4.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6dc3090992a735d23219de5c204927163d922f42f575a0189b005c62d37549a"
+dependencies = [
+ "cap-primitives",
+ "io-extras",
+ "io-lifetimes",
+ "rustix",
+]
+
+[[package]]
 name = "cc"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -193,6 +229,7 @@ checksum = "9ed9a281f7bc9b7576e61468ba615a66a5c8cfdff42420a70aa82701a3b1e292"
 dependencies = [
  "block-buffer",
  "crypto-common",
+ "subtle",
 ]
 
 [[package]]
@@ -246,6 +283,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb4cb245038516f5f85277875cdaa4f7d2c9a0fa0468de06ed190163b1581fcf"
 dependencies = [
  "percent-encoding",
+]
+
+[[package]]
+name = "fs-set-times"
+version = "0.20.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "94e7099f6313ecacbe1256e8ff9d617b75d1bcb16a6fddef94866d225a01a14a"
+dependencies = [
+ "io-lifetimes",
+ "rustix",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -374,10 +422,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "glob"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e4eba85ea1d0a966a983acd07deee566e67395d2d96b6fb39e62b5a833f1eb0b"
+
+[[package]]
 name = "heck"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
+
+[[package]]
+name = "hmac"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c49c37c09c17a53d937dfbb742eb3a961d65a994e6bcdcf37e7399d0cc8ab5e"
+dependencies = [
+ "digest",
+]
 
 [[package]]
 name = "http"
@@ -605,6 +668,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "io-extras"
+version = "0.18.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2285ddfe3054097ef4b2fe909ef8c3bcd1ea52a8f0d274416caebeef39f04a65"
+dependencies = [
+ "io-lifetimes",
+ "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "io-lifetimes"
+version = "2.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "06432fb54d3be7964ecd3649233cddf80db2832f47fec34c01f65b3d9d774983"
+
+[[package]]
 name = "ipnet"
 version = "2.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -653,8 +732,8 @@ checksum = "92daf443525c4cce67b150400bc2316076100ce0b3686209eb8cf3c31612e6f0"
 
 [[package]]
 name = "llm-harness-agent"
-version = "0.3.0"
-source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=247e380ed4d9ea1b0d2b2f275637c4cab27acc66#247e380ed4d9ea1b0d2b2f275637c4cab27acc66"
+version = "0.5.0"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=5eae99ed1c42dd558529bede9957518ba15eef5c#5eae99ed1c42dd558529bede9957518ba15eef5c"
 dependencies = [
  "anyhow",
  "chrono",
@@ -671,12 +750,13 @@ dependencies = [
 
 [[package]]
 name = "llm-harness-loop"
-version = "0.3.0"
-source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=247e380ed4d9ea1b0d2b2f275637c4cab27acc66#247e380ed4d9ea1b0d2b2f275637c4cab27acc66"
+version = "0.5.0"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=5eae99ed1c42dd558529bede9957518ba15eef5c#5eae99ed1c42dd558529bede9957518ba15eef5c"
 dependencies = [
  "async-stream",
  "async-trait",
  "chrono",
+ "fastrand",
  "futures",
  "llm-harness-types",
  "llm_adapter",
@@ -684,6 +764,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tokio-util",
+ "tracing",
  "uuid",
 ]
 
@@ -698,9 +779,18 @@ dependencies = [
  "llm-harness-agent",
  "llm-harness-loop",
  "llm-harness-runtime",
+ "llm-harness-runtime-audit-jsonl",
+ "llm-harness-runtime-knowledge",
+ "llm-harness-runtime-knowledge-local",
  "llm-harness-runtime-mcp",
+ "llm-harness-runtime-memory",
+ "llm-harness-runtime-sandbox-bwrap",
  "llm-harness-runtime-sandbox-os",
+ "llm-harness-runtime-sandbox-seatbelt",
+ "llm-harness-runtime-session-recall",
  "llm-harness-runtime-tools",
+ "llm-harness-runtime-trace-otel",
+ "llm-harness-strategy",
  "llm-harness-types",
  "parking_lot",
  "pyo3",
@@ -717,8 +807,8 @@ dependencies = [
 
 [[package]]
 name = "llm-harness-runtime"
-version = "0.3.0"
-source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=247e380ed4d9ea1b0d2b2f275637c4cab27acc66#247e380ed4d9ea1b0d2b2f275637c4cab27acc66"
+version = "0.5.0"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=5eae99ed1c42dd558529bede9957518ba15eef5c#5eae99ed1c42dd558529bede9957518ba15eef5c"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -742,9 +832,58 @@ dependencies = [
 ]
 
 [[package]]
+name = "llm-harness-runtime-audit-jsonl"
+version = "0.5.0"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=5eae99ed1c42dd558529bede9957518ba15eef5c#5eae99ed1c42dd558529bede9957518ba15eef5c"
+dependencies = [
+ "anyhow",
+ "futures",
+ "llm-harness-types",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+]
+
+[[package]]
+name = "llm-harness-runtime-knowledge"
+version = "0.5.0"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=5eae99ed1c42dd558529bede9957518ba15eef5c#5eae99ed1c42dd558529bede9957518ba15eef5c"
+dependencies = [
+ "base64",
+ "chrono",
+ "futures",
+ "hmac",
+ "llm-harness-agent",
+ "llm-harness-types",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror",
+ "tokio-util",
+]
+
+[[package]]
+name = "llm-harness-runtime-knowledge-local"
+version = "0.5.0"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=5eae99ed1c42dd558529bede9957518ba15eef5c#5eae99ed1c42dd558529bede9957518ba15eef5c"
+dependencies = [
+ "base64",
+ "chrono",
+ "futures",
+ "hmac",
+ "llm-harness-runtime-knowledge",
+ "llm-harness-types",
+ "sha2",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
 name = "llm-harness-runtime-mcp"
-version = "0.3.0"
-source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=247e380ed4d9ea1b0d2b2f275637c4cab27acc66#247e380ed4d9ea1b0d2b2f275637c4cab27acc66"
+version = "0.5.0"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=5eae99ed1c42dd558529bede9957518ba15eef5c#5eae99ed1c42dd558529bede9957518ba15eef5c"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -757,6 +896,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "sha2",
  "thiserror",
  "tokio",
  "tokio-util",
@@ -765,9 +905,46 @@ dependencies = [
 ]
 
 [[package]]
+name = "llm-harness-runtime-memory"
+version = "0.5.0"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=5eae99ed1c42dd558529bede9957518ba15eef5c#5eae99ed1c42dd558529bede9957518ba15eef5c"
+dependencies = [
+ "base64",
+ "chrono",
+ "futures",
+ "hmac",
+ "llm-harness-agent",
+ "llm-harness-runtime-knowledge",
+ "llm-harness-types",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror",
+ "tokio-util",
+ "zeroize",
+]
+
+[[package]]
+name = "llm-harness-runtime-sandbox-bwrap"
+version = "0.5.0"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=5eae99ed1c42dd558529bede9957518ba15eef5c#5eae99ed1c42dd558529bede9957518ba15eef5c"
+dependencies = [
+ "anyhow",
+ "cap-std",
+ "chrono",
+ "futures",
+ "llm-harness-runtime",
+ "llm-harness-runtime-sandbox-os",
+ "llm-harness-types",
+ "tokio",
+ "tokio-util",
+ "uuid",
+]
+
+[[package]]
 name = "llm-harness-runtime-sandbox-os"
-version = "0.3.0"
-source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=247e380ed4d9ea1b0d2b2f275637c4cab27acc66#247e380ed4d9ea1b0d2b2f275637c4cab27acc66"
+version = "0.5.0"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=5eae99ed1c42dd558529bede9957518ba15eef5c#5eae99ed1c42dd558529bede9957518ba15eef5c"
 dependencies = [
  "anyhow",
  "chrono",
@@ -781,24 +958,88 @@ dependencies = [
 ]
 
 [[package]]
+name = "llm-harness-runtime-sandbox-seatbelt"
+version = "0.5.0"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=5eae99ed1c42dd558529bede9957518ba15eef5c#5eae99ed1c42dd558529bede9957518ba15eef5c"
+dependencies = [
+ "anyhow",
+ "futures",
+ "llm-harness-runtime",
+ "llm-harness-types",
+]
+
+[[package]]
+name = "llm-harness-runtime-session-recall"
+version = "0.5.0"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=5eae99ed1c42dd558529bede9957518ba15eef5c#5eae99ed1c42dd558529bede9957518ba15eef5c"
+dependencies = [
+ "base64",
+ "chrono",
+ "futures",
+ "llm-harness-agent",
+ "llm-harness-runtime-knowledge",
+ "llm-harness-types",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+ "tracing",
+]
+
+[[package]]
 name = "llm-harness-runtime-tools"
-version = "0.3.0"
-source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=247e380ed4d9ea1b0d2b2f275637c4cab27acc66#247e380ed4d9ea1b0d2b2f275637c4cab27acc66"
+version = "0.5.0"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=5eae99ed1c42dd558529bede9957518ba15eef5c#5eae99ed1c42dd558529bede9957518ba15eef5c"
 dependencies = [
  "futures",
+ "glob",
  "llm-harness-agent",
  "llm-harness-types",
  "parking_lot",
+ "regex",
  "serde",
  "serde_json",
  "sha2",
  "tokio",
+ "tokio-util",
+]
+
+[[package]]
+name = "llm-harness-runtime-trace-otel"
+version = "0.5.0"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=5eae99ed1c42dd558529bede9957518ba15eef5c#5eae99ed1c42dd558529bede9957518ba15eef5c"
+dependencies = [
+ "anyhow",
+ "futures",
+ "llm-harness-runtime",
+]
+
+[[package]]
+name = "llm-harness-strategy"
+version = "0.5.0"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=5eae99ed1c42dd558529bede9957518ba15eef5c#5eae99ed1c42dd558529bede9957518ba15eef5c"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "futures",
+ "llm-harness-agent",
+ "llm-harness-types",
+ "parking_lot",
+ "regex",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]
 name = "llm-harness-types"
-version = "0.3.0"
-source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=247e380ed4d9ea1b0d2b2f275637c4cab27acc66#247e380ed4d9ea1b0d2b2f275637c4cab27acc66"
+version = "0.5.0"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=5eae99ed1c42dd558529bede9957518ba15eef5c#5eae99ed1c42dd558529bede9957518ba15eef5c"
 dependencies = [
  "anyhow",
  "chrono",
@@ -815,7 +1056,7 @@ dependencies = [
 [[package]]
 name = "llm_adapter"
 version = "0.1.0"
-source = "git+https://github.com/oh-my-harness/llm-api-adapter?rev=16a22ad284b8deb8c3a77664a0876f565f4a6eb9#16a22ad284b8deb8c3a77664a0876f565f4a6eb9"
+source = "git+https://github.com/oh-my-harness/llm-api-adapter?rev=193117cbb8398aadeca74a925cfd699617f8c861#193117cbb8398aadeca74a925cfd699617f8c861"
 dependencies = [
  "async-trait",
  "eventsource-stream",
@@ -857,6 +1098,12 @@ checksum = "d1525a2a28c7f4fa0fc98bb91ae755d1e2d1505079e05539e35bc876b5d65ae9"
 dependencies = [
  "regex-automata",
 ]
+
+[[package]]
+name = "maybe-owned"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4facc753ae494aeb6e3c22f839b158aebd4f9270f55cd3c79906c45476c47ab4"
 
 [[package]]
 name = "memchr"
@@ -1241,6 +1488,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustix-linux-procfs"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2fc84bf7e9aa16c4f2c758f27412dc9841341e16aa682d9c7ac308fe3ee12056"
+dependencies = [
+ "once_cell",
+ "rustix",
+]
+
+[[package]]
 name = "rustls"
 version = "0.23.42"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1350,8 +1607,8 @@ dependencies = [
 
 [[package]]
 name = "session-viewer"
-version = "0.3.0"
-source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=247e380ed4d9ea1b0d2b2f275637c4cab27acc66#247e380ed4d9ea1b0d2b2f275637c4cab27acc66"
+version = "0.5.0"
+source = "git+https://github.com/oh-my-harness/llm-harness-runtime?rev=5eae99ed1c42dd558529bede9957518ba15eef5c#5eae99ed1c42dd558529bede9957518ba15eef5c"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2030,6 +2287,16 @@ name = "windows_x86_64_msvc"
 version = "0.52.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
+
+[[package]]
+name = "winx"
+version = "0.36.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f3fd376f71958b862e7afb20cfe5a22830e1963462f3a17f49d82a6c1d1f42d"
+dependencies = [
+ "bitflags",
+ "windows-sys 0.52.0",
+]
 
 [[package]]
 name = "writeable"

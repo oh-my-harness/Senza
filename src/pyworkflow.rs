@@ -20,8 +20,8 @@ use llm_harness_runtime::workflow::error::WorkflowError;
 use llm_harness_runtime::workflow::executor::{ExecutorCtx, StepExecutor};
 use llm_harness_runtime::workflow::judge::{EdgeConditionJudge, StepCtx, StepTransitionJudge};
 use llm_harness_runtime::workflow::model::{
-    Edge, EdgeCondition, LoopConfig, Step, StepExecutionPolicy, StepRecord, StepResult,
-    Transition, Workflow, WorkflowStatus,
+    Edge, EdgeCondition, LoopConfig, Step, StepExecutionPolicy, StepRecord, StepResult, Transition,
+    Workflow, WorkflowStatus,
 };
 use llm_harness_types::{AgentError, CostAggregate, ExecutionEnv, Tool, UnsupportedEnv};
 use pyo3::prelude::*;
@@ -469,10 +469,16 @@ fn parse_step_policy(step_dict: &Bound<'_, PyDict>) -> PyResult<Option<StepExecu
     };
     let policy_dict = policy_val.cast::<PyDict>()?;
     let mut policy = StepExecutionPolicy::default();
-    if let Some(v) = policy_dict.get_item("max_attempts")?.filter(|v| !v.is_none()) {
+    if let Some(v) = policy_dict
+        .get_item("max_attempts")?
+        .filter(|v| !v.is_none())
+    {
         policy.max_attempts = Some(v.extract::<u32>()?);
     }
-    if let Some(v) = policy_dict.get_item("retry_backoff_ms")?.filter(|v| !v.is_none()) {
+    if let Some(v) = policy_dict
+        .get_item("retry_backoff_ms")?
+        .filter(|v| !v.is_none())
+    {
         policy.retry_backoff_ms = Some(v.extract::<u64>()?);
     }
     if let Some(v) = policy_dict.get_item("timeout_ms")?.filter(|v| !v.is_none()) {
@@ -2086,9 +2092,16 @@ mod tests {
     fn make_dict(source: &str) -> Py<pyo3::types::PyDict> {
         Python::attach(|py| {
             let locals = pyo3::types::PyDict::new(py);
-            py.run(std::ffi::CString::new(source).unwrap().as_c_str(), None, Some(&locals))
-                .unwrap();
-            let obj = locals.get_item("d").unwrap().expect("missing 'd' in source");
+            py.run(
+                std::ffi::CString::new(source).unwrap().as_c_str(),
+                None,
+                Some(&locals),
+            )
+            .unwrap();
+            let obj = locals
+                .get_item("d")
+                .unwrap()
+                .expect("missing 'd' in source");
             obj.cast::<pyo3::types::PyDict>().unwrap().clone().unbind()
         })
     }
@@ -2112,11 +2125,9 @@ mod tests {
     /// Parse a step-level dict's policy, expecting an error.
     fn parse_policy_err(source: &str) -> String {
         let dict = make_dict(source);
-        Python::attach(|py| {
-            match parse_step_policy(&dict.bind(py)) {
-                Ok(v) => format!("expected error, got Ok({:?})", v),
-                Err(e) => e.to_string(),
-            }
+        Python::attach(|py| match parse_step_policy(&dict.bind(py)) {
+            Ok(v) => format!("expected error, got Ok({:?})", v),
+            Err(e) => e.to_string(),
         })
     }
 
@@ -2154,9 +2165,8 @@ mod tests {
 
     #[test]
     fn parse_step_policy_partial_with_none_values() {
-        let policy = parse_policy(
-            r#"d = {"policy": {"max_attempts": None, "timeout_ms": 5000}}"#,
-        ).unwrap();
+        let policy =
+            parse_policy(r#"d = {"policy": {"max_attempts": None, "timeout_ms": 5000}}"#).unwrap();
         assert_eq!(policy.max_attempts, None);
         assert_eq!(policy.timeout_ms, Some(5000));
     }
@@ -2164,13 +2174,19 @@ mod tests {
     #[test]
     fn parse_step_policy_non_dict_value_errors() {
         let msg = parse_policy_err(r#"d = {"policy": 3}"#);
-        assert!(!msg.starts_with("expected error"), "non-dict policy must raise: {msg}");
+        assert!(
+            !msg.starts_with("expected error"),
+            "non-dict policy must raise: {msg}"
+        );
     }
 
     #[test]
     fn parse_step_policy_wrong_field_type_errors() {
         let msg = parse_policy_err(r#"d = {"policy": {"max_attempts": "lots"}}"#);
-        assert!(!msg.starts_with("expected error"), "wrong field type must raise: {msg}");
+        assert!(
+            !msg.starts_with("expected error"),
+            "wrong field type must raise: {msg}"
+        );
     }
 
     // ── dict_to_workflow integration tests ───────────────────────────────
@@ -2223,7 +2239,10 @@ mod tests {
             }"#,
         );
         let step = wf.steps.iter().find(|s| s.id() == "s1").expect("step s1");
-        assert!(policy_of(step).is_none(), "absent policy must leave step.policy() as None");
+        assert!(
+            policy_of(step).is_none(),
+            "absent policy must leave step.policy() as None"
+        );
     }
 
     #[test]

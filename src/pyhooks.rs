@@ -23,9 +23,9 @@ use llm_harness_types::{
     AssistantMessage, BeforeCompactCtx, BeforeCompactDecision, BeforeCompactHook,
     BeforeProviderRequestCtx, BeforeProviderRequestHook, BeforeRunCtx, BeforeRunHook,
     BeforeRunResult, BeforeToolCallCtx, BeforeToolCallDecision, BeforeToolCallHook, BeforeTurnCtx,
-    BeforeTurnHook, CompactionResult, ContentBlock, NextTurnDirective, PrepareNextTurnCtx,
+    BeforeTurnHook, CompactionResult, DataBlock, NextTurnDirective, PrepareNextTurnCtx,
     PrepareNextTurnHook, RunContext, ShouldStopCtx, ShouldStopHook, StopReason, ToolError,
-    ToolResult, ToolResultPatch, TransformContextCtx, TransformContextHook,
+    ToolFailure, ToolResult, TransformContextCtx, TransformContextHook,
 };
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
@@ -53,7 +53,7 @@ pub fn agent_messages_to_list(py: Python<'_>, msgs: &[AgentMessage]) -> PyResult
 pub fn tool_result_to_dict(py: Python<'_>, result: &ToolResult) -> PyResult<Py<PyAny>> {
     let dict = PyDict::new(py);
     let content_list = PyList::empty(py);
-    for block in &result.content {
+    for block in &result.model_content {
         let block_json: Value = serde_json::to_value(block)
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
         content_list.append(value_to_pyobject(py, &block_json)?)?;
@@ -521,19 +521,17 @@ impl BeforeToolCallHook for PyBeforeToolCallHook {
                 Ok(Err(e)) => {
                     tracing::warn!("BeforeToolCallHook error: {e}");
                     // Fail-closed: deny tool call on callback error
-                    BeforeToolCallDecision::Deny(ToolResult {
-                        content: vec![],
-                        details: Value::Null,
-                        terminate: false,
-                    })
+                    BeforeToolCallDecision::Deny(ToolFailure::new(
+                        "hook_error",
+                        "tool call denied: before_tool_call hook error",
+                    ))
                 }
                 Err(e) => {
                     tracing::warn!("BeforeToolCallHook join error: {e}");
-                    BeforeToolCallDecision::Deny(ToolResult {
-                        content: vec![],
-                        details: Value::Null,
-                        terminate: false,
-                    })
+                    BeforeToolCallDecision::Deny(ToolFailure::new(
+                        "hook_error",
+                        "tool call denied: before_tool_call hook join error",
+                    ))
                 }
             }
         })
@@ -548,11 +546,10 @@ fn parse_before_tool_call_decision(raw: &Bound<'_, PyAny>) -> PyResult<BeforeToo
             "modify" => Err(pyo3::exceptions::PyValueError::new_err(
                 "action 'modify' requires a dict with 'args'",
             )),
-            "deny" => Ok(BeforeToolCallDecision::Deny(ToolResult {
-                content: vec![],
-                details: Value::Null,
-                terminate: false,
-            })),
+            "deny" => Ok(BeforeToolCallDecision::Deny(ToolFailure::new(
+                "denied",
+                "tool call denied by before_tool_call hook",
+            ))),
             other => Err(pyo3::exceptions::PyValueError::new_err(format!(
                 "unknown decision: {other}"
             ))),
@@ -573,13 +570,13 @@ fn parse_before_tool_call_decision(raw: &Bound<'_, PyAny>) -> PyResult<BeforeToo
             Ok(BeforeToolCallDecision::Modify(new_args_val))
         }
         "deny" => {
-            // 从 Python dict 重建 ToolResult
+            // 从 Python dict 构造 ToolFailure
             let result_val = d
                 .get_item("result")?
                 .ok_or_else(|| pyo3::exceptions::PyValueError::new_err("missing 'result'"))?;
             let result_json = pyobject_to_value(&result_val)?;
-            let tool_result = parse_tool_result_from_value(&result_json);
-            Ok(BeforeToolCallDecision::Deny(tool_result))
+            let tool_failure = parse_tool_failure_from_value(&result_json);
+            Ok(BeforeToolCallDecision::Deny(tool_failure))
         }
         other => Err(pyo3::exceptions::PyValueError::new_err(format!(
             "unknown action: {other}"
@@ -587,22 +584,30 @@ fn parse_before_tool_call_decision(raw: &Bound<'_, PyAny>) -> PyResult<BeforeToo
     }
 }
 
-/// 从 JSON Value 构造 `ToolResult`。
-fn parse_tool_result_from_value(val: &Value) -> ToolResult {
-    let content: Vec<ContentBlock> = val
+/// 从 JSON Value 构造 `ToolFailure`（用于 BeforeToolCall deny）。
+///
+/// Python 侧 `result` dict 的 `content` 文本块被拼接为 `model_message`，
+/// `details` 字段原样传递。
+fn parse_tool_failure_from_value(val: &Value) -> ToolFailure {
+    let model_message = val
         .get("content")
-        .and_then(|c| serde_json::from_value(c.clone()).ok())
-        .unwrap_or_default();
+        .and_then(|c| serde_json::from_value::<Vec<DataBlock>>(c.clone()).ok())
+        .map(|blocks| {
+            blocks
+                .into_iter()
+                .filter_map(|b| match b {
+                    DataBlock::Text { text, .. } => Some(text),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        })
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "tool call denied by before_tool_call hook".to_string());
     let details = val.get("details").cloned().unwrap_or(Value::Null);
-    let terminate = val
-        .get("terminate")
-        .and_then(|t| t.as_bool())
-        .unwrap_or(false);
-    ToolResult {
-        content,
-        details,
-        terminate,
-    }
+    let mut failure = ToolFailure::new("denied", model_message);
+    failure.details = details;
+    failure
 }
 
 // ── AfterToolCallHook ───────────────────────────────────────────────────────
@@ -646,7 +651,8 @@ impl AfterToolCallHook for PyAfterToolCallHook {
         let result_is_ok = ctx.result.is_ok();
         let result_value = match ctx.result {
             Ok(r) => {
-                let content_json: Value = serde_json::to_value(&r.content).unwrap_or(Value::Null);
+                let content_json: Value =
+                    serde_json::to_value(&r.model_content).unwrap_or(Value::Null);
                 let mut map = serde_json::Map::new();
                 map.insert("content".to_string(), content_json);
                 map.insert("details".to_string(), r.details.clone());
@@ -712,19 +718,24 @@ fn parse_after_tool_call_decision(raw: &Bound<'_, PyAny>) -> PyResult<AfterToolC
     match action.as_str() {
         "passthrough" => Ok(AfterToolCallDecision::Passthrough),
         "patch" => {
-            let content: Option<Vec<ContentBlock>> = d.get_item("content")?.and_then(|v| {
-                let json = pyobject_to_value(&v).ok()?;
-                serde_json::from_value(json).ok()
-            });
-            let details: Option<Value> = d
+            let content: Vec<DataBlock> = d
+                .get_item("content")?
+                .and_then(|v| {
+                    let json = pyobject_to_value(&v).ok()?;
+                    serde_json::from_value(json).ok()
+                })
+                .unwrap_or_default();
+            let details: Value = d
                 .get_item("details")?
-                .and_then(|v| pyobject_to_value(&v).ok());
-            let terminate: Option<bool> = d.get_item("terminate")?.and_then(|v| v.extract().ok());
-            Ok(AfterToolCallDecision::Patch(ToolResultPatch {
-                content,
-                details,
-                terminate,
-            }))
+                .and_then(|v| pyobject_to_value(&v).ok())
+                .unwrap_or(Value::Null);
+            let terminate: bool = d
+                .get_item("terminate")?
+                .and_then(|v| v.extract().ok())
+                .unwrap_or(false);
+            Ok(AfterToolCallDecision::Replace(Ok(ToolResult::full(
+                content, details, terminate,
+            ))))
         }
         other => Err(pyo3::exceptions::PyValueError::new_err(format!(
             "unknown action: {other}"

@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use futures::future::BoxFuture;
 use llm_harness_types::{
-    ContentBlock, Tool, ToolContext, ToolError, ToolExecutionMode, ToolResult,
+    DataBlock, Tool, ToolContext, ToolExecutionMode, ToolFailure, ToolProgress, ToolResult,
 };
 #[cfg(feature = "test-utils")]
 use llm_harness_types::{RunContext, RunRequest};
@@ -62,7 +62,7 @@ impl Tool for PyTool {
         &'a self,
         args: Value,
         ctx: &'a ToolContext,
-    ) -> BoxFuture<'a, Result<ToolResult, ToolError>> {
+    ) -> BoxFuture<'a, Result<ToolResult, ToolFailure>> {
         let callback = Arc::clone(&self.callback);
         let is_async = self.is_async;
         let abort = ctx.abort.clone();
@@ -89,8 +89,8 @@ impl Tool for PyTool {
                 })
             })
             .await
-            .map_err(|e| ToolError::Execution(format!("callback join failed: {e}")))?
-            .map_err(|e: PyErr| ToolError::Execution(e.to_string()))?;
+            .map_err(|e| ToolFailure::new("execution_error", format!("callback join failed: {e}")))?
+            .map_err(|e: PyErr| ToolFailure::new("execution_error", e.to_string()))?;
             Ok(result)
         })
     }
@@ -113,11 +113,11 @@ impl Tool for PyTool {
 fn parse_tool_result(obj: &Bound<'_, PyAny>) -> PyResult<ToolResult> {
     // Accept plain string as shorthand for {"content": [{"type": "text", "text": <str>}]}
     if let Ok(s) = obj.extract::<String>() {
-        return Ok(ToolResult {
-            content: vec![ContentBlock::Text { text: s }],
-            details: Value::Null,
-            terminate: false,
-        });
+        return Ok(ToolResult::full(
+            vec![DataBlock::text(s)],
+            Value::Null,
+            false,
+        ));
     }
     let dict = obj.cast::<PyDict>()?;
 
@@ -144,7 +144,10 @@ fn parse_tool_result(obj: &Bound<'_, PyAny>) -> PyResult<ToolResult> {
                                 )
                             })?
                             .extract()?;
-                        blocks.push(ContentBlock::Text { text });
+                        blocks.push(DataBlock::Text {
+                            text,
+                            mime_type: None,
+                        });
                     }
                     other => {
                         return Err(pyo3::exceptions::PyValueError::new_err(format!(
@@ -170,22 +173,21 @@ fn parse_tool_result(obj: &Bound<'_, PyAny>) -> PyResult<ToolResult> {
         .and_then(|v| v.extract::<bool>().ok())
         .unwrap_or(false);
 
-    Ok(ToolResult {
-        content: content_vec,
-        details,
-        terminate,
-    })
+    Ok(ToolResult::full(content_vec, details, terminate))
 }
 
 /// Python 侧的 tool context，暴露 `is_cancelled` 和 `send_update`。
 #[pyclass(name = "ToolContext")]
 pub struct PyToolContext {
     abort: CancellationToken,
-    update_tx: tokio::sync::mpsc::Sender<ToolResult>,
+    update_tx: tokio::sync::mpsc::Sender<ToolProgress>,
 }
 
 impl PyToolContext {
-    pub fn new(abort: CancellationToken, update_tx: tokio::sync::mpsc::Sender<ToolResult>) -> Self {
+    pub fn new(
+        abort: CancellationToken,
+        update_tx: tokio::sync::mpsc::Sender<ToolProgress>,
+    ) -> Self {
         Self { abort, update_tx }
     }
 }
@@ -200,8 +202,12 @@ impl PyToolContext {
     /// 推送一个部分结果（Python dict），解析后发送到 update channel。
     fn send_update(&self, result: &Bound<'_, PyAny>) -> PyResult<()> {
         let parsed = parse_tool_result(result)?;
+        let progress = ToolProgress {
+            content: parsed.model_content,
+            details: parsed.details,
+        };
         self.update_tx
-            .try_send(parsed)
+            .try_send(progress)
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
     }
 }
@@ -275,10 +281,9 @@ fn build_test_ctx() -> ToolContext {
 /// 将 `ToolResult` 转换为 Python dict。
 #[cfg(feature = "test-utils")]
 fn toolresult_to_pyobject(py: Python<'_>, result: &ToolResult) -> PyResult<Py<PyAny>> {
-    let dict = pyo3::types::PyDict::new(py);
-    // content: Vec<ContentBlock> → list of dicts（ContentBlock 实现了 Serialize）
-    let content_list = pyo3::types::PyList::empty(py);
-    for block in &result.content {
+    let dict = PyDict::new(py);
+    let content_list = PyList::empty(py);
+    for block in &result.model_content {
         let block_json: Value = serde_json::to_value(block)
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
         content_list.append(value_to_pyobject(py, &block_json)?)?;

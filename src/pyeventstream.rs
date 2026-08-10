@@ -8,7 +8,7 @@ use std::sync::Arc;
 use futures::future::BoxFuture;
 use llm_harness_runtime::lifecycle::event::{Event, EventStream, WaitForExternalEventTool};
 use llm_harness_runtime::lifecycle::task::TaskId;
-use llm_harness_types::{ContentBlock, Tool};
+use llm_harness_types::{DataBlock, Tool};
 use pyo3::prelude::*;
 use tokio::sync::{Mutex, mpsc};
 
@@ -36,9 +36,7 @@ impl PyEventStreamHandle {
     fn submit(&self, content: &str, details: &Bound<'_, PyAny>) -> PyResult<()> {
         let details_val = pyobject_to_value(details)?;
         let event = Event {
-            content: vec![ContentBlock::Text {
-                text: content.to_string(),
-            }],
+            content: vec![DataBlock::text(content.to_string())],
             details: details_val,
         };
         self.tx

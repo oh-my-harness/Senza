@@ -8,7 +8,7 @@
 
 use std::sync::Arc;
 
-use llm_harness_types::{AgentEvent, AgentMessage, ContentBlock, ToolResult};
+use llm_harness_types::{AgentEvent, AgentMessage, ContentBlock, DataBlock, ToolResult};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
@@ -24,10 +24,10 @@ fn tool_result_to_flat_dict(py: Python<'_>, result: &ToolResult) -> PyResult<Py<
 
     // content: 提取文本块拼接，其余块序列化为 JSON
     let texts: Vec<String> = result
-        .content
+        .model_content
         .iter()
         .filter_map(|b| match b {
-            ContentBlock::Text { text } => Some(text.clone()),
+            DataBlock::Text { text, .. } => Some(text.clone()),
             _ => None,
         })
         .collect();
@@ -63,7 +63,7 @@ fn agent_message_to_dict(py: Python<'_>, msg: &AgentMessage) -> PyResult<Py<PyAn
                 .content
                 .iter()
                 .filter_map(|b| match b {
-                    ContentBlock::Text { text } => Some(text.clone()),
+                    DataBlock::Text { text, .. } => Some(text.clone()),
                     _ => None,
                 })
                 .collect();
@@ -142,6 +142,7 @@ pub fn agent_event_to_dict(py: Python<'_>, event: &AgentEvent) -> PyResult<Py<Py
         AgentEvent::MessageEnd {
             message_id,
             message,
+            discarded: _,
         } => {
             dict.set_item("type", "message_end")?;
             dict.set_item("message_id", message_id)?;
@@ -203,7 +204,19 @@ pub fn agent_event_to_dict(py: Python<'_>, event: &AgentEvent) -> PyResult<Py<Py
         } => {
             dict.set_item("type", "tool_execution_update")?;
             dict.set_item("tool_use_id", tool_use_id)?;
-            dict.set_item("result", tool_result_to_flat_dict(py, partial)?)?;
+            let prog_dict = PyDict::new(py);
+            prog_dict.set_item("terminate", false)?;
+            let texts: Vec<String> = partial
+                .content
+                .iter()
+                .filter_map(|b| match b {
+                    DataBlock::Text { text, .. } => Some(text.clone()),
+                    _ => None,
+                })
+                .collect();
+            prog_dict.set_item("text", texts.join("\n"))?;
+            prog_dict.set_item("details", value_to_pyobject(py, &partial.details)?)?;
+            dict.set_item("result", prog_dict)?;
         }
         AgentEvent::ToolExecutionEnd {
             tool_use_id,
@@ -237,6 +250,9 @@ pub fn agent_event_to_dict(py: Python<'_>, event: &AgentEvent) -> PyResult<Py<Py
             dict.set_item("max_retries", max_retries)?;
             dict.set_item("delay_ms", delay_ms)?;
             dict.set_item("error", error)?;
+        }
+        _ => {
+            dict.set_item("type", "unknown")?;
         }
     }
     Ok(dict.into_any().unbind())

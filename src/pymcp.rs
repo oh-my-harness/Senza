@@ -45,6 +45,8 @@ impl PyMcpServerConfig {
                 env: env.unwrap_or_default(),
                 cwd: cwd.map(std::path::PathBuf::from),
                 timeout,
+                version_policy: Default::default(),
+                credentials: None,
             },
         }
     }
@@ -59,6 +61,8 @@ impl PyMcpServerConfig {
                 transport_type: None,
                 headers: headers.unwrap_or_default(),
                 timeout,
+                version_policy: Default::default(),
+                credentials: None,
             },
         }
     }
@@ -73,6 +77,8 @@ impl PyMcpServerConfig {
                 transport_type: Some("sse".into()),
                 headers: headers.unwrap_or_default(),
                 timeout,
+                version_policy: Default::default(),
+                credentials: None,
             },
         }
     }

@@ -7,7 +7,7 @@ use llm_harness_loop::test_utils::{NoOpEnv, test_assistant_message};
 use pyo3::types::PyDictMethods;
 use std::sync::Arc;
 
-use llm_harness_types::{ContentBlock, RunContext, RunRequest, ToolContext};
+use llm_harness_types::{DataBlock, RunContext, RunRequest, ToolContext};
 use tokio_util::sync::CancellationToken;
 
 /// 验证 async Python callback 在 tokio runtime 内执行不死锁。
@@ -56,9 +56,9 @@ async fn async_pytool_executes_without_deadlock() {
     .expect("async tool execution timed out — likely deadlock")
     .unwrap();
 
-    assert_eq!(result.content.len(), 1);
-    match &result.content[0] {
-        ContentBlock::Text { text } => assert_eq!(text, "async hello"),
+    assert_eq!(result.model_content.len(), 1);
+    match &result.model_content[0] {
+        DataBlock::Text { text, .. } => assert_eq!(text, "async hello"),
         _ => panic!("expected text block"),
     }
 }
