@@ -208,6 +208,8 @@ class EventStream:
 
 def create_webhook_stream(buffer: int) -> tuple[WebhookChannel, EventStream]: ...
 
+def create_context_aware_compaction_prompt() -> tuple[str, str]: ...
+
 # ── Hook (11 types) ──────────────────────────────────────────────────────────
 
 class Hook:

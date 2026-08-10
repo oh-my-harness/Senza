@@ -97,6 +97,10 @@ fn senza(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
         strategy::pyeventstreams::create_webhook_stream,
         m
     )?)?;
+    m.add_function(wrap_pyfunction!(
+        strategy::pycompaction::create_context_aware_compaction_prompt,
+        m
+    )?)?;
     m.add_function(wrap_pyfunction!(create_before_turn_hook, m)?)?;
     m.add_class::<crate::core::pyeventstream::PyEventStreamHandle>()?;
     m.add_class::<crate::core::pyeventstream::PyWaitForExternalEventTool>()?;
