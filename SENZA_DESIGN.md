@@ -138,6 +138,12 @@ PyO3 module 名：`senza`（已从 `llm_harness_py` 改名）。
 | — | ~~Rules 审批系统未暴露~~ `create_*_predicate` + `RuleChainBuilder` + `create_rule_approval_hook()` 已添加 | ~~P1~~ | ✅ 已实现 |
 | — | ~~Skills 加载未暴露~~ `load_skills(path)` + `builder.skill()/skills()` 已添加 | ~~P2~~ | ✅ 已实现 |
 | — | stub 数从 112 增至 138 | — | ✅ 已验证 |
+| — | grep/glob 工具未暴露 | P2 | ✅ runtime v0.5.0 FsToolsPlugin 自动注册 |
+| — | compaction_prompt/compaction_query setter 未暴露 | P2 | ✅ 已暴露 |
+| — | UsageLedger 未暴露 | P2 | ✅ 已暴露 |
+| — | WorkflowRunRequest 路径未验证 | P2 | ✅ 已验证 |
+| — | src/ 目录结构 flat，22 文件 | P2 | ✅ 已重组为 shared/core/runtime/strategy/knowledge/infra 子目录 |
+| — | stub 数从 138 增至 173 | — | ✅ 已验证 |
 
 ---
 
