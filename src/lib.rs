@@ -91,6 +91,12 @@ fn senza(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
         strategy::pytoolguard::create_tool_output_guard_plugin,
         m
     )?)?;
+    m.add_class::<crate::strategy::pyeventstreams::PyWebhookChannel>()?;
+    m.add_class::<crate::strategy::pyeventstreams::PyEventStream>()?;
+    m.add_function(wrap_pyfunction!(
+        strategy::pyeventstreams::create_webhook_stream,
+        m
+    )?)?;
     m.add_function(wrap_pyfunction!(create_before_turn_hook, m)?)?;
     m.add_class::<crate::core::pyeventstream::PyEventStreamHandle>()?;
     m.add_class::<crate::core::pyeventstream::PyWaitForExternalEventTool>()?;

@@ -196,6 +196,18 @@ def create_tool_output_guard_plugin(
     env: ExecutionEnv, config: Optional[dict] = None
 ) -> Plugin: ...
 
+# ── Webhook event stream ──────────────────────────────────────────────────────
+
+class WebhookChannel:
+    """Sender side of a webhook event stream. Call push() to inject events."""
+
+    def push(self, payload: Any) -> None: ...
+
+class EventStream:
+    """Consumer side of a webhook event stream (opaque)."""
+
+def create_webhook_stream(buffer: int) -> tuple[WebhookChannel, EventStream]: ...
+
 # ── Hook (11 types) ──────────────────────────────────────────────────────────
 
 class Hook:

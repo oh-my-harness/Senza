@@ -1,4 +1,5 @@
 pub mod pyaudit;
+pub mod pyeventstreams;
 pub mod pyinjection;
 pub mod pyloopsafety;
 pub mod pymemorydefense;
