@@ -451,6 +451,21 @@ impl PyHarnessBuilder {
         }
         slf
     }
+
+    /// Attach a caller-owned UsageLedger for shared cost accounting across harnesses.
+    ///
+    /// The ledger is cloned into the builder; the Python-side object remains
+    /// usable (snapshot reflects state shared with the built harness).
+    #[pyo3(text_signature = "($self, ledger)")]
+    fn usage_ledger<'a>(
+        mut slf: PyRefMut<'a, Self>,
+        ledger: &Bound<'_, PyUsageLedger>,
+    ) -> PyRefMut<'a, Self> {
+        if let Some(b) = slf.builder.take() {
+            slf.builder = Some(b.usage_ledger(ledger.borrow().ledger.clone()));
+        }
+        slf
+    }
     /// 配置预算上限和可选的超限 hook。
     ///
     /// - `limit` — 预算上限（USD）。
@@ -622,5 +637,46 @@ impl Plugin for MultiSkillPlugin {
 
     fn register_skills(&self, skills: &mut Vec<Skill>) {
         skills.extend(self.skills.iter().cloned());
+    }
+}
+
+// ── UsageLedger ─────────────────────────────────────────────────────────────
+
+/// Caller-owned usage accounting state, shareable across multiple harnesses.
+///
+/// Wraps `llm_harness_runtime::control::cost::UsageLedger`, which holds an
+/// `Arc<Mutex<CostAggregate>>`. Because the inner state is `Arc`-shared,
+/// cloning the ledger (as `usage_ledger()` does) shares the same accumulator —
+/// cost recorded by any harness is visible via `snapshot()` on this object.
+#[pyclass(name = "UsageLedger", skip_from_py_object)]
+#[derive(Clone)]
+pub struct PyUsageLedger {
+    pub(crate) ledger: llm_harness_runtime::control::cost::UsageLedger,
+}
+
+#[pymethods]
+impl PyUsageLedger {
+    #[new]
+    fn new() -> Self {
+        Self {
+            ledger: llm_harness_runtime::control::cost::UsageLedger::default(),
+        }
+    }
+
+    /// Return the current completed-call accounting snapshot as a dict.
+    #[pyo3(text_signature = "($self)")]
+    fn snapshot(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let cost = self.ledger.snapshot();
+        crate::runtime::pyworkflow::cost_aggregate_to_dict(py, &cost)
+    }
+
+    fn __repr__(&self) -> &'static str {
+        "UsageLedger"
+    }
+}
+
+impl Default for PyUsageLedger {
+    fn default() -> Self {
+        Self::new()
     }
 }
