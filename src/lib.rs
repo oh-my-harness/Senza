@@ -57,6 +57,14 @@ fn senza(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
         strategy::pysafety::create_safety_defaults_plugin,
         m
     )?)?;
+    m.add_function(wrap_pyfunction!(
+        strategy::pyloopsafety::create_loop_safety_plugin,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        strategy::pystatuspanel::create_status_panel_plugin,
+        m
+    )?)?;
     m.add_function(wrap_pyfunction!(create_before_turn_hook, m)?)?;
     m.add_class::<crate::core::pyeventstream::PyEventStreamHandle>()?;
     m.add_class::<crate::core::pyeventstream::PyWaitForExternalEventTool>()?;
