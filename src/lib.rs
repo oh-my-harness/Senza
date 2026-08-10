@@ -53,6 +53,10 @@ fn senza(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(create_http_executor, m)?)?;
     m.add_function(wrap_pyfunction!(create_os_env, m)?)?;
     m.add_function(wrap_pyfunction!(create_fs_tools_plugin, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        strategy::pysafety::create_safety_defaults_plugin,
+        m
+    )?)?;
     m.add_function(wrap_pyfunction!(create_before_turn_hook, m)?)?;
     m.add_class::<crate::core::pyeventstream::PyEventStreamHandle>()?;
     m.add_class::<crate::core::pyeventstream::PyWaitForExternalEventTool>()?;

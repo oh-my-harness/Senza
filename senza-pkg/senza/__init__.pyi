@@ -172,6 +172,10 @@ def create_plugin(
 
 def create_fs_tools_plugin() -> Plugin: ...
 
+# ── Strategy plugins ──────────────────────────────────────────────────────────
+
+def create_safety_defaults_plugin() -> Plugin: ...
+
 # ── Hook (11 types) ──────────────────────────────────────────────────────────
 
 class Hook:
