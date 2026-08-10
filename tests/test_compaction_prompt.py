@@ -55,6 +55,20 @@ def test_compaction_prompt_unknown_placeholder():
         )
 
 
+def test_compaction_prompt_mixed_args_system_only():
+    """Providing only system_prompt (no user_template) raises RuntimeError."""
+    builder = senza.HarnessBuilder("gpt-4o").provider("gpt-*", _make_provider())
+    with pytest.raises(RuntimeError):
+        builder.compaction_prompt(system_prompt="only system")
+
+
+def test_compaction_prompt_mixed_args_template_only():
+    """Providing only user_template (no system_prompt) raises RuntimeError."""
+    builder = senza.HarnessBuilder("gpt-4o").provider("gpt-*", _make_provider())
+    with pytest.raises(RuntimeError):
+        builder.compaction_prompt(user_template="Summarize: {conversation}")
+
+
 # ── compaction_query ─────────────────────────────────────────────────────────
 
 
