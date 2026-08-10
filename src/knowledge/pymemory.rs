@@ -40,12 +40,12 @@ impl MemoryStore for InMemoryStore {
 
     fn upsert<'a>(
         &'a self,
-        ctx: KnowledgeRequestContext<'a>,
+        _ctx: KnowledgeRequestContext<'a>,
         write: MemoryWrite,
         _abort: CancellationToken,
     ) -> BoxFuture<'a, Result<MemoryWriteReceipt, KnowledgeError>> {
         Box::pin(async move {
-            let item_id = format!("mem-{}", ctx.run.id());
+            let item_id = format!("mem-{}", write.idempotency_key);
             let revision =
                 llm_harness_runtime_knowledge_local::content_revision(write.content.as_bytes());
             let reference = KnowledgeRef {
@@ -53,10 +53,13 @@ impl MemoryStore for InMemoryStore {
                 item_id,
                 revision: Some(revision),
             };
-            self.entries
-                .lock()
-                .unwrap()
-                .push((reference.clone(), write.content.into_bytes()));
+            let mut entries = self.entries.lock().unwrap();
+            // Upsert: replace existing entry with same item_id, or append
+            if let Some(pos) = entries.iter().position(|(r, _)| r.item_id == reference.item_id) {
+                entries[pos] = (reference.clone(), write.content.into_bytes());
+            } else {
+                entries.push((reference.clone(), write.content.into_bytes()));
+            }
             Ok(MemoryWriteReceipt {
                 reference,
                 visibility: MemoryVisibility::Visible,
