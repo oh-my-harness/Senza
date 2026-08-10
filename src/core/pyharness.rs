@@ -772,6 +772,17 @@ impl PyAgentHarness {
         cost_aggregate_to_dict(py, &cost)
     }
 
+    /// 返回共享 UsageLedger 的成本快照，dict。
+    ///
+    /// 与 `usage()` 返回相同的 `CostAggregate` 快照——当 harness 通过
+    /// `HarnessBuilder.usage_ledger()` 注入了 caller-owned ledger 时，
+    /// 此方法返回的是该共享 ledger 的当前累计值。
+    #[pyo3(text_signature = "($self)")]
+    fn usage_ledger(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let cost = self.harness.usage();
+        cost_aggregate_to_dict(py, &cost)
+    }
+
     /// 重置累计成本统计。
     fn reset_usage(&self) {
         self.harness.reset_usage();

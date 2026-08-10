@@ -79,3 +79,48 @@ def test_usage_ledger_cloned_not_consumed():
     # The ledger should still be usable after being attached
     snapshot = ledger.snapshot()
     assert isinstance(snapshot, dict)
+
+
+# ── AgentHarness.usage_ledger ────────────────────────────────────────────────
+
+
+def test_harness_usage_ledger_returns_dict():
+    """AgentHarness.usage_ledger() returns a dict."""
+    provider = _make_provider()
+    harness = (
+        senza.HarnessBuilder("gpt-4o")
+        .provider("*", provider)
+        .system_prompt("You are helpful.")
+        .build()
+    )
+    cost = harness.usage_ledger()
+    assert isinstance(cost, dict)
+
+
+def test_harness_usage_ledger_zero_cost():
+    """AgentHarness.usage_ledger() returns zero cost on a fresh harness."""
+    provider = _make_provider()
+    harness = (
+        senza.HarnessBuilder("gpt-4o")
+        .provider("*", provider)
+        .system_prompt("You are helpful.")
+        .build()
+    )
+    cost = harness.usage_ledger()
+    assert cost.get("total_input_tokens", 0) == 0
+    assert cost.get("total_output_tokens", 0) == 0
+    assert isinstance(cost.get("by_model"), dict)
+
+
+def test_harness_usage_ledger_matches_usage():
+    """usage_ledger() returns the same structure as usage()."""
+    provider = _make_provider()
+    harness = (
+        senza.HarnessBuilder("gpt-4o")
+        .provider("*", provider)
+        .system_prompt("You are helpful.")
+        .build()
+    )
+    from_usage = harness.usage()
+    from_ledger = harness.usage_ledger()
+    assert from_usage == from_ledger
