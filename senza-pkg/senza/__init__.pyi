@@ -191,6 +191,7 @@ def create_project_instruction_plugin(
 def create_audit_plugin(
     sink_path: str, trace_id: Optional[str] = None, task_id: Optional[str] = None
 ) -> Plugin: ...
+def create_notify_plugin() -> Plugin: ...
 
 # ── Hook (11 types) ──────────────────────────────────────────────────────────
 
