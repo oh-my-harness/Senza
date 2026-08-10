@@ -185,6 +185,10 @@ def create_local_knowledge_source(
     domains: Optional[list[str]] = None,
     max_document_bytes: int = 1048576,
 ) -> KnowledgeSource: ...
+def create_knowledge_plugin(
+    sources: list[KnowledgeSource],
+    config: Optional[dict] = None,
+) -> Plugin: ...
 
 # ── Strategy plugins ──────────────────────────────────────────────────────────
 

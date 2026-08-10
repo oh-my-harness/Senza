@@ -127,6 +127,10 @@ fn senza(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
         knowledge::pylocalsource::create_local_knowledge_source,
         m
     )?)?;
+    m.add_function(wrap_pyfunction!(
+        knowledge::pyknowledge::create_knowledge_plugin,
+        m
+    )?)?;
     m.add_class::<crate::core::pyresponseformat::PyResponseFormat>()?;
     m.add_function(wrap_pyfunction!(
         crate::core::pyresponseformat::create_json_object_format,
