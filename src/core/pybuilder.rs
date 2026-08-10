@@ -10,7 +10,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use llm_harness_agent::ModelInfo;
+use llm_harness_agent::{CompactionPromptSpec, ModelInfo};
 use llm_harness_agent::{Plugin, Skill};
 use llm_harness_loop::config::RetryConfig;
 use llm_harness_loop::final_answer::FinalAnswerMode;
@@ -389,6 +389,49 @@ impl PyHarnessBuilder {
                     max_tokens,
                 },
             ));
+        }
+        slf
+    }
+
+    /// 设置自定义 compaction prompt 模板。
+    ///
+    /// 两个参数都提供时构造 `CompactionPromptSpec`；`user_template`
+    /// 必须包含 `{conversation}` 占位符，支持 `{previous_summary}`、
+    /// `{file_operations}`、`{query}`。传 `None` 清除（使用默认）。
+    #[pyo3(text_signature = "($self, system_prompt=None, user_template=None)")]
+    #[pyo3(signature = (system_prompt=None, user_template=None))]
+    fn compaction_prompt<'a>(
+        mut slf: PyRefMut<'a, Self>,
+        system_prompt: Option<&str>,
+        user_template: Option<&str>,
+    ) -> PyResult<PyRefMut<'a, Self>> {
+        if let Some(b) = slf.builder.take() {
+            let spec = match (system_prompt, user_template) {
+                (None, None) => None,
+                (Some(sp), Some(ut)) => Some(
+                    CompactionPromptSpec::new(sp, ut)
+                        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?,
+                ),
+                _ => {
+                    return Err(pyo3::exceptions::PyRuntimeError::new_err(
+                        "compaction_prompt: provide both system_prompt and user_template, or None for both",
+                    ));
+                }
+            };
+            slf.builder = Some(b.compaction_prompt(spec));
+        }
+        Ok(slf)
+    }
+
+    /// 设置 compaction 查询意图，用于上下文感知的摘要。
+    #[pyo3(signature = (query=None))]
+    #[pyo3(text_signature = "($self, query=None)")]
+    fn compaction_query<'a>(
+        mut slf: PyRefMut<'a, Self>,
+        query: Option<String>,
+    ) -> PyRefMut<'a, Self> {
+        if let Some(b) = slf.builder.take() {
+            slf.builder = Some(b.compaction_query(query));
         }
         slf
     }
