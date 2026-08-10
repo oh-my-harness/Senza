@@ -131,6 +131,48 @@ fn senza(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
         knowledge::pyknowledge::create_knowledge_plugin,
         m
     )?)?;
+    m.add_class::<crate::knowledge::pymemory::PyMemoryStore>()?;
+    m.add_class::<crate::knowledge::pymemory::PyMemoryWritePolicy>()?;
+    m.add_class::<crate::knowledge::pymemory::PyMemoryMutationGate>()?;
+    m.add_function(wrap_pyfunction!(
+        knowledge::pymemory::create_in_memory_store,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        knowledge::pymemory::create_secure_write_policy,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        knowledge::pymemory::create_allow_all_gate,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        knowledge::pymemory::create_memory_plugin,
+        m
+    )?)?;
+    m.add_class::<crate::knowledge::pysessionrecall::PySessionRecallIndex>()?;
+    m.add_class::<crate::knowledge::pysessionrecall::PySessionRepo>()?;
+    m.add_class::<crate::knowledge::pysessionrecall::PySessionRecallKnowledgeSource>()?;
+    m.add_function(wrap_pyfunction!(
+        knowledge::pysessionrecall::create_in_memory_session_recall_index,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        knowledge::pysessionrecall::create_sqlite_session_recall_index,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        knowledge::pysessionrecall::create_in_memory_session_repo,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        knowledge::pysessionrecall::create_session_recall_knowledge_source,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        knowledge::pysessionrecall::create_history_recall_plugin,
+        m
+    )?)?;
     m.add_class::<crate::core::pyresponseformat::PyResponseFormat>()?;
     m.add_function(wrap_pyfunction!(
         crate::core::pyresponseformat::create_json_object_format,

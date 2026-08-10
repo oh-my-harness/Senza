@@ -190,6 +190,50 @@ def create_knowledge_plugin(
     config: Optional[dict] = None,
 ) -> Plugin: ...
 
+# ── Memory ──────────────────────────────────────────────────────────────────
+
+class MemoryStore:
+    """Opaque memory store handle (from create_in_memory_store)."""
+
+class MemoryWritePolicy:
+    """Opaque memory write policy handle (from create_secure_write_policy)."""
+
+class MemoryMutationGate:
+    """Opaque memory mutation gate handle (from create_allow_all_gate)."""
+
+def create_in_memory_store(read_source_id: str) -> MemoryStore: ...
+def create_secure_write_policy(config: Optional[dict] = None) -> MemoryWritePolicy: ...
+def create_allow_all_gate() -> MemoryMutationGate: ...
+def create_memory_plugin(
+    source: KnowledgeSource,
+    store: MemoryStore,
+    policy: MemoryWritePolicy,
+    gate: Optional[MemoryMutationGate] = None,
+) -> Plugin: ...
+
+# ── Session Recall ──────────────────────────────────────────────────────────
+
+class SessionRecallIndex:
+    """Opaque session recall index handle."""
+
+class SessionRepo:
+    """Opaque session repo handle."""
+
+class SessionRecallKnowledgeSource:
+    """Opaque session recall knowledge source handle."""
+    def as_knowledge_source(self) -> KnowledgeSource: ...
+
+def create_in_memory_session_recall_index() -> SessionRecallIndex: ...
+def create_sqlite_session_recall_index(path: str) -> SessionRecallIndex: ...
+def create_in_memory_session_repo() -> SessionRepo: ...
+def create_session_recall_knowledge_source(
+    repo: SessionRepo, index: SessionRecallIndex
+) -> SessionRecallKnowledgeSource: ...
+def create_history_recall_plugin(
+    source: SessionRecallKnowledgeSource,
+    config: Optional[dict] = None,
+) -> Plugin: ...
+
 # ── Strategy plugins ──────────────────────────────────────────────────────────
 
 def create_safety_defaults_plugin() -> Plugin: ...
