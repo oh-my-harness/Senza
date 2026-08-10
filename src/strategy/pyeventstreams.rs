@@ -25,7 +25,7 @@ impl PyWebhookChannel {
         let value = pyobject_to_value(payload)?;
         let channel = self.channel.clone();
         let rt = crate::core::pyagent::runtime(py);
-        py.detach(|| {
+        crate::shared::pyerror::detach_catch_panic_result(py, move || {
             rt.block_on(async move {
                 channel
                     .push(value)
