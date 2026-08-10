@@ -65,6 +65,11 @@ fn senza(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
         strategy::pystatuspanel::create_status_panel_plugin,
         m
     )?)?;
+    m.add_class::<crate::strategy::pymemorydefense::PyMemoryDefensePluginBuilder>()?;
+    m.add_function(wrap_pyfunction!(
+        strategy::pymemorydefense::create_memory_defense_plugin,
+        m
+    )?)?;
     m.add_function(wrap_pyfunction!(create_before_turn_hook, m)?)?;
     m.add_class::<crate::core::pyeventstream::PyEventStreamHandle>()?;
     m.add_class::<crate::core::pyeventstream::PyWaitForExternalEventTool>()?;
