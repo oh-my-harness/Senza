@@ -8,7 +8,7 @@ use llm_harness_agent::{HarnessHooks, Plugin};
 use llm_harness_types::Tool;
 use pyo3::prelude::*;
 
-use crate::pyhooks::HookKind;
+use crate::core::pyhooks::HookKind;
 
 /// Python 侧的 Plugin 配置。
 pub struct PyPlugin {

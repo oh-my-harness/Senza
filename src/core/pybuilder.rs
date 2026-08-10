@@ -19,20 +19,20 @@ use llm_harness_runtime_mcp::builder::HarnessBuilderMcpExt;
 use llm_harness_types::{ExecutionEnv, StreamOptions, Tool, UnsupportedEnv};
 use pyo3::prelude::*;
 
-use crate::pyagent::runtime;
-use crate::pybudget::PyBudgetExceededHook;
-use crate::pyharness::PyAgentHarness;
-use crate::pyharness::parse_thinking_level;
-use crate::pyhooks::PyHookWrapper;
-use crate::pyplugin::PyPluginWrapper;
-use crate::pypricing::PyPricingProvider;
-use crate::pyprovider::PyProvider;
-use crate::pyresponseformat::PyResponseFormat;
-use crate::pyskills::PySkill;
-use crate::pytool::PyToolWrapper;
+use crate::core::pyagent::runtime;
+use crate::core::pyharness::PyAgentHarness;
+use crate::core::pyharness::parse_thinking_level;
+use crate::core::pyhooks::PyHookWrapper;
+use crate::core::pyplugin::PyPluginWrapper;
+use crate::core::pyprovider::PyProvider;
+use crate::core::pyresponseformat::PyResponseFormat;
+use crate::core::pytool::PyToolWrapper;
+use crate::runtime::pybudget::PyBudgetExceededHook;
+use crate::runtime::pypricing::PyPricingProvider;
+use crate::runtime::pyskills::PySkill;
 
-use crate::pymcp::{PyMcpManager, PyMcpServerConfig};
-use crate::pyworkflow::PyEnvWrapper;
+use crate::runtime::pymcp::{PyMcpManager, PyMcpServerConfig};
+use crate::runtime::pyworkflow::PyEnvWrapper;
 /// Python 侧的 `HarnessBuilder`。
 ///
 /// 镜像 Rust `HarnessBuilder` 的 fluent API。fluent 方法以 `PyRefMut`
@@ -517,12 +517,12 @@ impl PyHarnessBuilder {
                 mcp_builder = mcp_builder.with_mcp_manager(manager);
             }
 
-            let mcp_harness = crate::pyerror::detach_catch_panic_result(py, move || {
+            let mcp_harness = crate::shared::pyerror::detach_catch_panic_result(py, move || {
                 rt.block_on(async move { mcp_builder.build(env).await })
             })?;
             Py::new(py, PyAgentHarness::new_mcp(Arc::new(mcp_harness)))
         } else {
-            let harness = crate::pyerror::detach_catch_panic_result(py, move || {
+            let harness = crate::shared::pyerror::detach_catch_panic_result(py, move || {
                 rt.block_on(async move { builder.build(env).await })
             })?;
             Py::new(py, PyAgentHarness::new_base(Arc::new(harness)))

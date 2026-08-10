@@ -13,8 +13,8 @@ use futures::future::BoxFuture;
 use llm_harness_types::{BudgetExceededHook, CostAggregate};
 use pyo3::prelude::*;
 
-use crate::pyhooks::{call_callback_with_mode, detect_async};
-use crate::pyworkflow::cost_aggregate_to_dict;
+use crate::core::pyhooks::{call_callback_with_mode, detect_async};
+use crate::runtime::pyworkflow::cost_aggregate_to_dict;
 
 /// Python 侧的 `BudgetExceededHook` wrapper。
 ///

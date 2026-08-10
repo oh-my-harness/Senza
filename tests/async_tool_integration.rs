@@ -29,7 +29,7 @@ async fn async_pytool_executes_without_deadlock() {
         let callback = locals.get_item("cb").unwrap().unwrap().unbind();
         let schema =
             serde_json::json!({"type": "object", "properties": {"text": {"type": "string"}}});
-        Arc::new(senza::pytool::PyTool::new(
+        Arc::new(senza::core::pytool::PyTool::new(
             "async_echo".into(),
             "async echo".into(),
             schema,

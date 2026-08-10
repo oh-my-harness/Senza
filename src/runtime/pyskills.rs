@@ -15,7 +15,7 @@ use llm_harness_types::{
 use pyo3::prelude::*;
 use tokio_util::sync::CancellationToken;
 
-use crate::pyagent::runtime;
+use crate::core::pyagent::runtime;
 
 /// Skill handle（通过 `load_skills()` 创建，不可变）。
 #[pyclass(name = "Skill")]
@@ -300,7 +300,7 @@ pub fn load_skills<'py>(py: Python<'py>, path: &str) -> PyResult<Bound<'py, pyo3
     let env: Arc<dyn ExecutionEnv> = Arc::new(LocalFsEnv::new(path));
     let rt = runtime(py);
     // load_skills 是 async 且涉及文件 I/O，释放 GIL 更安全。
-    let (skills, diags) = crate::pyerror::detach_catch_panic(py, move || {
+    let (skills, diags) = crate::shared::pyerror::detach_catch_panic(py, move || {
         rt.block_on(async move { llm_harness_agent::load_skills(env.as_ref(), &[dir]).await })
     })?;
 

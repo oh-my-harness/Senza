@@ -7,7 +7,7 @@
 //!
 //! # asyncio 回调调度
 //!
-//! `async def` callback 通过 [`crate::pyloop::run_coro`] 执行。当用户通过
+//! `async def` callback 通过 [`crate::core::pyloop::run_coro`] 执行。当用户通过
 //! `senza.set_event_loop(loop)` 注册了正在运行的 event loop 时，coroutine 会被
 //! `asyncio.run_coroutine_threadsafe()` 调度到该 loop 上执行，可安全使用主 loop
 //! 的 asyncio 原语（`asyncio.Lock`、`asyncio.Queue` 等）。未注册 loop 时回退到
@@ -31,7 +31,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use serde_json::Value;
 
-use crate::value_conv::{pyobject_to_value, value_to_pyobject};
+use crate::shared::value_conv::{pyobject_to_value, value_to_pyobject};
 
 // ── 共享类型转换器 ────────────────────────────────────────────────────────────
 
@@ -1216,7 +1216,7 @@ pub(crate) fn call_callback_with_mode<'py>(
     if is_async {
         // Schedule the coroutine on the user's main event loop when
         // possible (issue #13), falling back to asyncio.run().
-        Ok(crate::pyloop::run_coro(py, &result)?)
+        Ok(crate::core::pyloop::run_coro(py, &result)?)
     } else {
         Ok(result)
     }

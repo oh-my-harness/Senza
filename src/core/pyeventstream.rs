@@ -12,7 +12,7 @@ use llm_harness_types::{DataBlock, Tool};
 use pyo3::prelude::*;
 use tokio::sync::{Mutex, mpsc};
 
-use crate::value_conv::pyobject_to_value;
+use crate::shared::value_conv::pyobject_to_value;
 
 /// mpsc-backed EventStream。
 struct ChannelStream {

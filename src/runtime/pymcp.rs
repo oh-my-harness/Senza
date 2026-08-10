@@ -11,7 +11,7 @@ use llm_harness_runtime_mcp::config::{McpConfigFile, McpServerConfig};
 use llm_harness_runtime_mcp::manager::{ConnectionStatus, McpManager};
 use pyo3::prelude::*;
 
-use crate::pyagent::runtime;
+use crate::core::pyagent::runtime;
 
 // ── PyMcpServerConfig ───────────────────────────────────────────────────────
 
@@ -120,7 +120,7 @@ impl PyMcpManager {
         let manager = self.inner.clone();
         let config = config.inner.clone();
         let rt = runtime(py);
-        crate::pyerror::detach_catch_panic_result(py, move || {
+        crate::shared::pyerror::detach_catch_panic_result(py, move || {
             rt.block_on(async move {
                 manager
                     .add_server(name, config)
@@ -134,7 +134,7 @@ impl PyMcpManager {
     fn load_config_file(&self, py: Python<'_>, path: String) -> PyResult<()> {
         let manager = self.inner.clone();
         let rt = runtime(py);
-        crate::pyerror::detach_catch_panic_result(py, move || {
+        crate::shared::pyerror::detach_catch_panic_result(py, move || {
             rt.block_on(async move {
                 let config = McpConfigFile::from_file(std::path::Path::new(&path))
                     .await
@@ -172,7 +172,7 @@ impl PyMcpManager {
     fn reconnect(&self, py: Python<'_>, name: String) -> PyResult<()> {
         let manager = self.inner.clone();
         let rt = runtime(py);
-        crate::pyerror::detach_catch_panic_result(py, move || {
+        crate::shared::pyerror::detach_catch_panic_result(py, move || {
             rt.block_on(async move {
                 manager
                     .reconnect(&name)
@@ -186,7 +186,7 @@ impl PyMcpManager {
     fn disconnect_server(&self, py: Python<'_>, name: String) -> PyResult<()> {
         let manager = self.inner.clone();
         let rt = runtime(py);
-        crate::pyerror::detach_catch_panic_result(py, move || {
+        crate::shared::pyerror::detach_catch_panic_result(py, move || {
             rt.block_on(async move {
                 manager
                     .disconnect_server(&name)
@@ -200,7 +200,7 @@ impl PyMcpManager {
     fn disconnect_all(&self, py: Python<'_>) -> PyResult<()> {
         let manager = self.inner.clone();
         let rt = runtime(py);
-        crate::pyerror::detach_catch_panic_result(py, move || {
+        crate::shared::pyerror::detach_catch_panic_result(py, move || {
             rt.block_on(async move {
                 manager
                     .disconnect_all()

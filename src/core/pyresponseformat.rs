@@ -47,7 +47,7 @@ pub fn create_json_schema_format<'py>(
             pyo3::exceptions::PyValueError::new_err(format!("invalid JSON schema string: {e}"))
         })?
     } else {
-        crate::value_conv::pyobject_to_value(schema)?
+        crate::shared::value_conv::pyobject_to_value(schema)?
     };
     Py::new(
         py,

@@ -87,7 +87,7 @@ impl PyAgent {
         let rt = runtime(py);
 
         // 释放 GIL + panic 隔离 + 信号检查（Ctrl+C 可打断）。
-        crate::pyerror::block_on_with_signal_check(
+        crate::shared::pyerror::block_on_with_signal_check(
             py,
             rt,
             async move {
@@ -131,10 +131,10 @@ impl PyAgent {
         py: Python<'_>,
         timeout_ms: u64,
         max_consecutive_timeouts: u32,
-    ) -> PyResult<Py<crate::event_stream::PyEventIterator>> {
+    ) -> PyResult<Py<crate::shared::event_stream::PyEventIterator>> {
         let rx = self.agent.subscribe();
         let handle = runtime(py).handle().clone();
-        let iter = crate::event_stream::PyEventIterator::new(
+        let iter = crate::shared::event_stream::PyEventIterator::new(
             rx,
             timeout_ms,
             max_consecutive_timeouts,

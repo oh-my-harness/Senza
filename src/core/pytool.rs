@@ -17,7 +17,7 @@ use pyo3::types::{PyDict, PyList};
 use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 
-use crate::value_conv::{pyobject_to_value, value_to_pyobject};
+use crate::shared::value_conv::{pyobject_to_value, value_to_pyobject};
 /// Python callable 包装为 `Tool` trait。
 pub struct PyTool {
     name: String,
@@ -79,7 +79,7 @@ impl Tool for PyTool {
                         // event loop when possible (issue #13), falling
                         // back to asyncio.run().
                         let coro = cb.call1((py_args, py_ctx))?;
-                        let raw = crate::pyloop::run_coro(py, &coro)?;
+                        let raw = crate::core::pyloop::run_coro(py, &coro)?;
                         parse_tool_result(&raw)
                     } else {
                         // sync: 直接调用
@@ -238,11 +238,11 @@ impl PyToolWrapper {
     #[cfg(feature = "test-utils")]
     fn drive(&self, args: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
         let py = args.py();
-        let args_val = crate::value_conv::pyobject_to_value(args)?;
+        let args_val = crate::shared::value_conv::pyobject_to_value(args)?;
         let tool = self.tool.clone();
         // 在 Python 释放 GIL 后运行 tokio runtime，避免 GIL 与 runtime 死锁。
         // panic 隔离：Rust panic 转为 RustPanicError。
-        crate::pyerror::detach_catch_panic(py, move || {
+        crate::shared::pyerror::detach_catch_panic(py, move || {
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()

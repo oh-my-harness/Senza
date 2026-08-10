@@ -22,10 +22,10 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use tokio::sync::broadcast;
 
-use crate::event_stream::agent_event_to_dict;
-use crate::pyagent::runtime;
-use crate::pyworkflow::cost_aggregate_to_dict;
-use crate::value_conv::value_to_pyobject;
+use crate::core::pyagent::runtime;
+use crate::runtime::pyworkflow::cost_aggregate_to_dict;
+use crate::shared::event_stream::agent_event_to_dict;
+use crate::shared::value_conv::value_to_pyobject;
 
 /// 将 `HarnessPhase` 转为字符串标识。
 fn phase_str(phase: HarnessPhase) -> &'static str {
@@ -258,7 +258,7 @@ impl PyHarnessEventIterator {
         let timeout = std::time::Duration::from_millis(self.timeout_ms);
         let handle = self.handle.clone();
 
-        let recv_result = crate::pyerror::detach_catch_panic(py, move || {
+        let recv_result = crate::shared::pyerror::detach_catch_panic(py, move || {
             handle.block_on(async move { tokio::time::timeout(timeout, rx.recv()).await })
         })?;
 
@@ -404,7 +404,7 @@ impl PyAgentHarness {
         let harness = self.harness.clone();
         let text = text.to_string();
         let rt = runtime(py);
-        crate::pyerror::block_on_with_signal_check(
+        crate::shared::pyerror::block_on_with_signal_check(
             py,
             rt,
             async move {
@@ -424,7 +424,7 @@ impl PyAgentHarness {
     fn message_count(&self, py: Python<'_>) -> PyResult<usize> {
         let harness = self.harness.clone();
         let rt = runtime(py);
-        let ctx = crate::pyerror::detach_catch_panic_result(py, move || {
+        let ctx = crate::shared::pyerror::detach_catch_panic_result(py, move || {
             rt.block_on(async move { harness.build_context().await })
         })?;
         Ok(ctx.messages.len())
@@ -437,7 +437,7 @@ impl PyAgentHarness {
     fn get_messages(&self, py: Python<'_>) -> PyResult<Vec<Py<PyAny>>> {
         let harness = self.harness.clone();
         let rt = runtime(py);
-        let ctx = crate::pyerror::detach_catch_panic_result(py, move || {
+        let ctx = crate::shared::pyerror::detach_catch_panic_result(py, move || {
             rt.block_on(async move { harness.build_context().await })
         })?;
         let mut messages = Vec::new();
@@ -458,7 +458,7 @@ impl PyAgentHarness {
     fn last_response(&self, py: Python<'_>) -> PyResult<String> {
         let harness = self.harness.clone();
         let rt = runtime(py);
-        let ctx = crate::pyerror::detach_catch_panic_result(py, move || {
+        let ctx = crate::shared::pyerror::detach_catch_panic_result(py, move || {
             rt.block_on(async move { harness.build_context().await })
         })?;
         {
@@ -537,32 +537,33 @@ impl PyAgentHarness {
         let handle = runtime(py).handle().clone();
         let timeout = std::time::Duration::from_millis(timeout_ms);
 
-        let events: Vec<Py<PyAny>> = crate::pyerror::detach_catch_panic_pyresult(py, move || {
-            let mut events = Vec::new();
-            let mut rx = rx;
-            loop {
-                let recv = handle.block_on(recv_event_with_signal_check(&mut rx, timeout));
-                match recv {
-                    Ok(Some(event)) => {
-                        let is_settled = matches!(
-                            &*event,
-                            AgentHarnessEvent::Settled | AgentHarnessEvent::Aborted
-                        );
-                        Python::attach(|py| {
-                            if let Ok(dict) = harness_event_to_dict(py, &event) {
-                                events.push(dict);
+        let events: Vec<Py<PyAny>> =
+            crate::shared::pyerror::detach_catch_panic_pyresult(py, move || {
+                let mut events = Vec::new();
+                let mut rx = rx;
+                loop {
+                    let recv = handle.block_on(recv_event_with_signal_check(&mut rx, timeout));
+                    match recv {
+                        Ok(Some(event)) => {
+                            let is_settled = matches!(
+                                &*event,
+                                AgentHarnessEvent::Settled | AgentHarnessEvent::Aborted
+                            );
+                            Python::attach(|py| {
+                                if let Ok(dict) = harness_event_to_dict(py, &event) {
+                                    events.push(dict);
+                                }
+                            });
+                            if is_settled {
+                                break;
                             }
-                        });
-                        if is_settled {
-                            break;
                         }
+                        Ok(None) => break,
+                        Err(e) => return Err(e),
                     }
-                    Ok(None) => break,
-                    Err(e) => return Err(e),
                 }
-            }
-            Ok(events)
-        })?;
+                Ok(events)
+            })?;
 
         Ok(events)
     }
@@ -588,7 +589,7 @@ impl PyAgentHarness {
         let timeout = std::time::Duration::from_millis(timeout_ms);
 
         let events: PyResult<Vec<Py<PyAny>>> =
-            crate::pyerror::detach_catch_panic_pyresult(py, move || {
+            crate::shared::pyerror::detach_catch_panic_pyresult(py, move || {
                 // Spawn prompt as a background task so we can collect events concurrently.
                 let prompt_harness = harness.clone();
                 let prompt_text = text.clone();
@@ -675,7 +676,7 @@ impl PyAgentHarness {
             max_tokens: max_tokens.unwrap_or(0),
         });
         let rt = runtime(py);
-        crate::pyerror::detach_catch_panic_result(py, move || {
+        crate::shared::pyerror::detach_catch_panic_result(py, move || {
             rt.block_on(async move { harness.set_model(model, info).await })
         })
     }
@@ -692,7 +693,7 @@ impl PyAgentHarness {
     fn set_temperature(&self, py: Python<'_>, temperature: Option<f32>) -> PyResult<()> {
         let harness = self.harness.clone();
         let rt = runtime(py);
-        crate::pyerror::detach_catch_panic_result(py, move || {
+        crate::shared::pyerror::detach_catch_panic_result(py, move || {
             rt.block_on(async move { harness.set_temperature(temperature).await })
         })
     }
@@ -702,7 +703,7 @@ impl PyAgentHarness {
         let level = parse_thinking_level(level)?;
         let harness = self.harness.clone();
         let rt = runtime(py);
-        crate::pyerror::detach_catch_panic_result(py, move || {
+        crate::shared::pyerror::detach_catch_panic_result(py, move || {
             rt.block_on(async move { harness.set_thinking_level(level).await })
         })
     }
@@ -716,13 +717,13 @@ impl PyAgentHarness {
     fn set_tools(&self, py: Python<'_>, tools: &Bound<'_, PyList>) -> PyResult<()> {
         let mut tool_vec: Vec<Arc<dyn Tool>> = Vec::with_capacity(tools.len());
         for item in tools.iter() {
-            let wrapper = item.cast::<crate::pytool::PyToolWrapper>()?;
+            let wrapper = item.cast::<crate::core::pytool::PyToolWrapper>()?;
             let t: Arc<dyn Tool> = wrapper.borrow().tool.clone();
             tool_vec.push(t);
         }
         let harness = self.harness.clone();
         let rt = runtime(py);
-        crate::pyerror::detach_catch_panic_result(py, move || {
+        crate::shared::pyerror::detach_catch_panic_result(py, move || {
             rt.block_on(async move { harness.set_tools(tool_vec).await })
         })
     }
@@ -745,7 +746,7 @@ impl PyAgentHarness {
     fn continue_run(&self, py: Python<'_>) -> PyResult<()> {
         let harness = self.harness.clone();
         let rt = runtime(py);
-        crate::pyerror::block_on_with_signal_check(
+        crate::shared::pyerror::block_on_with_signal_check(
             py,
             rt,
             async move {
@@ -782,7 +783,7 @@ impl PyAgentHarness {
     fn wait_for_idle(&self, py: Python<'_>) -> PyResult<()> {
         let harness = self.harness.clone();
         let rt = runtime(py);
-        crate::pyerror::block_on_with_signal_check(
+        crate::shared::pyerror::block_on_with_signal_check(
             py,
             rt,
             async move {
@@ -797,7 +798,7 @@ impl PyAgentHarness {
     fn wait_for_settled(&self, py: Python<'_>) -> PyResult<()> {
         let harness = self.harness.clone();
         let rt = runtime(py);
-        crate::pyerror::block_on_with_signal_check(
+        crate::shared::pyerror::block_on_with_signal_check(
             py,
             rt,
             async move {
@@ -844,7 +845,7 @@ impl PyAgentHarness {
         let harness = self.harness.clone();
         let active = tools.map(|v| v.into_iter().collect::<HashSet<String>>());
         let rt = runtime(py);
-        crate::pyerror::detach_catch_panic_result(py, move || {
+        crate::shared::pyerror::detach_catch_panic_result(py, move || {
             rt.block_on(async move { harness.set_active_tools(active).await })
         })
     }
@@ -863,7 +864,7 @@ impl PyAgentHarness {
         let entry = llm_harness_types::EntryId::from_str(from_entry)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         let rt = runtime(py);
-        crate::pyerror::detach_catch_panic_result(py, move || {
+        crate::shared::pyerror::detach_catch_panic_result(py, move || {
             rt.block_on(async move { harness.fork_branch(entry, label).await })
         })
         .map(|id| id.to_string())
@@ -875,7 +876,7 @@ impl PyAgentHarness {
         let entry = llm_harness_types::EntryId::from_str(target)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         let rt = runtime(py);
-        crate::pyerror::detach_catch_panic_result(py, move || {
+        crate::shared::pyerror::detach_catch_panic_result(py, move || {
             rt.block_on(async move { harness.navigate_tree(entry).await })
         })
     }
@@ -884,7 +885,7 @@ impl PyAgentHarness {
     fn list_branches(&self, py: Python<'_>) -> PyResult<Vec<Py<PyAny>>> {
         let harness = self.harness.clone();
         let rt = runtime(py);
-        let branches = crate::pyerror::detach_catch_panic_result(py, move || {
+        let branches = crate::shared::pyerror::detach_catch_panic_result(py, move || {
             rt.block_on(async move { harness.list_branches().await })
         })?;
         let mut result = Vec::new();
@@ -904,7 +905,7 @@ impl PyAgentHarness {
     fn read_active_path(&self, py: Python<'_>) -> PyResult<Vec<Py<PyAny>>> {
         let harness = self.harness.clone();
         let rt = runtime(py);
-        let entries = crate::pyerror::detach_catch_panic_result(py, move || {
+        let entries = crate::shared::pyerror::detach_catch_panic_result(py, move || {
             rt.block_on(async move { harness.read_active_path().await })
         })?;
         Ok(session_entries_to_list(py, &entries))
@@ -914,7 +915,7 @@ impl PyAgentHarness {
     fn read_all_entries(&self, py: Python<'_>) -> PyResult<Vec<Py<PyAny>>> {
         let harness = self.harness.clone();
         let rt = runtime(py);
-        let entries = crate::pyerror::detach_catch_panic_result(py, move || {
+        let entries = crate::shared::pyerror::detach_catch_panic_result(py, move || {
             rt.block_on(async move { harness.read_all_entries().await })
         })?;
         Ok(session_entries_to_list(py, &entries))
@@ -926,7 +927,7 @@ impl PyAgentHarness {
         let entry = llm_harness_types::EntryId::from_str(leaf)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         let rt = runtime(py);
-        crate::pyerror::detach_catch_panic_result(py, move || {
+        crate::shared::pyerror::detach_catch_panic_result(py, move || {
             rt.block_on(async move { harness.delete_branch(entry).await })
         })
     }
@@ -937,7 +938,7 @@ impl PyAgentHarness {
         let entry = llm_harness_types::EntryId::from_str(leaf)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         let rt = runtime(py);
-        let summary = crate::pyerror::detach_catch_panic_result(py, move || {
+        let summary = crate::shared::pyerror::detach_catch_panic_result(py, move || {
             rt.block_on(async move { harness.generate_branch_summary(entry).await })
         })?;
         let dict = PyDict::new(py);
@@ -979,7 +980,7 @@ impl PyAgentHarness {
         if let HarnessRef::Mcp(mcp_harness) = &self.harness {
             let mcp_harness = mcp_harness.clone();
             let rt = runtime(py);
-            crate::pyerror::detach_catch_panic_result(py, move || {
+            crate::shared::pyerror::detach_catch_panic_result(py, move || {
                 rt.block_on(async move {
                     mcp_harness
                         .shutdown()
@@ -1021,7 +1022,7 @@ fn session_entries_to_list(
         if let Ok(payload_val) = serde_json::to_value(&entry.payload) {
             dict.set_item(
                 "payload",
-                crate::value_conv::value_to_pyobject(py, &payload_val).unwrap_or(py.None()),
+                crate::shared::value_conv::value_to_pyobject(py, &payload_val).unwrap_or(py.None()),
             )
             .ok();
         }

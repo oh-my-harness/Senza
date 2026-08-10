@@ -14,7 +14,7 @@ use llm_harness_runtime::rules::{
 use llm_harness_types::BeforeToolCallHook;
 use pyo3::prelude::*;
 
-use crate::pyhooks::{HookKind, PyHookWrapper};
+use crate::core::pyhooks::{HookKind, PyHookWrapper};
 
 // ── Predicate wrapper ──────────────────────────────────────────────────────
 

@@ -7,7 +7,7 @@
 use pyo3::prelude::*;
 use pyo3::types::PyString;
 
-use crate::value_conv::value_to_pyobject;
+use crate::shared::value_conv::value_to_pyobject;
 
 /// Read all sessions under `dir` and return a Python dict.
 ///

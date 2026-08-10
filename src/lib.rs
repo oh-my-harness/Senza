@@ -6,40 +6,28 @@ use llm_harness_runtime::workflow::executor::{HttpCallExecutor, HttpCallPolicy, 
 use llm_harness_runtime_sandbox_os::OsEnv;
 use pyo3::prelude::*;
 
-pub mod event_stream;
-pub mod pyagent;
-pub mod pybudget;
-pub mod pybuilder;
-pub mod pyerror;
-pub mod pyeventstream;
-pub mod pyharness;
-pub mod pyhooks;
-pub mod pylogging;
-pub mod pyloop;
-pub mod pymcp;
-pub mod pyplugin;
-pub mod pypricing;
-pub mod pyprovider;
-pub mod pyresponseformat;
-pub mod pyrules;
-pub mod pyskills;
-pub mod pytool;
-pub mod pyviewer;
-pub mod pyworkflow;
-pub mod value_conv;
+pub mod core;
+pub mod infra;
+pub mod knowledge;
+pub mod runtime;
+pub mod shared;
+pub mod strategy;
 
 /// PyO3 module entry point.
 #[pymodule]
 fn senza(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     // 桥接 Rust tracing → Python logging：用户 `logging.basicConfig(level=DEBUG)`
     // 即可看到 Rust 底座日志，级别/handler/格式完全由 Python 侧控制。
-    pylogging::init_logging();
-    m.add("RustPanicError", py.get_type::<pyerror::RustPanicError>())?;
+    crate::shared::pylogging::init_logging();
+    m.add(
+        "RustPanicError",
+        py.get_type::<crate::shared::pyerror::RustPanicError>(),
+    )?;
     m.add_function(wrap_pyfunction!(version, m)?)?;
     m.add_function(wrap_pyfunction!(set_event_loop, m)?)?;
     m.add_function(wrap_pyfunction!(to_json, m)?)?;
-    m.add_function(wrap_pyfunction!(pyviewer::read_sessions, m)?)?;
-    m.add_function(wrap_pyfunction!(pyviewer::viewer_html, m)?)?;
+    m.add_function(wrap_pyfunction!(crate::core::pyviewer::read_sessions, m)?)?;
+    m.add_function(wrap_pyfunction!(crate::core::pyviewer::viewer_html, m)?)?;
     m.add_function(wrap_pyfunction!(from_json, m)?)?;
     // `PyAgent`'s `#[new]` uses `MockLlmClient` (test-only). Gating the
     // class registration behind `test-utils` keeps it out of production
@@ -47,15 +35,15 @@ fn senza(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     // `TypeError: cannot create 'Agent' instances`. Production callers
     // use `HarnessBuilder` → `AgentHarness` instead.
     #[cfg(feature = "test-utils")]
-    m.add_class::<pyagent::PyAgent>()?;
-    m.add_class::<event_stream::PyEventIterator>()?;
-    m.add_class::<pyworkflow::PyJudgeWrapper>()?;
-    m.add_class::<pyworkflow::PyCompositeJudge>()?;
-    m.add_class::<pyworkflow::PyExecutorWrapper>()?;
-    m.add_class::<pyworkflow::PyEnvWrapper>()?;
-    m.add_class::<pyhooks::PyHookWrapper>()?;
-    m.add_class::<pytool::PyToolWrapper>()?;
-    m.add_class::<pytool::PyToolContext>()?;
+    m.add_class::<crate::core::pyagent::PyAgent>()?;
+    m.add_class::<crate::shared::event_stream::PyEventIterator>()?;
+    m.add_class::<crate::runtime::pyworkflow::PyJudgeWrapper>()?;
+    m.add_class::<crate::runtime::pyworkflow::PyCompositeJudge>()?;
+    m.add_class::<crate::runtime::pyworkflow::PyExecutorWrapper>()?;
+    m.add_class::<crate::runtime::pyworkflow::PyEnvWrapper>()?;
+    m.add_class::<crate::core::pyhooks::PyHookWrapper>()?;
+    m.add_class::<crate::core::pytool::PyToolWrapper>()?;
+    m.add_class::<crate::core::pytool::PyToolContext>()?;
     m.add_function(wrap_pyfunction!(create_sync_tool, m)?)?;
     m.add_function(wrap_pyfunction!(create_tool, m)?)?;
     m.add_function(wrap_pyfunction!(create_judge, m)?)?;
@@ -66,9 +54,12 @@ fn senza(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(create_os_env, m)?)?;
     m.add_function(wrap_pyfunction!(create_fs_tools_plugin, m)?)?;
     m.add_function(wrap_pyfunction!(create_before_turn_hook, m)?)?;
-    m.add_class::<pyeventstream::PyEventStreamHandle>()?;
-    m.add_class::<pyeventstream::PyWaitForExternalEventTool>()?;
-    m.add_function(wrap_pyfunction!(pyeventstream::create_event_channel, m)?)?;
+    m.add_class::<crate::core::pyeventstream::PyEventStreamHandle>()?;
+    m.add_class::<crate::core::pyeventstream::PyWaitForExternalEventTool>()?;
+    m.add_function(wrap_pyfunction!(
+        crate::core::pyeventstream::create_event_channel,
+        m
+    )?)?;
     m.add_function(wrap_pyfunction!(create_after_turn_hook, m)?)?;
     m.add_function(wrap_pyfunction!(create_before_run_hook, m)?)?;
     m.add_function(wrap_pyfunction!(create_after_provider_response_hook, m)?)?;
@@ -79,46 +70,76 @@ fn senza(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(create_before_compact_hook, m)?)?;
     m.add_function(wrap_pyfunction!(create_transform_context_hook, m)?)?;
     m.add_function(wrap_pyfunction!(create_prepare_next_turn_hook, m)?)?;
-    m.add_class::<pybuilder::PyHarnessBuilder>()?;
-    m.add_class::<pyplugin::PyPluginWrapper>()?;
+    m.add_class::<crate::core::pybuilder::PyHarnessBuilder>()?;
+    m.add_class::<crate::core::pyplugin::PyPluginWrapper>()?;
     m.add_function(wrap_pyfunction!(create_plugin, m)?)?;
-    m.add_class::<pyresponseformat::PyResponseFormat>()?;
+    m.add_class::<crate::core::pyresponseformat::PyResponseFormat>()?;
     m.add_function(wrap_pyfunction!(
-        pyresponseformat::create_json_object_format,
+        crate::core::pyresponseformat::create_json_object_format,
         m
     )?)?;
     m.add_function(wrap_pyfunction!(
-        pyresponseformat::create_json_schema_format,
+        crate::core::pyresponseformat::create_json_schema_format,
         m
     )?)?;
-    m.add_class::<pyprovider::PyProvider>()?;
-    m.add_function(wrap_pyfunction!(pyprovider::create_openai_provider, m)?)?;
-    m.add_function(wrap_pyfunction!(pyprovider::create_anthropic_provider, m)?)?;
-    m.add_class::<pypricing::PyPricingProvider>()?;
-    m.add_function(wrap_pyfunction!(pypricing::create_pricing_provider, m)?)?;
+    m.add_class::<crate::core::pyprovider::PyProvider>()?;
     m.add_function(wrap_pyfunction!(
-        pypricing::create_pricing_provider_callback,
+        crate::core::pyprovider::create_openai_provider,
         m
     )?)?;
-    m.add_class::<pybudget::PyBudgetExceededHook>()?;
-    m.add_function(wrap_pyfunction!(pybudget::create_budget_exceeded_hook, m)?)?;
-    m.add_class::<pyrules::PyPredicate>()?;
-    m.add_class::<pyrules::PyRuleChain>()?;
-    m.add_class::<pyrules::PyRuleChainBuilder>()?;
-    m.add_function(wrap_pyfunction!(pyrules::create_rule_chain, m)?)?;
-    m.add_function(wrap_pyfunction!(pyrules::create_contains_predicate, m)?)?;
-    m.add_function(wrap_pyfunction!(pyrules::create_regex_field_predicate, m)?)?;
-    m.add_function(wrap_pyfunction!(pyrules::create_number_range_predicate, m)?)?;
-    m.add_function(wrap_pyfunction!(pyrules::create_rate_limit_predicate, m)?)?;
-    m.add_function(wrap_pyfunction!(pyrules::create_rule_approval_hook, m)?)?;
-    m.add_class::<pyskills::PySkill>()?;
-    m.add_function(wrap_pyfunction!(pyskills::load_skills, m)?)?;
-    m.add_class::<pyharness::PyAgentHarness>()?;
-    m.add_class::<pyharness::PyHarnessEventIterator>()?;
-    m.add_class::<pyworkflow::PyWorkflowEngine>()?;
-    m.add_class::<pyworkflow::PyWorkflowEventIterator>()?;
-    m.add_class::<pymcp::PyMcpServerConfig>()?;
-    m.add_class::<pymcp::PyMcpManager>()?;
+    m.add_function(wrap_pyfunction!(
+        crate::core::pyprovider::create_anthropic_provider,
+        m
+    )?)?;
+    m.add_class::<crate::runtime::pypricing::PyPricingProvider>()?;
+    m.add_function(wrap_pyfunction!(
+        crate::runtime::pypricing::create_pricing_provider,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        crate::runtime::pypricing::create_pricing_provider_callback,
+        m
+    )?)?;
+    m.add_class::<crate::runtime::pybudget::PyBudgetExceededHook>()?;
+    m.add_function(wrap_pyfunction!(
+        crate::runtime::pybudget::create_budget_exceeded_hook,
+        m
+    )?)?;
+    m.add_class::<crate::runtime::pyrules::PyPredicate>()?;
+    m.add_class::<crate::runtime::pyrules::PyRuleChain>()?;
+    m.add_class::<crate::runtime::pyrules::PyRuleChainBuilder>()?;
+    m.add_function(wrap_pyfunction!(
+        crate::runtime::pyrules::create_rule_chain,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        crate::runtime::pyrules::create_contains_predicate,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        crate::runtime::pyrules::create_regex_field_predicate,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        crate::runtime::pyrules::create_number_range_predicate,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        crate::runtime::pyrules::create_rate_limit_predicate,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        crate::runtime::pyrules::create_rule_approval_hook,
+        m
+    )?)?;
+    m.add_class::<crate::runtime::pyskills::PySkill>()?;
+    m.add_function(wrap_pyfunction!(crate::runtime::pyskills::load_skills, m)?)?;
+    m.add_class::<crate::core::pyharness::PyAgentHarness>()?;
+    m.add_class::<crate::core::pyharness::PyHarnessEventIterator>()?;
+    m.add_class::<crate::runtime::pyworkflow::PyWorkflowEngine>()?;
+    m.add_class::<crate::runtime::pyworkflow::PyWorkflowEventIterator>()?;
+    m.add_class::<crate::runtime::pymcp::PyMcpServerConfig>()?;
+    m.add_class::<crate::runtime::pymcp::PyMcpManager>()?;
     Ok(())
 }
 
@@ -141,13 +162,13 @@ fn version() -> &'static str {
 #[pyfunction]
 #[pyo3(text_signature = "(loop)")]
 fn set_event_loop(loop_obj: Py<PyAny>) {
-    pyloop::set_event_loop(loop_obj);
+    crate::core::pyloop::set_event_loop(loop_obj);
 }
 
 /// Convert a Python object to a JSON string.
 #[pyfunction]
 fn to_json(obj: &Bound<'_, PyAny>) -> PyResult<String> {
-    let value = crate::value_conv::pyobject_to_value(obj)?;
+    let value = crate::shared::value_conv::pyobject_to_value(obj)?;
     Ok(value.to_string())
 }
 
@@ -156,7 +177,7 @@ fn to_json(obj: &Bound<'_, PyAny>) -> PyResult<String> {
 fn from_json(py: Python<'_>, json_str: &str) -> PyResult<Py<PyAny>> {
     let value: serde_json::Value = serde_json::from_str(json_str)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-    crate::value_conv::value_to_pyobject(py, &value)
+    crate::shared::value_conv::value_to_pyobject(py, &value)
 }
 
 /// 从 Python callable 创建一个同步 `Tool`。
@@ -170,7 +191,7 @@ fn create_sync_tool<'py>(
     description: &str,
     parameters_schema: &str,
     callback: Py<PyAny>,
-) -> PyResult<Bound<'py, pytool::PyToolWrapper>> {
+) -> PyResult<Bound<'py, crate::core::pytool::PyToolWrapper>> {
     create_tool(py, name, description, parameters_schema, callback)
 }
 
@@ -186,11 +207,16 @@ fn create_tool<'py>(
     description: &str,
     parameters_schema: &str,
     callback: Py<PyAny>,
-) -> PyResult<Bound<'py, pytool::PyToolWrapper>> {
+) -> PyResult<Bound<'py, crate::core::pytool::PyToolWrapper>> {
     let schema: serde_json::Value = serde_json::from_str(parameters_schema)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-    let tool = pytool::PyTool::new(name.to_string(), description.to_string(), schema, callback);
-    let wrapper = pytool::PyToolWrapper {
+    let tool = crate::core::pytool::PyTool::new(
+        name.to_string(),
+        description.to_string(),
+        schema,
+        callback,
+    );
+    let wrapper = crate::core::pytool::PyToolWrapper {
         tool: Arc::new(tool),
     };
     Py::new(py, wrapper).map(|p| p.into_bound(py))
@@ -204,9 +230,9 @@ fn create_tool<'py>(
 fn create_judge<'py>(
     py: Python<'py>,
     callback: Py<PyAny>,
-) -> PyResult<Bound<'py, pyworkflow::PyJudgeWrapper>> {
-    let judge = pyworkflow::PyJudge::new(callback);
-    let wrapper = pyworkflow::PyJudgeWrapper {
+) -> PyResult<Bound<'py, crate::runtime::pyworkflow::PyJudgeWrapper>> {
+    let judge = crate::runtime::pyworkflow::PyJudge::new(callback);
+    let wrapper = crate::runtime::pyworkflow::PyJudgeWrapper {
         judge: Arc::new(judge)
             as Arc<dyn llm_harness_runtime::workflow::judge::StepTransitionJudge>,
     };
@@ -229,8 +255,8 @@ fn create_judge<'py>(
 #[pyfunction]
 fn create_composite_judge<'py>(
     py: Python<'py>,
-) -> PyResult<Bound<'py, pyworkflow::PyCompositeJudge>> {
-    Py::new(py, pyworkflow::PyCompositeJudge::new()).map(|p| p.into_bound(py))
+) -> PyResult<Bound<'py, crate::runtime::pyworkflow::PyCompositeJudge>> {
+    Py::new(py, crate::runtime::pyworkflow::PyCompositeJudge::new()).map(|p| p.into_bound(py))
 }
 
 /// 从 Python callable 创建一个 `StepExecutor`。
@@ -241,9 +267,9 @@ fn create_composite_judge<'py>(
 fn create_executor<'py>(
     py: Python<'py>,
     callback: Py<PyAny>,
-) -> PyResult<Bound<'py, pyworkflow::PyExecutorWrapper>> {
-    let executor = pyworkflow::PyExecutor::new(callback);
-    let wrapper = pyworkflow::PyExecutorWrapper {
+) -> PyResult<Bound<'py, crate::runtime::pyworkflow::PyExecutorWrapper>> {
+    let executor = crate::runtime::pyworkflow::PyExecutor::new(callback);
+    let wrapper = crate::runtime::pyworkflow::PyExecutorWrapper {
         executor: Arc::new(executor),
     };
     Py::new(py, wrapper).map(|p| p.into_bound(py))
@@ -264,11 +290,11 @@ fn create_shell_executor<'py>(
     commands: Vec<String>,
     default_timeout_ms: u64,
     max_output_bytes: usize,
-) -> PyResult<Bound<'py, pyworkflow::PyExecutorWrapper>> {
+) -> PyResult<Bound<'py, crate::runtime::pyworkflow::PyExecutorWrapper>> {
     let exec = ShellExecutor::new(commands)
         .with_default_timeout(std::time::Duration::from_millis(default_timeout_ms))
         .with_max_output_bytes(max_output_bytes);
-    let wrapper = pyworkflow::PyExecutorWrapper {
+    let wrapper = crate::runtime::pyworkflow::PyExecutorWrapper {
         executor: Arc::new(exec),
     };
     Py::new(py, wrapper).map(|p| p.into_bound(py))
@@ -288,7 +314,7 @@ fn create_http_executor<'py>(
     allowed_schemes: Option<Vec<String>>,
     max_timeout_ms: u64,
     allow_private_ip_targets: bool,
-) -> PyResult<Bound<'py, pyworkflow::PyExecutorWrapper>> {
+) -> PyResult<Bound<'py, crate::runtime::pyworkflow::PyExecutorWrapper>> {
     let mut policy = HttpCallPolicy::new(allowed_hosts)
         .with_max_timeout(std::time::Duration::from_millis(max_timeout_ms));
     if let Some(schemes) = allowed_schemes {
@@ -296,7 +322,7 @@ fn create_http_executor<'py>(
     }
     policy = policy.allow_private_ip_targets(allow_private_ip_targets);
     let exec = HttpCallExecutor::new(policy);
-    let wrapper = pyworkflow::PyExecutorWrapper {
+    let wrapper = crate::runtime::pyworkflow::PyExecutorWrapper {
         executor: Arc::new(exec),
     };
     Py::new(py, wrapper).map(|p| p.into_bound(py))
@@ -319,10 +345,10 @@ fn create_http_executor<'py>(
 fn create_os_env<'py>(
     py: Python<'py>,
     working_dir: &str,
-) -> PyResult<Bound<'py, pyworkflow::PyEnvWrapper>> {
+) -> PyResult<Bound<'py, crate::runtime::pyworkflow::PyEnvWrapper>> {
     let env: Arc<dyn llm_harness_types::ExecutionEnv> =
         Arc::new(OsEnv::new(std::path::PathBuf::from(working_dir)));
-    Py::new(py, pyworkflow::PyEnvWrapper::new(env)).map(|p| p.into_bound(py))
+    Py::new(py, crate::runtime::pyworkflow::PyEnvWrapper::new(env)).map(|p| p.into_bound(py))
 }
 
 /// 创建一个聚合 `bash`/`read`/`write`/`edit` 四件套的 `FsToolsPlugin`。
@@ -342,13 +368,15 @@ fn create_os_env<'py>(
 /// harness = lh.HarnessBuilder("gpt-4o").plugin(plugin).env(lh.create_os_env()).build()
 /// ```
 #[pyfunction]
-fn create_fs_tools_plugin<'py>(py: Python<'py>) -> PyResult<Bound<'py, pyplugin::PyPluginWrapper>> {
+fn create_fs_tools_plugin<'py>(
+    py: Python<'py>,
+) -> PyResult<Bound<'py, crate::core::pyplugin::PyPluginWrapper>> {
     let store = Arc::new(parking_lot::RwLock::new(
         llm_harness_runtime_tools::FileSnapshotStore::new(),
     ));
     let plugin: Arc<dyn llm_harness_agent::Plugin> =
         Arc::new(llm_harness_runtime_tools::FsToolsPlugin::new(Some(store)));
-    Py::new(py, pyplugin::PyPluginWrapper::new(plugin)).map(|p| p.into_bound(py))
+    Py::new(py, crate::core::pyplugin::PyPluginWrapper::new(plugin)).map(|p| p.into_bound(py))
 }
 
 /// 从 Python callable 创建一个 `BeforeTurnHook`。
@@ -360,12 +388,12 @@ fn create_fs_tools_plugin<'py>(py: Python<'py>) -> PyResult<Bound<'py, pyplugin:
 fn create_before_turn_hook<'py>(
     py: Python<'py>,
     callback: Py<PyAny>,
-) -> PyResult<Bound<'py, pyhooks::PyHookWrapper>> {
-    let hook = pyhooks::PyBeforeTurnHook::new(callback);
+) -> PyResult<Bound<'py, crate::core::pyhooks::PyHookWrapper>> {
+    let hook = crate::core::pyhooks::PyBeforeTurnHook::new(callback);
     Py::new(
         py,
-        pyhooks::PyHookWrapper {
-            kind: pyhooks::HookKind::BeforeTurn(Arc::new(hook)),
+        crate::core::pyhooks::PyHookWrapper {
+            kind: crate::core::pyhooks::HookKind::BeforeTurn(Arc::new(hook)),
         },
     )
     .map(|p| p.into_bound(py))
@@ -380,12 +408,12 @@ fn create_before_turn_hook<'py>(
 fn create_after_turn_hook<'py>(
     py: Python<'py>,
     callback: Py<PyAny>,
-) -> PyResult<Bound<'py, pyhooks::PyHookWrapper>> {
-    let hook = pyhooks::PyAfterTurnHook::new(callback);
+) -> PyResult<Bound<'py, crate::core::pyhooks::PyHookWrapper>> {
+    let hook = crate::core::pyhooks::PyAfterTurnHook::new(callback);
     Py::new(
         py,
-        pyhooks::PyHookWrapper {
-            kind: pyhooks::HookKind::AfterTurn(Arc::new(hook)),
+        crate::core::pyhooks::PyHookWrapper {
+            kind: crate::core::pyhooks::HookKind::AfterTurn(Arc::new(hook)),
         },
     )
     .map(|p| p.into_bound(py))
@@ -401,12 +429,12 @@ fn create_after_turn_hook<'py>(
 fn create_before_run_hook<'py>(
     py: Python<'py>,
     callback: Py<PyAny>,
-) -> PyResult<Bound<'py, pyhooks::PyHookWrapper>> {
-    let hook = pyhooks::PyBeforeRunHook::new(callback);
+) -> PyResult<Bound<'py, crate::core::pyhooks::PyHookWrapper>> {
+    let hook = crate::core::pyhooks::PyBeforeRunHook::new(callback);
     Py::new(
         py,
-        pyhooks::PyHookWrapper {
-            kind: pyhooks::HookKind::BeforeRun(Arc::new(hook)),
+        crate::core::pyhooks::PyHookWrapper {
+            kind: crate::core::pyhooks::HookKind::BeforeRun(Arc::new(hook)),
         },
     )
     .map(|p| p.into_bound(py))
@@ -421,12 +449,12 @@ fn create_before_run_hook<'py>(
 fn create_after_provider_response_hook<'py>(
     py: Python<'py>,
     callback: Py<PyAny>,
-) -> PyResult<Bound<'py, pyhooks::PyHookWrapper>> {
-    let hook = pyhooks::PyAfterProviderResponseHook::new(callback);
+) -> PyResult<Bound<'py, crate::core::pyhooks::PyHookWrapper>> {
+    let hook = crate::core::pyhooks::PyAfterProviderResponseHook::new(callback);
     Py::new(
         py,
-        pyhooks::PyHookWrapper {
-            kind: pyhooks::HookKind::AfterProviderResponse(Arc::new(hook)),
+        crate::core::pyhooks::PyHookWrapper {
+            kind: crate::core::pyhooks::HookKind::AfterProviderResponse(Arc::new(hook)),
         },
     )
     .map(|p| p.into_bound(py))
@@ -441,12 +469,12 @@ fn create_after_provider_response_hook<'py>(
 fn create_before_provider_request_hook<'py>(
     py: Python<'py>,
     callback: Py<PyAny>,
-) -> PyResult<Bound<'py, pyhooks::PyHookWrapper>> {
-    let hook = pyhooks::PyBeforeProviderRequestHook::new(callback);
+) -> PyResult<Bound<'py, crate::core::pyhooks::PyHookWrapper>> {
+    let hook = crate::core::pyhooks::PyBeforeProviderRequestHook::new(callback);
     Py::new(
         py,
-        pyhooks::PyHookWrapper {
-            kind: pyhooks::HookKind::BeforeProviderRequest(Arc::new(hook)),
+        crate::core::pyhooks::PyHookWrapper {
+            kind: crate::core::pyhooks::HookKind::BeforeProviderRequest(Arc::new(hook)),
         },
     )
     .map(|p| p.into_bound(py))
@@ -462,12 +490,12 @@ fn create_before_provider_request_hook<'py>(
 fn create_before_tool_call_hook<'py>(
     py: Python<'py>,
     callback: Py<PyAny>,
-) -> PyResult<Bound<'py, pyhooks::PyHookWrapper>> {
-    let hook = pyhooks::PyBeforeToolCallHook::new(callback);
+) -> PyResult<Bound<'py, crate::core::pyhooks::PyHookWrapper>> {
+    let hook = crate::core::pyhooks::PyBeforeToolCallHook::new(callback);
     Py::new(
         py,
-        pyhooks::PyHookWrapper {
-            kind: pyhooks::HookKind::BeforeToolCall(Arc::new(hook)),
+        crate::core::pyhooks::PyHookWrapper {
+            kind: crate::core::pyhooks::HookKind::BeforeToolCall(Arc::new(hook)),
         },
     )
     .map(|p| p.into_bound(py))
@@ -483,12 +511,12 @@ fn create_before_tool_call_hook<'py>(
 fn create_after_tool_call_hook<'py>(
     py: Python<'py>,
     callback: Py<PyAny>,
-) -> PyResult<Bound<'py, pyhooks::PyHookWrapper>> {
-    let hook = pyhooks::PyAfterToolCallHook::new(callback);
+) -> PyResult<Bound<'py, crate::core::pyhooks::PyHookWrapper>> {
+    let hook = crate::core::pyhooks::PyAfterToolCallHook::new(callback);
     Py::new(
         py,
-        pyhooks::PyHookWrapper {
-            kind: pyhooks::HookKind::AfterToolCall(Arc::new(hook)),
+        crate::core::pyhooks::PyHookWrapper {
+            kind: crate::core::pyhooks::HookKind::AfterToolCall(Arc::new(hook)),
         },
     )
     .map(|p| p.into_bound(py))
@@ -504,12 +532,12 @@ fn create_after_tool_call_hook<'py>(
 fn create_should_stop_hook<'py>(
     py: Python<'py>,
     callback: Py<PyAny>,
-) -> PyResult<Bound<'py, pyhooks::PyHookWrapper>> {
-    let hook = pyhooks::PyShouldStopHook::new(callback);
+) -> PyResult<Bound<'py, crate::core::pyhooks::PyHookWrapper>> {
+    let hook = crate::core::pyhooks::PyShouldStopHook::new(callback);
     Py::new(
         py,
-        pyhooks::PyHookWrapper {
-            kind: pyhooks::HookKind::ShouldStop(Arc::new(hook)),
+        crate::core::pyhooks::PyHookWrapper {
+            kind: crate::core::pyhooks::HookKind::ShouldStop(Arc::new(hook)),
         },
     )
     .map(|p| p.into_bound(py))
@@ -527,12 +555,12 @@ fn create_should_stop_hook<'py>(
 fn create_before_compact_hook<'py>(
     py: Python<'py>,
     callback: Py<PyAny>,
-) -> PyResult<Bound<'py, pyhooks::PyHookWrapper>> {
-    let hook = pyhooks::PyBeforeCompactHook::new(callback);
+) -> PyResult<Bound<'py, crate::core::pyhooks::PyHookWrapper>> {
+    let hook = crate::core::pyhooks::PyBeforeCompactHook::new(callback);
     Py::new(
         py,
-        pyhooks::PyHookWrapper {
-            kind: pyhooks::HookKind::BeforeCompact(Arc::new(hook)),
+        crate::core::pyhooks::PyHookWrapper {
+            kind: crate::core::pyhooks::HookKind::BeforeCompact(Arc::new(hook)),
         },
     )
     .map(|p| p.into_bound(py))
@@ -548,12 +576,12 @@ fn create_before_compact_hook<'py>(
 fn create_transform_context_hook<'py>(
     py: Python<'py>,
     callback: Py<PyAny>,
-) -> PyResult<Bound<'py, pyhooks::PyHookWrapper>> {
-    let hook = pyhooks::PyTransformContextHook::new(callback);
+) -> PyResult<Bound<'py, crate::core::pyhooks::PyHookWrapper>> {
+    let hook = crate::core::pyhooks::PyTransformContextHook::new(callback);
     Py::new(
         py,
-        pyhooks::PyHookWrapper {
-            kind: pyhooks::HookKind::TransformContext(Arc::new(hook)),
+        crate::core::pyhooks::PyHookWrapper {
+            kind: crate::core::pyhooks::HookKind::TransformContext(Arc::new(hook)),
         },
     )
     .map(|p| p.into_bound(py))
@@ -570,12 +598,12 @@ fn create_transform_context_hook<'py>(
 fn create_prepare_next_turn_hook<'py>(
     py: Python<'py>,
     callback: Py<PyAny>,
-) -> PyResult<Bound<'py, pyhooks::PyHookWrapper>> {
-    let hook = pyhooks::PyPrepareNextTurnHook::new(callback);
+) -> PyResult<Bound<'py, crate::core::pyhooks::PyHookWrapper>> {
+    let hook = crate::core::pyhooks::PyPrepareNextTurnHook::new(callback);
     Py::new(
         py,
-        pyhooks::PyHookWrapper {
-            kind: pyhooks::HookKind::PrepareNextTurn(Arc::new(hook)),
+        crate::core::pyhooks::PyHookWrapper {
+            kind: crate::core::pyhooks::HookKind::PrepareNextTurn(Arc::new(hook)),
         },
     )
     .map(|p| p.into_bound(py))
@@ -590,9 +618,9 @@ fn create_prepare_next_turn_hook<'py>(
 fn create_plugin<'py>(
     py: Python<'py>,
     name: &str,
-    tools: Option<Vec<Bound<'py, pytool::PyToolWrapper>>>,
-    hooks: Option<Vec<Bound<'py, pyhooks::PyHookWrapper>>>,
-) -> PyResult<Bound<'py, pyplugin::PyPluginWrapper>> {
+    tools: Option<Vec<Bound<'py, crate::core::pytool::PyToolWrapper>>>,
+    hooks: Option<Vec<Bound<'py, crate::core::pyhooks::PyHookWrapper>>>,
+) -> PyResult<Bound<'py, crate::core::pyplugin::PyPluginWrapper>> {
     let mut tool_vec: Vec<Arc<dyn llm_harness_types::Tool>> = vec![];
     if let Some(tools) = tools {
         for t in tools {
@@ -600,17 +628,15 @@ fn create_plugin<'py>(
             tool_vec.push(borrowed.tool.clone());
         }
     }
-    let mut hook_vec: Vec<pyhooks::HookKind> = vec![];
+    let mut hook_vec: Vec<crate::core::pyhooks::HookKind> = vec![];
     if let Some(hooks) = hooks {
         for h in hooks {
             let borrowed = h.try_borrow()?;
             hook_vec.push(borrowed.kind.clone());
         }
     }
-    let plugin: Arc<dyn llm_harness_agent::Plugin> = Arc::new(pyplugin::PyPlugin::new(
-        name.to_string(),
-        tool_vec,
-        hook_vec,
-    ));
-    Py::new(py, pyplugin::PyPluginWrapper::new(plugin)).map(|p| p.into_bound(py))
+    let plugin: Arc<dyn llm_harness_agent::Plugin> = Arc::new(
+        crate::core::pyplugin::PyPlugin::new(name.to_string(), tool_vec, hook_vec),
+    );
+    Py::new(py, crate::core::pyplugin::PyPluginWrapper::new(plugin)).map(|p| p.into_bound(py))
 }

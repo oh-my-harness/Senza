@@ -28,14 +28,14 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use serde_json::Value;
 
-use crate::pyagent::runtime;
-use crate::pybuilder::PyHarnessBuilder;
-use crate::pyeventstream::PyWaitForExternalEventTool;
-use crate::pyplugin::PyPluginWrapper;
-use crate::pypricing::PyPricingProvider;
-use crate::pyprovider::PyProvider;
-use crate::pytool::PyToolWrapper;
-use crate::value_conv::{pyobject_to_value, value_to_pyobject};
+use crate::core::pyagent::runtime;
+use crate::core::pybuilder::PyHarnessBuilder;
+use crate::core::pyeventstream::PyWaitForExternalEventTool;
+use crate::core::pyplugin::PyPluginWrapper;
+use crate::core::pyprovider::PyProvider;
+use crate::core::pytool::PyToolWrapper;
+use crate::runtime::pypricing::PyPricingProvider;
+use crate::shared::value_conv::{pyobject_to_value, value_to_pyobject};
 
 // ── PyJudge ─────────────────────────────────────────────────────────────────
 
@@ -1398,9 +1398,9 @@ impl PyWorkflowEngine {
 
         let mut harness_hooks = HarnessHooks::none();
         for item in hooks_list.iter() {
-            let wrapper = item.cast::<crate::pyhooks::PyHookWrapper>()?;
+            let wrapper = item.cast::<crate::core::pyhooks::PyHookWrapper>()?;
             let kind = &wrapper.borrow().kind;
-            use crate::pyhooks::HookKind;
+            use crate::core::pyhooks::HookKind;
             match kind {
                 HookKind::BeforeTurn(h) => harness_hooks.before_turn.push(h.clone()),
                 HookKind::AfterTurn(h) => harness_hooks.after_turn.push(h.clone()),
@@ -1664,7 +1664,7 @@ impl PyWorkflowEngine {
         let store = JsonlTaskStore::new(PathBuf::from(task_store_dir));
         let rt = runtime(py);
         let summaries: Vec<TaskSummary> =
-            crate::pyerror::detach_catch_panic_result(py, move || {
+            crate::shared::pyerror::detach_catch_panic_result(py, move || {
                 rt.block_on(async move { store.list_tasks().await })
             })?;
         let mut result = Vec::with_capacity(summaries.len());
@@ -1808,7 +1808,7 @@ impl PyWorkflowEngine {
             .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("engine not available"))?;
         let engine_clone = engine.clone();
         let rt = runtime(py);
-        crate::pyerror::block_on_with_signal_check(
+        crate::shared::pyerror::block_on_with_signal_check(
             py,
             rt,
             async move { engine_clone.run().await.map_err(workflow_error_to_pyerr) },
@@ -1834,7 +1834,7 @@ impl PyWorkflowEngine {
             .as_ref()
             .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("engine not available"))?;
         let rt = runtime(py);
-        let status = crate::pyerror::detach_catch_panic(py, move || {
+        let status = crate::shared::pyerror::detach_catch_panic(py, move || {
             rt.block_on(async move { engine.state().await })
         })?;
         Ok(workflow_status_to_str(&status).to_string())
@@ -1847,7 +1847,7 @@ impl PyWorkflowEngine {
             .as_ref()
             .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("engine not available"))?;
         let rt = runtime(py);
-        let step = crate::pyerror::detach_catch_panic(py, move || {
+        let step = crate::shared::pyerror::detach_catch_panic(py, move || {
             rt.block_on(async move { engine.current_step().await })
         })?;
         Ok(step)
@@ -1860,7 +1860,7 @@ impl PyWorkflowEngine {
             .as_ref()
             .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("engine not available"))?;
         let rt = runtime(py);
-        let history = crate::pyerror::detach_catch_panic(py, move || {
+        let history = crate::shared::pyerror::detach_catch_panic(py, move || {
             rt.block_on(async move { engine.step_history().await })
         })?;
         let mut result = Vec::with_capacity(history.len());
@@ -1887,7 +1887,7 @@ impl PyWorkflowEngine {
             .as_ref()
             .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("engine not available"))?;
         let rt = runtime(py);
-        let result = crate::pyerror::detach_catch_panic(py, move || {
+        let result = crate::shared::pyerror::detach_catch_panic(py, move || {
             rt.block_on(async move { engine.resume().await })
         })?;
         result.map_err(workflow_error_to_pyerr)
@@ -1901,7 +1901,7 @@ impl PyWorkflowEngine {
             .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("engine not available"))?;
         let reason = reason.to_string();
         let rt = runtime(py);
-        let result = crate::pyerror::detach_catch_panic(py, move || {
+        let result = crate::shared::pyerror::detach_catch_panic(py, move || {
             rt.block_on(async move { engine.cancel(&reason).await })
         })?;
         result.map_err(workflow_error_to_pyerr)
@@ -1921,7 +1921,7 @@ impl PyWorkflowEngine {
         let payload_val = pyobject_to_value(payload)?;
         let description = description.to_string();
         let rt = runtime(py);
-        let result = crate::pyerror::detach_catch_panic(py, move || {
+        let result = crate::shared::pyerror::detach_catch_panic(py, move || {
             rt.block_on(async move { engine.checkpoint(&description, payload_val).await })
         })?;
         result.map_err(workflow_error_to_pyerr)
@@ -1934,7 +1934,7 @@ impl PyWorkflowEngine {
             .as_ref()
             .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("engine not available"))?;
         let rt = runtime(py);
-        let cost = crate::pyerror::detach_catch_panic(py, move || {
+        let cost = crate::shared::pyerror::detach_catch_panic(py, move || {
             rt.block_on(async move { engine.total_cost().await })
         })?;
         cost_aggregate_to_dict(py, &cost)
@@ -1974,7 +1974,7 @@ impl PyWorkflowEngine {
             let engine_clone = engine.clone();
             let py = _exc_type.py();
             let rt = runtime(py);
-            let _ = crate::pyerror::detach_catch_panic(py, move || {
+            let _ = crate::shared::pyerror::detach_catch_panic(py, move || {
                 rt.block_on(async { engine_clone.cancel("context manager exit").await })
             })?;
         }
@@ -1990,7 +1990,7 @@ impl PyWorkflowEngine {
         let task_id = engine.task_id().0.clone();
         let engine_clone = engine.clone();
         let rt = runtime(py);
-        let state = crate::pyerror::detach_catch_panic(py, move || {
+        let state = crate::shared::pyerror::detach_catch_panic(py, move || {
             rt.block_on(async { workflow_status_to_str(&engine_clone.state().await).to_string() })
         })?;
         Ok(format!(
@@ -2048,7 +2048,7 @@ impl PyWorkflowEventIterator {
         let timeout = std::time::Duration::from_millis(self.timeout_ms);
         let handle = self.handle.clone();
 
-        let recv_result = crate::pyerror::detach_catch_panic(py, move || {
+        let recv_result = crate::shared::pyerror::detach_catch_panic(py, move || {
             handle.block_on(async move { tokio::time::timeout(timeout, rx.recv()).await })
         })?;
 
