@@ -205,6 +205,20 @@ fn senza(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
         strategy::pyeventstreams::create_webhook_stream,
         m
     )?)?;
+    m.add_class::<crate::strategy::pyeventstreams::PyHeartbeatHandle>()?;
+    m.add_class::<crate::strategy::pyeventstreams::PyShellMonitorHandle>()?;
+    m.add_function(wrap_pyfunction!(
+        strategy::pyeventstreams::create_timer_stream,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        strategy::pyeventstreams::create_heartbeat_stream,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        strategy::pyeventstreams::create_shell_monitor_stream,
+        m
+    )?)?;
     m.add_function(wrap_pyfunction!(
         strategy::pycompaction::create_context_aware_compaction_prompt,
         m

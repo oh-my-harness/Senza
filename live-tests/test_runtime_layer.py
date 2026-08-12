@@ -122,3 +122,70 @@ def test_runtime_constructs_offline():
     stub = senza.providers.openai(api_key="sk-test")
     e = senza.WorkflowEngine(_flow(), stub, live_model(), _judge())
     assert e is not None and e.state() == "idle"
+
+
+# ── Spawn tests (mirrors runtime runtime_layer/spawn.rs) ─────────────────
+
+def _make_spawn_harness(provider, session_dir):
+    """Build a harness with spawn infrastructure enabled."""
+    builder = senza.HarnessBuilder(live_model()).provider("*", provider)
+    builder = builder.enable_spawn(
+        model=live_model(),
+        provider=provider,
+        session_dir=session_dir,
+    ).system_prompt(
+        "You are a helpful assistant that can dispatch sub-agents for sub-tasks. "
+        "Use the spawn_agent tool to delegate work, await_subagent_reply to wait "
+        "for results, and query_subagent to check status."
+    )
+    return builder.build()
+
+
+def test_spawn_async_completes():
+    """spawn_agent tool is called and spawn completes."""
+    provider = provider_or_skip()
+    session_dir = tempfile.mkdtemp()
+    h = _make_spawn_harness(provider, session_dir)
+    ev = run_prompt(
+        h,
+        "Use the spawn_agent tool to spawn a sub-agent with the prompt "
+        "'Say hello in one word.'",
+        timeout_ms=120_000,
+    )
+    from base import assert_settled, assert_tool_called
+    assert_settled(ev)
+    assert_tool_called(ev, "spawn_agent")
+
+
+def test_await_subagent_reply():
+    """spawn_agent + await_subagent_reply delivers a reply."""
+    provider = provider_or_skip()
+    session_dir = tempfile.mkdtemp()
+    h = _make_spawn_harness(provider, session_dir)
+    ev = run_prompt(
+        h,
+        "Spawn a sub-agent with prompt 'What is 2+2? Answer with just the number.' "
+        "Then use await_subagent_reply to get the response.",
+        timeout_ms=120_000,
+    )
+    from base import assert_settled, assert_tool_called
+    assert_settled(ev)
+    assert_tool_called(ev, "spawn_agent")
+    assert_tool_called(ev, "await_subagent_reply")
+
+
+def test_query_subagent_status():
+    """spawn_agent + query_subagent returns status."""
+    provider = provider_or_skip()
+    session_dir = tempfile.mkdtemp()
+    h = _make_spawn_harness(provider, session_dir)
+    ev = run_prompt(
+        h,
+        "Spawn a sub-agent with prompt 'Count from 1 to 5.' "
+        "Then use query_subagent to check its status.",
+        timeout_ms=120_000,
+    )
+    from base import assert_settled, assert_tool_called
+    assert_settled(ev)
+    assert_tool_called(ev, "spawn_agent")
+    assert_tool_called(ev, "query_subagent")

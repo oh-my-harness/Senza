@@ -66,3 +66,108 @@ def test_tools_constructs_offline():
     )
     k_h = make_harness(stub, lambda b: b.plugin(plugin))
     assert env_h is not None and k_h is not None and env_h.phase() == "idle"
+
+
+# ── Event stream tests (mirrors runtime tools_layer/event_stream.rs) ──────
+# All 4 are skipped: GLM streaming bug — WaitForExternalEventTool has empty
+# properties schema, LLM won't emit tool_call chunk. Same as runtime #[ignore].
+
+import pytest
+
+
+@pytest.mark.skip(reason="GLM streaming bug: empty properties schema")
+def test_timer_stream():
+    """TimerStream::once fires after delay; LLM calls wait_for_external_event."""
+    provider = provider_or_skip()
+    (tool,) = senza.create_timer_stream(delay_ms=2000, label="test-timer", task_id="task1")
+    h = make_harness(provider, lambda b: b.tool(tool))
+    ev = run_prompt(
+        h,
+        "Use the wait_for_external_event tool to wait for a scheduled timer event. "
+        "After the tool returns, tell me what happened.",
+        timeout_ms=120_000,
+    )
+    assert_settled(ev)
+    assert_tool_called(ev, "wait_for_external_event")
+
+
+@pytest.mark.skip(reason="GLM streaming bug: empty properties schema")
+def test_webhook_stream():
+    """WebhookStream receives externally-pushed payload."""
+    import threading
+    import time
+
+    provider = provider_or_skip()
+    handle, tool = senza.create_event_channel(task_id="task1")
+
+    def push_later():
+        time.sleep(1)
+        handle.submit("test-event", {"event": "test"})
+
+    threading.Thread(target=push_later, daemon=True).start()
+    h = make_harness(provider, lambda b: b.tool(tool))
+    ev = run_prompt(
+        h,
+        "Use the wait_for_external_event tool to wait for an external event. "
+        "After the tool returns, tell me what happened.",
+        timeout_ms=120_000,
+    )
+    assert_settled(ev)
+    assert_tool_called(ev, "wait_for_external_event")
+
+
+@pytest.mark.skip(reason="GLM streaming bug: empty properties schema")
+def test_heartbeat_stream():
+    """HeartbeatStream fires when tick() is never called."""
+    provider = provider_or_skip()
+    handle, tool = senza.create_heartbeat_stream(
+        timeout_ms=3000, label="test-heartbeat", task_id="task1"
+    )
+    h = make_harness(provider, lambda b: b.tool(tool))
+    ev = run_prompt(
+        h,
+        "Use the wait_for_external_event tool to wait for a heartbeat event. "
+        "After the tool returns, tell me what happened.",
+        timeout_ms=120_000,
+    )
+    assert_settled(ev)
+    assert_tool_called(ev, "wait_for_external_event")
+
+
+@pytest.mark.skip(reason="GLM streaming bug: empty properties schema")
+def test_shell_monitor_stream():
+    """ShellMonitorStream captures stdout from a shell command."""
+    provider = provider_or_skip()
+    handle, tool = senza.create_shell_monitor_stream(
+        command="echo hello-from-shell",
+        cwd=None,
+        label="test-shell",
+        task_id="task1",
+    )
+    h = make_harness(provider, lambda b: b.tool(tool))
+    ev = run_prompt(
+        h,
+        "Use the wait_for_external_event tool to wait for shell output. "
+        "After the tool returns, tell me what happened.",
+        timeout_ms=120_000,
+    )
+    assert_settled(ev)
+    assert_tool_called(ev, "wait_for_external_event")
+
+@pytest.mark.skip(reason="requires MCP server (npx @modelcontextprotocol/server-everything)")
+def test_mcp_tool_discovery():
+    """MCP tools are discovered from a stdio MCP server."""
+    manager = senza.McpManager()
+    config = senza.McpServerConfig.stdio(
+        command="npx",
+        args=["-y", "@modelcontextprotocol/server-everything"],
+    )
+    manager.add_server("everything", config)
+    # Wait for server initialization
+    import time
+    time.sleep(3)
+    tools = manager.list_tools()
+    assert len(tools) >= 1, f"expected >=1 MCP tool, got {len(tools)}"
+    for tool_name in tools:
+        assert tool_name, f"empty tool name: {tool_name}"
+    manager.disconnect_all()

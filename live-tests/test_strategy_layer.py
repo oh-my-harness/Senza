@@ -1,7 +1,7 @@
 """Strategy layer live tests: safety, injection filter, loop safety, status/memory/source/notify/compact."""
 
 import senza
-from base import assert_no_error, assert_settled, make_harness, provider_or_skip, run_prompt
+from base import assert_no_error, assert_settled, live_model, make_harness, provider_or_skip, run_prompt
 
 
 def bash_tool():
@@ -78,6 +78,43 @@ def test_notify():
     h = make_harness(provider_or_skip(), lambda b: b.plugin(senza.strategy.notify()))
     ev = run_prompt(h, "Say hello.")
     assert_settled(ev)
+
+
+def test_context_aware_compact():
+    """Manual compact() with context_aware_prompt_spec: token reduction + events."""
+    provider = provider_or_skip()
+    system_prompt, user_template = senza.strategy.context_aware_compaction_prompt()
+    h = make_harness(
+        provider,
+        lambda b: (
+            b.max_tokens(1024)
+            .model_info(context_window=800, max_tokens=1024)
+            .compaction_model(live_model(), context_window=200_000, max_tokens=4096)
+            .compaction_keep_recent_tokens(100)
+            .compaction_reserve_tokens(50)
+            .compaction_prompt(system_prompt, user_template)
+            .compaction_query("User is collecting facts about space for a science report")
+            .auto_compact(False)
+        ),
+    )
+    # 3 turns to build up history with long-ish prompts.
+    for i in range(1, 4):
+        ev = run_prompt(
+            h,
+            f"Tell me fact #{i} about space. Give a detailed explanation with at least 3 sentences.",
+            timeout_ms=60_000,
+        )
+        assert_settled(ev)
+
+    entries_before = len(h.read_active_path())
+    assert entries_before >= 2, f"should have entries before compaction, got {entries_before}"
+
+    # Manually trigger compaction with the context-aware prompt spec.
+    stats = h.compact()
+
+    assert stats["tokens_after"] < stats["tokens_before"], (
+        f"tokens_after ({stats['tokens_after']}) should be < tokens_before ({stats['tokens_before']})"
+    )
 
 
 def test_strategy_constructs_offline():

@@ -32,6 +32,7 @@ use crate::runtime::pypricing::PyPricingProvider;
 use crate::runtime::pyskills::PySkill;
 
 use crate::runtime::pymcp::{PyMcpManager, PyMcpServerConfig};
+use crate::runtime::pyspawn::wire_spawn;
 use crate::runtime::pyworkflow::PyEnvWrapper;
 /// Python 侧的 `HarnessBuilder`。
 ///
@@ -48,6 +49,15 @@ pub struct PyHarnessBuilder {
     mcp_config_files: Vec<PathBuf>,
     /// 外部 McpManager（高级 API），在 build() 时注入。
     mcp_manager: Option<Arc<llm_harness_runtime_mcp::manager::McpManager>>,
+    /// Spawn 配置（model, client, session_dir），在 build() 时完成 spawn 基础设施粘合。
+    spawn_config: Option<SpawnConfig>,
+}
+
+/// Spawn 配置：`enable_spawn()` 存储的参数，`build()` 时消费。
+pub(crate) struct SpawnConfig {
+    pub(crate) model: String,
+    pub(crate) client: Arc<dyn llm_harness_loop::LlmClient>,
+    pub(crate) session_dir: PathBuf,
 }
 #[pymethods]
 impl PyHarnessBuilder {
@@ -59,6 +69,7 @@ impl PyHarnessBuilder {
             mcp_servers: Vec::new(),
             mcp_config_files: Vec::new(),
             mcp_manager: None,
+            spawn_config: None,
         }
     }
 
@@ -523,6 +534,31 @@ impl PyHarnessBuilder {
         slf
     }
 
+    /// Enable sub-agent spawn infrastructure.
+    ///
+    /// Wires `MessageBus`, `HarnessSubAgentSpawner`, `AsyncSpawnHook`,
+    /// `IdleWatcher`, and the three spawn tools (`spawn_agent`,
+    /// `await_subagent_reply`, `query_subagent`) into the harness at build time.
+    ///
+    /// Args:
+    ///     model: Default model name for sub-agents.
+    ///     provider: LLM provider for sub-agents (same as main agent's provider).
+    ///     session_dir: Directory for sub-agent session JSONL files.
+    #[pyo3(text_signature = "($self, model, provider, session_dir)")]
+    fn enable_spawn<'a>(
+        mut slf: PyRefMut<'a, Self>,
+        model: &str,
+        provider: &Bound<'_, PyProvider>,
+        session_dir: &str,
+    ) -> PyRefMut<'a, Self> {
+        slf.spawn_config = Some(SpawnConfig {
+            model: model.to_string(),
+            client: provider.borrow().client.clone(),
+            session_dir: PathBuf::from(session_dir),
+        });
+        slf
+    }
+
     /// 返回 builder 状态摘要。
     fn __repr__(&self) -> String {
         match &self.builder {
@@ -562,6 +598,8 @@ impl PyHarnessBuilder {
             || !self.mcp_config_files.is_empty()
             || self.mcp_manager.is_some();
 
+        let spawn_config = self.spawn_config.take();
+
         if has_mcp {
             // 提升为 McpHarnessBuilder 并追加 MCP 配置。
             let mut mcp_builder = builder.with_mcp();
@@ -580,10 +618,23 @@ impl PyHarnessBuilder {
             })?;
             Py::new(py, PyAgentHarness::new_mcp(Arc::new(mcp_harness)))
         } else {
+            // If spawn is enabled, wire spawn infrastructure into the builder
+            // before build, and set post-build hooks after.
+            let (builder, spawn_wiring) = match spawn_config {
+                Some(cfg) => wire_spawn(builder, cfg),
+                None => (builder, None),
+            };
+
             let harness = crate::shared::pyerror::detach_catch_panic_result(py, move || {
                 rt.block_on(async move { builder.build(env).await })
             })?;
-            Py::new(py, PyAgentHarness::new_base(Arc::new(harness)))
+            let harness = Arc::new(harness);
+
+            if let Some(wiring) = spawn_wiring {
+                wiring.post_build(&harness);
+            }
+
+            Py::new(py, PyAgentHarness::new_base(harness))
         }
     }
 }
@@ -604,6 +655,7 @@ impl PyHarnessBuilder {
             mcp_servers: Vec::new(),
             mcp_config_files: Vec::new(),
             mcp_manager: None,
+            spawn_config: None,
         }
     }
 }

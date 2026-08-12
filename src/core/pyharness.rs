@@ -754,6 +754,28 @@ impl PyAgentHarness {
     fn next_turn(&self, text: &str) {
         self.harness.next_turn(text);
     }
+    // ── Compaction ──────────────────────────────────────────────────────────
+
+    /// Manually trigger compaction. Returns a dict with:
+    /// `tokens_before`, `tokens_after`, `compressed_entries`.
+    ///
+    /// Uses the compaction prompt and query set via builder or runtime setters.
+    /// Not subject to the circuit breaker — manual compaction always runs.
+    fn compact(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let harness = self.harness.clone();
+        let rt = runtime(py);
+        let stats = crate::shared::pyerror::block_on_with_signal_check(
+            py,
+            rt,
+            async move { harness.compact().await.map_err(harness_error_to_pyerr) },
+            200,
+        )?;
+        let dict = PyDict::new(py);
+        dict.set_item("tokens_before", stats.tokens_before)?;
+        dict.set_item("tokens_after", stats.tokens_after)?;
+        dict.set_item("compressed_entries", stats.compressed_entries)?;
+        Ok(dict.into_any().unbind())
+    }
 
     // ── Cost / Usage ────────────────────────────────────────────────────────
 
