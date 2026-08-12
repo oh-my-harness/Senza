@@ -121,6 +121,23 @@ fn parse_tool_result(obj: &Bound<'_, PyAny>) -> PyResult<ToolResult> {
     }
     let dict = obj.cast::<PyDict>()?;
 
+    // If dict has no "content" key, treat the entire dict as a text content
+    // block (JSON-serialized). Extract terminate if present.
+    if dict.get_item("content")?.is_none() {
+        let json_val = pyobject_to_value(obj)?;
+        let json_str = serde_json::to_string(&json_val)
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+        let terminate = dict
+            .get_item("terminate")?
+            .and_then(|v| v.extract::<bool>().ok())
+            .unwrap_or(false);
+        return Ok(ToolResult::full(
+            vec![DataBlock::text(json_str)],
+            Value::Null,
+            terminate,
+        ));
+    }
+
     // content: 可选，缺省或 None → 空列表
     let content_vec = match dict.get_item("content")? {
         Some(v) if !v.is_none() => {
