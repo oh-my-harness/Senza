@@ -206,9 +206,66 @@ class EventType:
     WORKFLOW_DONE = "workflow_done"
     WORKFLOW_FAILED = "workflow_failed"
 
-# ── @senza.tool decorator ────────────────────────────────────────────
+# ── create_tool Python wrapper ───────────────────────────────────────
+# Rust-layer create_tool already accepts dict schema, but we add a Python
+# wrapper to: (1) accept `parameters` as canonical name (alias for
+# parameters_schema), and (2) allow single-argument callbacks.
 
 import inspect as _inspect
+
+_create_tool_rust = create_tool
+
+
+def _wrap_tool_callback(callback):
+    """Wrap a tool callback to allow single-argument (args-only) signatures.
+
+    Rust always calls cb(args, ctx). If the user's callback only accepts
+    one argument, we wrap it to ignore ctx.
+    """
+    try:
+        sig = _inspect.signature(callback)
+        params = [
+            p for p in sig.parameters.values()
+            if p.kind not in (p.VAR_POSITIONAL, p.VAR_KEYWORD)
+        ]
+        if len(params) <= 1:
+            return lambda args, ctx: callback(args)
+    except (ValueError, TypeError):
+        pass
+    return callback
+
+
+def create_tool(name, description, parameters=None, parameters_schema=None, callback=None):
+    """Create a Tool from a callback.
+
+    Args:
+        name: Tool name.
+        description: Tool description.
+        parameters: JSON Schema as dict or JSON string (canonical name).
+        parameters_schema: Alias for ``parameters`` (backward compat).
+            When used positionally as the 4th arg, accepts the callback
+            for backward compatibility with the old Rust signature.
+        callback: Callable with signature ``(args, ctx)`` or ``(args)``.
+            Async callables are supported.
+    """
+    # Backward compat: old Rust signature was create_tool(name, desc, schema, callback).
+    # When called positionally, the 4th arg lands in parameters_schema and callback is None.
+    if callback is None and callable(parameters_schema):
+        callback = parameters_schema
+        parameters_schema = None
+
+    schema = parameters if parameters is not None else parameters_schema
+    if schema is None:
+        raise TypeError(
+            "create_tool() missing required argument: 'parameters'"
+        )
+    if callback is None:
+        raise TypeError("create_tool() missing required argument: 'callback'")
+    wrapped = _wrap_tool_callback(callback)
+    return _create_tool_rust(name, description, schema, wrapped)
+
+# ── @senza.tool decorator ────────────────────────────────────────────
+
 import typing as _typing
 
 _PY_TO_JSON_SCHEMA = {

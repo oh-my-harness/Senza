@@ -273,8 +273,9 @@ class Tool:
 def create_tool(
     name: str,
     description: str,
-    parameters_schema: str,
-    callback: Callable[..., Any],
+    parameters: Optional[Union[dict, str]] = ...,
+    parameters_schema: Optional[Union[dict, str]] = ...,
+    callback: Callable[..., Any] = ...,
 ) -> Tool: ...
 
 def create_sync_tool(
