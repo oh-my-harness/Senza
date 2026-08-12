@@ -62,6 +62,7 @@ pub(crate) struct SpawnConfig {
 #[pymethods]
 impl PyHarnessBuilder {
     #[new]
+    #[pyo3(text_signature = "(model)")]
     fn new(model: &str) -> Self {
         Self {
             builder: Some(HarnessBuilder::new(model)),
@@ -105,6 +106,22 @@ impl PyHarnessBuilder {
         if let Some(b) = slf.builder.take() {
             let t: Arc<dyn Tool> = tool.borrow().tool.clone();
             slf.builder = Some(b.tool(t));
+        }
+        slf
+    }
+
+    /// 批量注册多个 `Tool`（来自 `create_tool`）。等效于逐个调用 `.tool(t)`。
+    #[pyo3(text_signature = "($self, tools)")]
+    fn tools<'a>(
+        mut slf: PyRefMut<'a, Self>,
+        tools: Vec<Bound<'_, PyToolWrapper>>,
+    ) -> PyRefMut<'a, Self> {
+        if let Some(mut b) = slf.builder.take() {
+            for wrapper in &tools {
+                let t: Arc<dyn Tool> = wrapper.borrow().tool.clone();
+                b = b.tool(t);
+            }
+            slf.builder = Some(b);
         }
         slf
     }

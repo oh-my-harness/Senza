@@ -1150,7 +1150,7 @@ impl PyWorkflowEngine {
     /// 提供后，`ShellExecutor` 等执行器可调用真实命令；不提供时引擎使用
     /// `UnsupportedEnv`，`execute_shell` 永远返回错误。
     #[new]
-    #[pyo3(signature = (workflow_dict, provider, model, judge, session_base_dir="sessions", env=None))]
+    #[pyo3(signature = (workflow_dict, provider, model, judge, session_base_dir="sessions", env=None), text_signature = "(workflow_dict, provider, model, judge, session_base_dir=\"sessions\", env=None)")]
     fn new(
         py: Python<'_>,
         workflow_dict: &Bound<'_, PyDict>,
