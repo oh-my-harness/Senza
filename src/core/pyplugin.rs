@@ -26,6 +26,7 @@ pub struct PyPlugin {
     prepare_next_turn: Vec<Arc<dyn llm_harness_types::PrepareNextTurnHook>>,
     before_provider_request: Vec<Arc<dyn llm_harness_types::BeforeProviderRequestHook>>,
     after_provider_response: Vec<Arc<dyn llm_harness_types::AfterProviderResponseHook>>,
+    final_answer_validator: Vec<Arc<dyn llm_harness_types::FinalAnswerValidator>>,
 }
 
 impl PyPlugin {
@@ -44,6 +45,7 @@ impl PyPlugin {
             prepare_next_turn: vec![],
             before_provider_request: vec![],
             after_provider_response: vec![],
+            final_answer_validator: vec![],
         };
         for kind in hooks {
             match kind {
@@ -58,6 +60,7 @@ impl PyPlugin {
                 HookKind::PrepareNextTurn(h) => p.prepare_next_turn.push(h),
                 HookKind::BeforeProviderRequest(h) => p.before_provider_request.push(h),
                 HookKind::AfterProviderResponse(h) => p.after_provider_response.push(h),
+                HookKind::FinalAnswerValidator(h) => p.final_answer_validator.push(h),
             }
         }
         p
@@ -99,6 +102,9 @@ impl Plugin for PyPlugin {
         hooks
             .after_provider_response
             .extend(self.after_provider_response.iter().cloned());
+        hooks
+            .final_answer_validator
+            .extend(self.final_answer_validator.iter().cloned());
     }
 }
 

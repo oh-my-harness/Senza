@@ -240,6 +240,7 @@ fn senza(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(create_before_compact_hook, m)?)?;
     m.add_function(wrap_pyfunction!(create_transform_context_hook, m)?)?;
     m.add_function(wrap_pyfunction!(create_prepare_next_turn_hook, m)?)?;
+    m.add_function(wrap_pyfunction!(create_final_answer_validator, m)?)?;
     m.add_class::<crate::core::pybuilder::PyHarnessBuilder>()?;
     m.add_class::<crate::core::pybuilder::PyUsageLedger>()?;
     m.add_class::<crate::core::pyplugin::PyPluginWrapper>()?;
@@ -852,6 +853,27 @@ fn create_prepare_next_turn_hook<'py>(
         py,
         crate::core::pyhooks::PyHookWrapper {
             kind: crate::core::pyhooks::HookKind::PrepareNextTurn(Arc::new(hook)),
+        },
+    )
+    .map(|p| p.into_bound(py))
+}
+
+/// Create a `FinalAnswerValidator` from a Python callable.
+///
+/// callback signature: `callback(ctx: dict) -> None | str | dict`
+/// - None → accept the candidate answer
+/// - str → reject with code="rejected", message=<returned str>
+/// - dict → reject with code=dict["code"], message=dict["message"]
+#[pyfunction]
+fn create_final_answer_validator<'py>(
+    py: Python<'py>,
+    callback: Py<PyAny>,
+) -> PyResult<Bound<'py, crate::core::pyhooks::PyHookWrapper>> {
+    let wrapper = crate::core::pyhooks::PyFinalAnswerValidatorWrapper::new(callback);
+    Py::new(
+        py,
+        crate::core::pyhooks::PyHookWrapper {
+            kind: crate::core::pyhooks::HookKind::FinalAnswerValidator(Arc::new(wrapper)),
         },
     )
     .map(|p| p.into_bound(py))

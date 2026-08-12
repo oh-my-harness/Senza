@@ -1409,6 +1409,9 @@ impl PyWorkflowEngine {
                 HookKind::BeforeCompact(h) => harness_hooks.before_compact.push(h.clone()),
                 HookKind::TransformContext(h) => harness_hooks.transform_context.push(h.clone()),
                 HookKind::PrepareNextTurn(h) => harness_hooks.prepare_next_turn.push(h.clone()),
+                HookKind::FinalAnswerValidator(h) => {
+                    harness_hooks.final_answer_validator.push(h.clone())
+                }
             }
         }
 

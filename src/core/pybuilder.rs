@@ -331,6 +331,23 @@ impl PyHarnessBuilder {
         Ok(slf)
     }
 
+    /// Register a `FinalAnswerValidator` (without wrapping in a Plugin).
+    ///
+    /// Multiple calls accumulate validators. A rejected candidate is never
+    /// committed; the loop retries (letting the model generate a new answer).
+    #[pyo3(text_signature = "($self, validator)")]
+    fn final_answer_validator<'a>(
+        mut slf: PyRefMut<'a, Self>,
+        validator: &Bound<'_, PyHookWrapper>,
+    ) -> PyResult<PyRefMut<'a, Self>> {
+        if let Some(b) = slf.builder.take() {
+            let mut harness_hooks = llm_harness_agent::HarnessHooks::none();
+            validator.borrow().push_into(&mut harness_hooks);
+            slf.builder = Some(b.hooks(harness_hooks));
+        }
+        Ok(slf)
+    }
+
     /// 设置 LLM 请求的 stream options。
     #[pyo3(text_signature = "($self, timeout_ms=None, max_retries=None)")]
     #[pyo3(signature = (timeout_ms=None, max_retries=None))]

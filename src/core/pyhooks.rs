@@ -23,7 +23,8 @@ use llm_harness_types::{
     AssistantMessage, BeforeCompactCtx, BeforeCompactDecision, BeforeCompactHook,
     BeforeProviderRequestCtx, BeforeProviderRequestHook, BeforeRunCtx, BeforeRunHook,
     BeforeRunResult, BeforeToolCallCtx, BeforeToolCallDecision, BeforeToolCallHook, BeforeTurnCtx,
-    BeforeTurnHook, CompactionResult, DataBlock, NextTurnDirective, PrepareNextTurnCtx,
+    BeforeTurnHook, CompactionResult, DataBlock, FinalAnswerValidationCtx,
+    FinalAnswerValidationError, FinalAnswerValidator, NextTurnDirective, PrepareNextTurnCtx,
     PrepareNextTurnHook, RunContext, ShouldStopCtx, ShouldStopHook, StopReason, ToolError,
     ToolFailure, ToolResult, TransformContextCtx, TransformContextHook,
 };
@@ -1222,6 +1223,133 @@ pub(crate) fn call_callback_with_mode<'py>(
     }
 }
 
+// ── FinalAnswerValidator ─────────────────────────────────────────────────────
+
+/// Python callable wrapper for `FinalAnswerValidator`.
+///
+/// callback signature: `callback(ctx: dict) -> None | str | dict`
+/// - None → accept the answer
+/// - str → reject with code="rejected", message=<returned str>
+/// - dict → reject with code=dict["code"], message=dict["message"]
+pub struct PyFinalAnswerValidatorWrapper {
+    callback: Arc<Py<PyAny>>,
+    is_async: bool,
+}
+
+impl PyFinalAnswerValidatorWrapper {
+    pub fn new(callback: Py<PyAny>) -> Self {
+        let is_async = detect_async(&callback);
+        Self {
+            callback: Arc::new(callback),
+            is_async,
+        }
+    }
+}
+
+impl FinalAnswerValidator for PyFinalAnswerValidatorWrapper {
+    fn validate<'a>(
+        &'a self,
+        ctx: FinalAnswerValidationCtx<'a>,
+    ) -> BoxFuture<'a, Result<(), FinalAnswerValidationError>> {
+        let cb = Arc::clone(&self.callback);
+        let is_async = self.is_async;
+        // Serialize candidate to owned data (avoids borrowing across threads).
+        let candidate_json: Value = serde_json::to_value(ctx.candidate).unwrap_or(Value::Null);
+        let turn_index = ctx.turn_index;
+        let (run_id, started_at) = run_context_fields(ctx.run);
+
+        Box::pin(async move {
+            let result = tokio::task::spawn_blocking(move || {
+                Python::attach(|py| {
+                    let dict = PyDict::new(py);
+                    dict.set_item("candidate", value_to_pyobject(py, &candidate_json)?)?;
+                    dict.set_item("turn_index", turn_index)?;
+                    dict.set_item("run_id", &run_id)?;
+                    dict.set_item("started_at", &started_at)?;
+                    let result = call_callback_with_mode(py, &cb, (dict,), is_async)?;
+                    Ok::<_, PyErr>(result.unbind())
+                })
+            })
+            .await;
+
+            match result {
+                Ok(Ok(obj)) => {
+                    // Callback succeeded — interpret return value.
+                    Python::attach(|py| -> Result<(), FinalAnswerValidationError> {
+                        if obj.is_none(py) {
+                            Ok(())
+                        } else if let Ok(s) = obj.extract::<String>(py) {
+                            Err(FinalAnswerValidationError::new("rejected", s))
+                        } else {
+                            // Try dict with "code" and "message"
+                            let dict = obj.bind(py).cast::<PyDict>().map_err(|e| {
+                                FinalAnswerValidationError::new("validator_error", e.to_string())
+                            })?;
+                            let code: String = dict
+                                .get_item("code")
+                                .map_err(|e: PyErr| {
+                                    FinalAnswerValidationError::new(
+                                        "validator_error",
+                                        e.to_string(),
+                                    )
+                                })?
+                                .ok_or_else(|| {
+                                    FinalAnswerValidationError::new(
+                                        "validator_error",
+                                        "validator dict must have 'code' key",
+                                    )
+                                })?
+                                .extract()
+                                .map_err(|e: PyErr| {
+                                    FinalAnswerValidationError::new(
+                                        "validator_error",
+                                        e.to_string(),
+                                    )
+                                })?;
+                            let message: String = dict
+                                .get_item("message")
+                                .map_err(|e: PyErr| {
+                                    FinalAnswerValidationError::new(
+                                        "validator_error",
+                                        e.to_string(),
+                                    )
+                                })?
+                                .ok_or_else(|| {
+                                    FinalAnswerValidationError::new(
+                                        "validator_error",
+                                        "validator dict must have 'message' key",
+                                    )
+                                })?
+                                .extract()
+                                .map_err(|e: PyErr| {
+                                    FinalAnswerValidationError::new(
+                                        "validator_error",
+                                        e.to_string(),
+                                    )
+                                })?;
+                            Err(FinalAnswerValidationError::new(code, message))
+                        }
+                    })
+                }
+                Ok(Err(e)) => {
+                    // Python exception in callback → treat as rejection.
+                    Err(FinalAnswerValidationError::new(
+                        "validator_error",
+                        e.to_string(),
+                    ))
+                }
+                Err(e) => {
+                    // JoinError (panic) → treat as rejection.
+                    Err(FinalAnswerValidationError::new(
+                        "validator_error",
+                        e.to_string(),
+                    ))
+                }
+            }
+        })
+    }
+}
+
 // ── Python 包装类 ───────────────────────────────────────────────────────────
 
 /// 所有 hook trait 的枚举包装。
@@ -1238,6 +1366,7 @@ pub enum HookKind {
     BeforeCompact(Arc<dyn BeforeCompactHook>),
     TransformContext(Arc<dyn TransformContextHook>),
     PrepareNextTurn(Arc<dyn PrepareNextTurnHook>),
+    FinalAnswerValidator(Arc<dyn FinalAnswerValidator>),
 }
 
 /// 持有任意 hook trait 对象的不透明 Python 包装。
@@ -1286,6 +1415,7 @@ impl PyHookWrapper {
             HookKind::BeforeCompact(h) => hooks.before_compact.push(h.clone()),
             HookKind::TransformContext(h) => hooks.transform_context.push(h.clone()),
             HookKind::PrepareNextTurn(h) => hooks.prepare_next_turn.push(h.clone()),
+            HookKind::FinalAnswerValidator(h) => hooks.final_answer_validator.push(h.clone()),
         }
     }
 }
@@ -1305,6 +1435,7 @@ impl HookKind {
             HookKind::BeforeCompact(_) => "BeforeCompact",
             HookKind::TransformContext(_) => "TransformContext",
             HookKind::PrepareNextTurn(_) => "PrepareNextTurn",
+            HookKind::FinalAnswerValidator(_) => "FinalAnswerValidator",
         }
     }
 }
