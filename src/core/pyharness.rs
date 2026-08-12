@@ -408,12 +408,7 @@ impl PyAgentHarness {
         crate::shared::pyerror::block_on_with_signal_check(
             py,
             rt,
-            async move {
-                harness
-                    .prompt(&text)
-                    .await
-                    .map_err(|e| harness_error_to_pyerr(e))
-            },
+            async move { harness.prompt(&text).await.map_err(harness_error_to_pyerr) },
             200,
         )?;
         Ok(())
@@ -750,12 +745,7 @@ impl PyAgentHarness {
         crate::shared::pyerror::block_on_with_signal_check(
             py,
             rt,
-            async move {
-                harness
-                    .continue_run()
-                    .await
-                    .map_err(|e| harness_error_to_pyerr(e))
-            },
+            async move { harness.continue_run().await.map_err(harness_error_to_pyerr) },
             200,
         )
     }
@@ -827,21 +817,21 @@ impl PyAgentHarness {
     fn clear_steering_queue(&self) -> PyResult<()> {
         self.harness
             .clear_steering_queue()
-            .map_err(|e| harness_error_to_pyerr(e))
+            .map_err(harness_error_to_pyerr)
     }
 
     /// Drain the follow-up queue. Only callable when Idle.
     fn clear_follow_up_queue(&self) -> PyResult<()> {
         self.harness
             .clear_follow_up_queue()
-            .map_err(|e| harness_error_to_pyerr(e))
+            .map_err(harness_error_to_pyerr)
     }
 
     /// Drain all queues (steer, follow-up, next_turn). Only callable when Idle.
     fn clear_all_queues(&self) -> PyResult<()> {
         self.harness
             .clear_all_queues()
-            .map_err(|e| harness_error_to_pyerr(e))
+            .map_err(harness_error_to_pyerr)
     }
 
     /// Returns True if any queue is non-empty.

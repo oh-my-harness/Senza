@@ -139,25 +139,25 @@ use llm_harness_types::{AgentError, HarnessError, ProviderErrorKind, ToolError a
 
 /// 在 PyErr 异常实例上设置属性。
 fn set_attr_str(py: Python<'_>, exc: &PyErr, name: &str, value: String) {
-    if let Some(instance) = exc.value(py).extract::<Py<PyAny>>().ok() {
+    if let Ok(instance) = exc.value(py).extract::<Py<PyAny>>() {
         let _ = instance.bind(py).setattr(name, value);
     }
 }
 
 fn set_attr_f64(py: Python<'_>, exc: &PyErr, name: &str, value: Option<f64>) {
-    if let Some(instance) = exc.value(py).extract::<Py<PyAny>>().ok() {
+    if let Ok(instance) = exc.value(py).extract::<Py<PyAny>>() {
         let _ = instance.bind(py).setattr(name, value);
     }
 }
 
 fn set_attr_u64(py: Python<'_>, exc: &PyErr, name: &str, value: u64) {
-    if let Some(instance) = exc.value(py).extract::<Py<PyAny>>().ok() {
+    if let Ok(instance) = exc.value(py).extract::<Py<PyAny>>() {
         let _ = instance.bind(py).setattr(name, value);
     }
 }
 
 fn set_attr_f64_val(py: Python<'_>, exc: &PyErr, name: &str, value: f64) {
-    if let Some(instance) = exc.value(py).extract::<Py<PyAny>>().ok() {
+    if let Ok(instance) = exc.value(py).extract::<Py<PyAny>>() {
         let _ = instance.bind(py).setattr(name, value);
     }
 }
@@ -300,8 +300,7 @@ pub fn task_error_to_pyerr(e: TaskError) -> PyErr {
 pub fn tool_error_to_pyerr(e: RustToolError) -> PyErr {
     match e {
         RustToolError::InvalidArguments(msg) => {
-            let exc = ToolArgumentError::new_err(format!("invalid arguments: {msg}"));
-            exc
+            ToolArgumentError::new_err(format!("invalid arguments: {msg}"))
         }
         RustToolError::Aborted => ToolAbortedError::new_err("tool aborted"),
         RustToolError::Execution(msg) => ToolExecutionError::new_err(msg),

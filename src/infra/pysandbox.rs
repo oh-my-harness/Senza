@@ -54,31 +54,31 @@ pub(crate) fn dict_to_sandbox_config(
                 fs_denylist.push(PathBuf::from(item.extract::<String>()?));
             }
         }
-        if let Some(v) = cfg.get_item("work_dir")? {
-            if !v.is_none() {
-                work_dir = Some(PathBuf::from(v.extract::<String>()?));
-            }
+        if let Some(v) = cfg.get_item("work_dir")?
+            && !v.is_none()
+        {
+            work_dir = Some(PathBuf::from(v.extract::<String>()?));
         }
-        if let Some(v) = cfg.get_item("max_memory_mb")? {
-            if !v.is_none() {
-                max_memory_mb = Some(v.extract::<usize>()?);
-            }
+        if let Some(v) = cfg.get_item("max_memory_mb")?
+            && !v.is_none()
+        {
+            max_memory_mb = Some(v.extract::<usize>()?);
         }
-        if let Some(v) = cfg.get_item("max_cpus")? {
-            if !v.is_none() {
-                max_cpus = Some(v.extract::<usize>()?);
-            }
+        if let Some(v) = cfg.get_item("max_cpus")?
+            && !v.is_none()
+        {
+            max_cpus = Some(v.extract::<usize>()?);
         }
-        if let Some(v) = cfg.get_item("max_disk_mb")? {
-            if !v.is_none() {
-                max_disk_mb = Some(v.extract::<usize>()?);
-            }
+        if let Some(v) = cfg.get_item("max_disk_mb")?
+            && !v.is_none()
+        {
+            max_disk_mb = Some(v.extract::<usize>()?);
         }
-        if let Some(v) = cfg.get_item("timeout_seconds")? {
-            if !v.is_none() {
-                let secs = v.extract::<f64>()?;
-                timeout = Some(Duration::from_secs_f64(secs));
-            }
+        if let Some(v) = cfg.get_item("timeout_seconds")?
+            && !v.is_none()
+        {
+            let secs = v.extract::<f64>()?;
+            timeout = Some(Duration::from_secs_f64(secs));
         }
     }
 

@@ -509,10 +509,10 @@ fn dict_to_workflow(dict: &Bound<'_, PyDict>) -> PyResult<Workflow> {
     //   2. "stages" (declarative pipeline YAML, each stage has next_on_* routes)
     // Format 2 is converted to steps + edges internally, eliminating the need
     // for Python-side PipelineConfig + pipeline_to_workflow_dict converter.
-    if let Some(stages_val) = dict.get_item("stages")? {
-        if !stages_val.is_none() {
-            return stages_to_workflow(dict);
-        }
+    if let Some(stages_val) = dict.get_item("stages")?
+        && !stages_val.is_none()
+    {
+        return stages_to_workflow(dict);
     }
 
     let entry_step: String = dict
@@ -547,7 +547,7 @@ fn dict_to_workflow(dict: &Bound<'_, PyDict>) -> PyResult<Workflow> {
                 .map(|v| pyobject_to_value(&v))
                 .transpose()?;
             let mut step = Step::executor(id, name, executor_name, config);
-            if let Some(policy) = parse_step_policy(&step_dict)? {
+            if let Some(policy) = parse_step_policy(step_dict)? {
                 step = step.with_policy(policy);
             }
             steps.push(step);
@@ -567,7 +567,7 @@ fn dict_to_workflow(dict: &Bound<'_, PyDict>) -> PyResult<Workflow> {
                 .filter(|v| !v.is_none())
                 .and_then(|v| v.extract::<bool>().ok());
             let mut step = Step::llm(id, name, prompt, allowed_tools).with_structured(structured);
-            if let Some(policy) = parse_step_policy(&step_dict)? {
+            if let Some(policy) = parse_step_policy(step_dict)? {
                 step = step.with_policy(policy);
             }
             steps.push(step);
@@ -716,29 +716,27 @@ fn stages_to_workflow(dict: &Bound<'_, PyDict>) -> PyResult<Workflow> {
         let mut step = Step::executor(name.clone(), name.clone(), executor_name, None);
 
         // Attach loop config if present.
-        if let Some(loop_val) = stage_dict.get_item("loop")? {
-            if !loop_val.is_none() {
-                let loop_dict = loop_val.cast::<PyDict>()?;
-                let max_iterations: u32 = loop_dict
-                    .get_item("max_iterations")?
-                    .ok_or_else(|| {
-                        pyo3::exceptions::PyKeyError::new_err("missing 'max_iterations'")
-                    })?
-                    .extract()?;
-                let target_stage: Option<String> = loop_dict
-                    .get_item("target_stage")?
-                    .filter(|v| !v.is_none())
-                    .map(|v| v.extract())
-                    .transpose()?;
+        if let Some(loop_val) = stage_dict.get_item("loop")?
+            && !loop_val.is_none()
+        {
+            let loop_dict = loop_val.cast::<PyDict>()?;
+            let max_iterations: u32 = loop_dict
+                .get_item("max_iterations")?
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("missing 'max_iterations'"))?
+                .extract()?;
+            let target_stage: Option<String> = loop_dict
+                .get_item("target_stage")?
+                .filter(|v| !v.is_none())
+                .map(|v| v.extract())
+                .transpose()?;
 
-                let mut policy = step.policy().cloned().unwrap_or_default();
-                policy.r#loop = Some(LoopConfig {
-                    max_iterations,
-                    target_stage,
-                    exit_route: None, // resolved from next_on_* edges below
-                });
-                step = step.with_policy(policy);
-            }
+            let mut policy = step.policy().cloned().unwrap_or_default();
+            policy.r#loop = Some(LoopConfig {
+                max_iterations,
+                target_stage,
+                exit_route: None, // resolved from next_on_* edges below
+            });
+            step = step.with_policy(policy);
         }
 
         steps.push(step);
@@ -2107,19 +2105,19 @@ mod tests {
     /// Parse a step-level dict's policy via the real code path.
     fn parse_policy(source: &str) -> Option<StepExecutionPolicy> {
         let dict = make_dict(source);
-        Python::attach(|py| parse_step_policy(&dict.bind(py))).unwrap()
+        Python::attach(|py| parse_step_policy(dict.bind(py))).unwrap()
     }
 
     /// Parse a full workflow dict via the real code path.
     fn parse_workflow(source: &str) -> Workflow {
         let dict = make_dict(source);
-        Python::attach(|py| dict_to_workflow(&dict.bind(py))).unwrap()
+        Python::attach(|py| dict_to_workflow(dict.bind(py))).unwrap()
     }
 
     /// Parse a step-level dict's policy, expecting an error.
     fn parse_policy_err(source: &str) -> String {
         let dict = make_dict(source);
-        Python::attach(|py| match parse_step_policy(&dict.bind(py)) {
+        Python::attach(|py| match parse_step_policy(dict.bind(py)) {
             Ok(v) => format!("expected error, got Ok({:?})", v),
             Err(e) => e.to_string(),
         })
