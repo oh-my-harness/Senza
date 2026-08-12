@@ -21,7 +21,7 @@ description: >-
 import senza
 
 # 1. Create provider
-provider = senza.create_openai_provider(api_key="sk-...")
+provider = senza.providers.openai(api_key="sk-...")
 
 # 2. Build harness (fluent chain)
 harness = (
@@ -46,8 +46,8 @@ for e in events:
 
 | Function | Use case |
 |----------|----------|
-| `senza.create_openai_provider(api_key, base_url=None, chat_path=None, thinking_scheme=None, parse_reasoning_content=True, tolerant_keepalive=True)` | OpenAI, DeepSeek, local models |
-| `senza.create_anthropic_provider(api_key, base_url=None)` | Anthropic Claude |
+| `senza.providers.openai(api_key, base_url=None, chat_path=None, thinking_scheme=None, parse_reasoning_content=True, tolerant_keepalive=True)` | OpenAI, DeepSeek, local models |
+| `senza.providers.anthropic(api_key, base_url=None)` | Anthropic Claude |
 
 - `base_url`: omit or pass empty string for default endpoint.
 - `parse_reasoning_content`: set `True` for DeepSeek R-series reasoning parsing.
@@ -77,11 +77,13 @@ import json
 tool = senza.create_tool(
     name="search",
     description="Search the web",
-    parameters_schema=json.dumps({
-        "type": "object",
-        "properties": {"query": {"type": "string"}},
-        "required": ["query"],
-    }),
+    parameters_schema=json.dumps(
+        {
+            "type": "object",
+            "properties": {"query": {"type": "string"}},
+            "required": ["query"],
+        }
+    ),
     callback=lambda args, ctx: {
         "content": [{"type": "text", "text": f"Results for {args['query']}"}],
         "terminate": False,
@@ -134,15 +136,12 @@ harness = (
 
 ### Compaction
 
-`senza.create_context_aware_compaction_prompt()` returns a `(system_prompt, user_template)` tuple for context-aware compaction that preserves task-critical context. Pair with `.compaction_prompt()`:
+`senza.strategy.context_aware_compaction_prompt()` returns a `(system_prompt, user_template)` tuple for context-aware compaction that preserves task-critical context. Pair with `.compaction_prompt()`:
 
 ```python
-sys_p, user_t = senza.create_context_aware_compaction_prompt()
+sys_p, user_t = senza.strategy.context_aware_compaction_prompt()
 harness = (
-    senza.HarnessBuilder("gpt-4o")
-    .provider("*", provider)
-    .compaction_prompt(sys_p, user_t)
-    .build()
+    senza.HarnessBuilder("gpt-4o").provider("*", provider).compaction_prompt(sys_p, user_t).build()
 )
 ```
 
@@ -168,14 +167,11 @@ for event in harness.events(timeout_ms=5000):
 ### Multiple providers (model routing)
 
 ```python
-openai = senza.create_openai_provider(api_key="sk-...")
-anthropic = senza.create_anthropic_provider(api_key="sk-ant-...")
+openai = senza.providers.openai(api_key="sk-...")
+anthropic = senza.providers.anthropic(api_key="sk-ant-...")
 
 harness = (
-    senza.HarnessBuilder("gpt-4o")
-    .provider("gpt-*", openai)
-    .provider("claude-*", anthropic)
-    .build()
+    senza.HarnessBuilder("gpt-4o").provider("gpt-*", openai).provider("claude-*", anthropic).build()
 )
 ```
 

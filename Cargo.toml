@@ -1,6 +1,6 @@
 [package]
 name = "llm-harness-py"
-version = "1.0.4"
+version = "1.1.0"
 edition = "2024"
 license = "MIT"
 publish = false
@@ -22,7 +22,7 @@ session-viewer     = { git = "https://github.com/oh-my-harness/llm-harness-runti
 llm-harness-strategy = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9" }
 llm-harness-runtime-knowledge = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9" }
 llm-harness-runtime-knowledge-local = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9" }
-llm-harness-runtime-session-recall = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9", features = ["sqlite"] }
+llm-harness-runtime-session-recall = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9", features = ["sqlite-bundled"] }
 llm-harness-runtime-memory = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9" }
 llm-harness-runtime-audit-jsonl = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9" }
 llm-harness-runtime-trace-otel = { git = "https://github.com/oh-my-harness/llm-harness-runtime", rev = "c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9" }

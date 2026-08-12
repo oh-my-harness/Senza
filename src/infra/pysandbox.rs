@@ -27,6 +27,7 @@ use crate::shared::pyerror::detach_catch_panic_result;
 /// - `max_cpus`: int | None
 /// - `max_disk_mb`: int | None
 /// - `timeout_seconds`: float | None
+#[cfg_attr(not(any(target_os = "linux", target_os = "macos")), allow(dead_code))]
 pub(crate) fn dict_to_sandbox_config(
     config: Option<&Bound<'_, PyDict>>,
 ) -> PyResult<SandboxConfig> {

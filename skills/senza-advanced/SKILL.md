@@ -28,12 +28,14 @@ When an LLM step's `allowed_tools` includes `"spawn_agent"`, the engine auto-reg
 ```python
 workflow = {
     "entry_step": "orchestrator",
-    "steps": [{
-        "id": "orchestrator",
-        "name": "编排者",
-        "prompt": "分析任务，派发 sub-agent 并行处理，汇总结果",
-        "allowed_tools": ["spawn_agent"],  # ← triggers 7-tool registration
-    }],
+    "steps": [
+        {
+            "id": "orchestrator",
+            "name": "编排者",
+            "prompt": "分析任务，派发 sub-agent 并行处理，汇总结果",
+            "allowed_tools": ["spawn_agent"],  # ← triggers 7-tool registration
+        }
+    ],
     "edges": [],
 }
 ```
@@ -74,25 +76,26 @@ You have 2 sub-tasks. For each:
 """
 ```
 
-## Hooks (11 Types)
+## Hooks (12 Types)
 
-Hooks intercept the agent loop at specific points. Create with `create_*_hook()`, register with `engine.with_hooks([h1, h2, ...])` or `builder.plugin(plugin_with_hooks)`.
+Hooks intercept the agent loop at specific points. Create with `senza.hooks.*()`, register with `engine.with_hooks([h1, h2, ...])` or `builder.plugin(plugin_with_hooks)`.
 
 ### Available Hooks
 
 | Function | When | Callback | Return |
 |----------|------|----------|--------|
-| `create_before_turn_hook(cb)` | Before each LLM turn | `ctx: dict` | `None` |
-| `create_after_turn_hook(cb)` | After each LLM turn | `ctx: dict` | `None` |
-| `create_before_run_hook(cb)` | Before agent loop starts | `ctx: dict` | `None` |
-| `create_after_provider_response_hook(cb)` | After LLM response | `ctx: dict` | `None` |
-| `create_before_provider_request_hook(cb)` | Before LLM request | `ctx: dict` | `None` |
-| `create_before_tool_call_hook(cb)` | Before tool execution | `ctx: dict` | `str \| None` (block reason) |
-| `create_after_tool_call_hook(cb)` | After tool execution | `ctx: dict` | `str \| dict` (patch result) |
-| `create_should_stop_hook(cb)` | Check if loop should stop | `ctx: dict` | `bool` |
-| `create_before_compact_hook(cb)` | Before context compaction | `ctx: dict` | `str \| dict` (proceed/skip/override) |
-| `create_transform_context_hook(cb)` | Transform messages before LLM | `ctx: dict` | `dict` (new system_prompt + messages) |
-| `create_prepare_next_turn_hook(cb)` | Before each turn setup | `ctx: dict` | `dict \| None` (model/thinking_level/temperature/active_tools) |
+| `senza.hooks.before_turn(cb)` | Before each LLM turn | `ctx: dict` | `None` |
+| `senza.hooks.after_turn(cb)` | After each LLM turn | `ctx: dict` | `None` |
+| `senza.hooks.before_run(cb)` | Before agent loop starts | `ctx: dict` | `None` |
+| `senza.hooks.after_provider_response(cb)` | After LLM response | `ctx: dict` | `None` |
+| `senza.hooks.before_provider_request(cb)` | Before LLM request | `ctx: dict` | `None` |
+| `senza.hooks.before_tool_call(cb)` | Before tool execution | `ctx: dict` | `str \| None` (block reason) |
+| `senza.hooks.after_tool_call(cb)` | After tool execution | `ctx: dict` | `str \| dict` (patch result) |
+| `senza.hooks.should_stop(cb)` | Check if loop should stop | `ctx: dict` | `bool` |
+| `senza.hooks.before_compact(cb)` | Before context compaction | `ctx: dict` | `str \| dict` (proceed/skip/override) |
+| `senza.hooks.transform_context(cb)` | Transform messages before LLM | `ctx: dict` | `dict` (new system_prompt + messages) |
+| `senza.hooks.prepare_next_turn(cb)` | Before each turn setup | `ctx: dict` | `dict \| None` (model/thinking_level/temperature/active_tools) |
+| `senza.hooks.final_answer_validator(cb)` | Before final answer is returned | `ctx: dict` | `None \| str \| dict` (reject/override) |
 
 All hooks support `async def` callbacks.
 
@@ -105,7 +108,8 @@ def guard(ctx):
         return f"blocked: {tool_name} not allowed"
     return None  # allow
 
-hook = senza.create_before_tool_call_hook(guard)
+
+hook = senza.hooks.before_tool_call(guard)
 engine = senza.WorkflowEngine(workflow, provider, "gpt-4o", judge).with_hooks([hook])
 ```
 
@@ -113,11 +117,14 @@ engine = senza.WorkflowEngine(workflow, provider, "gpt-4o", judge).with_hooks([h
 
 ```python
 turn_count = [0]
+
+
 def stop_after_5(ctx):
     turn_count[0] += 1
     return turn_count[0] >= 5
 
-hook = senza.create_should_stop_hook(stop_after_5)
+
+hook = senza.hooks.should_stop(stop_after_5)
 ```
 
 ## Human-in-the-Loop (Event Channel)
@@ -127,10 +134,7 @@ hook = senza.create_should_stop_hook(stop_after_5)
 handle, wait_tool = senza.create_event_channel("review-task-001")
 
 # 2. Register the wait tool — LLM can call it to pause for human input
-engine = (
-    senza.WorkflowEngine(workflow, provider, "gpt-4o", judge)
-    .with_external_tool(wait_tool)
-)
+engine = senza.WorkflowEngine(workflow, provider, "gpt-4o", judge).with_external_tool(wait_tool)
 
 # 3. In another thread/coroutine, push events
 handle.submit("审核通过", {"approved": True, "reviewer": "alice"})
@@ -147,7 +151,7 @@ tool1 = senza.create_tool("search", "Search", schema_json, search_callback)
 tool2 = senza.create_tool("write", "Write file", schema_json, write_callback)
 
 # Create hooks
-guard_hook = senza.create_before_tool_call_hook(guard_fn)
+guard_hook = senza.hooks.before_tool_call(guard_fn)
 
 # Bundle into a plugin
 plugin = senza.create_plugin(
@@ -201,19 +205,19 @@ Senza ships 12 strategy plugins (plus helpers) via `create_*` functions. Each is
 
 | Plugin | Function | Description |
 |--------|----------|-------------|
-| SafetyDefaults | `create_safety_defaults_plugin()` | Bash blacklist + path traversal guard |
-| LoopSafety | `create_loop_safety_plugin(config=None)` | Death-spiral / repetition / failure circuit breaker |
-| StatusPanel | `create_status_panel_plugin()` | Status bar + `todo_write` tool |
-| MemoryDefense | `create_memory_defense_plugin()` | Persistent memory injection defense |
+| SafetyDefaults | `senza.strategy.safety_defaults()` | Bash blacklist + path traversal guard |
+| LoopSafety | `senza.strategy.loop_safety(config=None)` | Death-spiral / repetition / failure circuit breaker |
+| StatusPanel | `senza.strategy.status_panel()` | Status bar + `todo_write` tool |
+| MemoryDefense | `senza.strategy.memory_defense()` | Persistent memory injection defense |
 | MemoryDefense (builder) | `MemoryDefensePluginBuilder().extra_file(name).build()` | Custom-file memory defense |
-| InjectionFilter | `create_injection_filter_plugin(patterns=None)` | Prompt injection detection |
-| SourceTag | `create_source_tag_plugin(entries)` | External content `<source>` wrapping |
-| ProjectInstruction | `create_project_instruction_plugin(env, config=None)` | Auto-inject CLAUDE.md etc |
-| Audit | `create_audit_plugin(sink_path, trace_id=None, task_id=None)` | Tool call audit log (JSONL) |
-| Notify | `create_notify_plugin()` | LLM proactively notifies user |
-| ToolOutputGuard | `create_tool_output_guard_plugin(env, config=None)` | Output truncation safety net |
-| WebhookStream | `create_webhook_stream(buffer)` | External event trigger |
-| ContextAwareCompaction | `create_context_aware_compaction_prompt()` | Context-aware compaction prompt pair |
+| InjectionFilter | `senza.strategy.injection_filter(patterns=None)` | Prompt injection detection |
+| SourceTag | `senza.strategy.source_tag(entries)` | External content `<source>` wrapping |
+| ProjectInstruction | `senza.strategy.project_instruction(env, config=None)` | Auto-inject CLAUDE.md etc |
+| Audit | `senza.strategy.audit(sink_path, trace_id=None, task_id=None)` | Tool call audit log (JSONL) |
+| Notify | `senza.strategy.notify()` | LLM proactively notifies user |
+| ToolOutputGuard | `senza.strategy.tool_output_guard(env, config=None)` | Output truncation safety net |
+| WebhookStream | `senza.strategy.webhook_stream(buffer)` | External event trigger |
+| ContextAwareCompaction | `senza.strategy.context_aware_compaction_prompt()` | Context-aware compaction prompt pair |
 
 **Production safety pattern** — combine SafetyDefaults + LoopSafety + Audit:
 
@@ -221,9 +225,9 @@ Senza ships 12 strategy plugins (plus helpers) via `create_*` functions. Each is
 harness = (
     senza.HarnessBuilder("gpt-4o")
     .provider("*", provider)
-    .plugin(senza.create_safety_defaults_plugin())
-    .plugin(senza.create_loop_safety_plugin())
-    .plugin(senza.create_audit_plugin("/tmp/audit.jsonl"))
+    .plugin(senza.strategy.safety_defaults())
+    .plugin(senza.strategy.loop_safety())
+    .plugin(senza.strategy.audit("/tmp/audit.jsonl"))
     .build()
 )
 ```

@@ -3,7 +3,14 @@
 ## Provider
 
 ```python
-senza.providers.openai(api_key, base_url=None, chat_path=None, thinking_scheme=None, parse_reasoning_content=True, tolerant_keepalive=True)
+senza.providers.openai(
+    api_key,
+    base_url=None,
+    chat_path=None,
+    thinking_scheme=None,
+    parse_reasoning_content=True,
+    tolerant_keepalive=True,
+)
 senza.providers.anthropic(api_key, base_url=None, messages_path=None)
 ```
 
@@ -33,7 +40,10 @@ senza.providers.anthropic(api_key, base_url=None, messages_path=None)
 | `.skill(skill)` / `.skills([skill, ...])` | 注册 skill(s) |
 | `.disable_skill_read_tool()` | 关闭 SkillReadTool 自动注册 |
 | `.tool(tool)` / `.plugin(plugin)` | 注册工具/插件 |
+| `.tools([tool, ...])` | 批量注册工具（等价多次 `.tool()`） |
 | `.env(env)` | 设置执行环境（`create_os_env(...)`），启用 bash/read/write/edit 工具 |
+| `.enable_spawn(model, provider, session_dir)` | 启用子 Agent 派发（自动注册 MessageBus + 7 个 spawn 通信 tool） |
+| `.final_answer_validator(hook)` | 注册最终回答校验 hook（提交前拦截/修改/拒绝） |
 | `.build()` | 返回 `AgentHarness` |
 
 ### AgentHarness
@@ -41,6 +51,8 @@ senza.providers.anthropic(api_key, base_url=None, messages_path=None)
 | 方法 | 说明 |
 |------|------|
 | `.prompt_and_collect(text, timeout_ms=30000)` | 发送提示并收集事件（推荐） |
+| `.chat(text, timeout_ms=30000)` | 发送提示并返回拼接后的纯文本回复（`str`） |
+| `.chat_async(text, timeout_ms=30000)` | `chat()` 的非阻塞 async 版本（线程池执行） |
 | `.prompt(text)` | 发送提示（阻塞，需配合线程收集事件） |
 | `.collect_until_settled(timeout_ms=30000)` | 收集事件直到完成 |
 | `.events(timeout_ms=5000)` | 流式事件迭代器 |
@@ -66,6 +78,10 @@ Streaming: `text_delta` (has `.text`), `message_end`, `tool_call_start`, `tool_c
 
 Harness: `phase_change`, `compaction_start`, `compaction_end`, `tools_update`.
 
+事件类型字符串也可通过 `senza.EventType` 常量引用（避免拼写错误）：
+`TEXT_DELTA`, `THINKING_DELTA`, `MESSAGE_END`, `TOOL_CALL_START`, `TOOL_CALL_END`,
+`TOOL_RESULT`, `SETTLED`, `ABORTED`, `AGENT_END`, `ERROR`, `WORKFLOW_DONE`, `WORKFLOW_FAILED`。
+
 ### 三种 prompt 方式
 
 | 方式 | 适用场景 | 说明 |
@@ -77,16 +93,14 @@ Harness: `phase_change`, `compaction_start`, `compaction_end`, `tools_update`.
 ### 工具创建
 
 ```python
-import json
-
 tool = senza.create_tool(
     name="search",
     description="Search the web",
-    parameters_schema=json.dumps({
+    parameters={
         "type": "object",
         "properties": {"query": {"type": "string"}},
         "required": ["query"],
-    }),
+    },
     callback=lambda args, ctx: {
         "content": [{"type": "text", "text": f"Results for {args['query']}"}],
         "terminate": False,
@@ -106,7 +120,7 @@ harness = (
     senza.HarnessBuilder("gpt-4o")
     .provider("*", provider)
     .plugin(senza.create_fs_tools_plugin())  # bash/read/write/edit
-    .env(senza.create_os_env("."))           # 真实文件系统 + shell
+    .env(senza.create_os_env("."))  # 真实文件系统 + shell
     .build()
 )
 ```
@@ -136,9 +150,9 @@ harness = (
 
 ```python
 {
-    "entry_step": "step1",       # must be in steps
-    "steps": [...],               # list of step dicts
-    "edges": [...],               # list of edge dicts
+    "entry_step": "step1",  # must be in steps
+    "steps": [...],  # list of step dicts
+    "edges": [...],  # list of edge dicts
 }
 ```
 
@@ -157,9 +171,13 @@ Step 类型由引擎自动检测：**有 `"executor"` key → Executor step；�
 ### Edges
 
 ```python
-{"from": "step1", "to": "step2"}                                           # unconditional
-{"from": "step1", "to": "step2", "condition": "pass"}                      # label (judge interprets)
-{"from": "step1", "to": "step2", "condition": {"op": "eq", "pointer": "/status", "value": "ok"}}  # declarative
+{"from": "step1", "to": "step2"}  # unconditional
+{"from": "step1", "to": "step2", "condition": "pass"}  # label (judge interprets)
+{
+    "from": "step1",
+    "to": "step2",
+    "condition": {"op": "eq", "pointer": "/status", "value": "ok"},
+}  # declarative
 ```
 
 ### 声明式 ConditionExpr
@@ -187,6 +205,7 @@ def my_judge(ctx: dict) -> str:
         return "retry"
     else:
         return "fail:quality gate failed"
+
 
 judge = senza.create_judge(my_judge)
 ```
@@ -224,12 +243,12 @@ judge = senza.create_judge(my_judge)
 ### Executor
 
 ```python
-senza.create_composite_judge()           # CompositeJudge（按节点注册独立路由）
-senza.create_executor(callback)           # Python 回调执行器
-senza.create_shell_executor(commands)     # Shell 命令执行器（命令白名单，需配合 create_os_env）
-senza.create_http_executor(allowed_hosts) # HTTP 调用执行器（host 白名单）
-senza.create_fs_tools_plugin()       # bash/read/write/edit 四件套 Plugin（需配合 create_os_env）
-senza.create_os_env(working_dir=".")      # OS 文件系统 + shell 执行环境（传给 WorkflowEngine(env=...)）
+senza.create_composite_judge()  # CompositeJudge（按节点注册独立路由）
+senza.create_executor(callback)  # Python 回调执行器
+senza.create_shell_executor(commands)  # Shell 命令执行器（命令白名单，需配合 create_os_env）
+senza.create_http_executor(allowed_hosts)  # HTTP 调用执行器（host 白名单）
+senza.create_fs_tools_plugin()  # bash/read/write/edit 四件套 Plugin（需配合 create_os_env）
+senza.create_os_env(working_dir=".")  # OS 文件系统 + shell 执行环境（传给 WorkflowEngine(env=...)）
 ```
 
 ### Shared Context
@@ -237,6 +256,7 @@ senza.create_os_env(working_dir=".")      # OS 文件系统 + shell 执行环境
 ```python
 # Set before run
 engine.set_context_variable("user_input", "hello")
+
 
 # Executor reads context
 def my_executor(ctx):
@@ -255,27 +275,28 @@ def my_executor(ctx):
 | `cancelled` | `reason` |
 | `failed` | `error` |
 
-## Hooks（11 种）
+## Hooks（12 种）
 
 ```python
-senza.hooks.before_turn(cb)         # cb(ctx: dict) -> None
-senza.hooks.after_turn(cb)          # cb(ctx: dict) -> None
-senza.hooks.before_run(cb)          # cb(ctx: dict) -> None
+senza.hooks.before_turn(cb)  # cb(ctx: dict) -> None
+senza.hooks.after_turn(cb)  # cb(ctx: dict) -> None
+senza.hooks.before_run(cb)  # cb(ctx: dict) -> None
 senza.hooks.after_provider_response(cb)  # cb(ctx: dict) -> None
 senza.hooks.before_provider_request(cb)  # cb(ctx: dict) -> None
-senza.hooks.before_tool_call(cb)    # cb(ctx: dict) -> str | None
-senza.hooks.after_tool_call(cb)     # cb(ctx: dict) -> str | dict
-senza.hooks.should_stop(cb)         # cb(ctx: dict) -> bool
-senza.hooks.before_compact(cb)      # cb(ctx: dict) -> Any
-senza.hooks.transform_context(cb)   # cb(ctx: dict) -> dict
-senza.hooks.prepare_next_turn(cb)   # cb(ctx: dict) -> Optional[dict]
+senza.hooks.before_tool_call(cb)  # cb(ctx: dict) -> str | None
+senza.hooks.after_tool_call(cb)  # cb(ctx: dict) -> str | dict
+senza.hooks.should_stop(cb)  # cb(ctx: dict) -> bool
+senza.hooks.before_compact(cb)  # cb(ctx: dict) -> Any
+senza.hooks.transform_context(cb)  # cb(ctx: dict) -> dict
+senza.hooks.prepare_next_turn(cb)  # cb(ctx: dict) -> Optional[dict]
+senza.hooks.final_answer_validator(cb)  # cb(ctx: dict) -> None | dict  # 提交最终回答前校验/拦截
 ```
 
 ## Pricing
 
 ```python
-senza.create_pricing_provider(table)              # 静态定价表 dict
-senza.create_pricing_provider_callback(cb)        # cb(model, provider) -> dict | None
+senza.create_pricing_provider(table)  # 静态定价表 dict
+senza.create_pricing_provider_callback(cb)  # cb(model, provider) -> dict | None
 ```
 
 ## Budget
@@ -287,9 +308,9 @@ senza.create_budget_exceeded_hook(cb)  # cb(cost: dict, limit: float) -> bool
 ## Rules 审批
 
 ```python
-senza.rules.contains(allowed)              # tool_name ∈ allowed
-senza.rules.regex_field(arg_path, pattern) # args[arg_path] 匹配正则
-senza.rules.number_range(arg_path, min, max) # 数值区间
+senza.rules.contains(allowed)  # tool_name ∈ allowed
+senza.rules.regex_field(arg_path, pattern)  # args[arg_path] 匹配正则
+senza.rules.number_range(arg_path, min, max)  # 数值区间
 senza.rules.rate_limit(max, window_seconds)  # 限流
 
 chain = senza.rules.chain().rule("search", pred, "allow").fallback("deny").build()
@@ -392,6 +413,7 @@ senza.knowledge.memory_plugin(
 senza.knowledge.in_memory_session_recall_index() -> SessionRecallIndex
 senza.knowledge.sqlite_session_recall_index(path: str) -> SessionRecallIndex
 senza.knowledge.in_memory_session_repo() -> SessionRepo
+senza.knowledge.jsonl_session_repo(path: str) -> SessionRepo  # JSONL 持久化会话仓库
 senza.knowledge.session_recall_knowledge_source(
     repo: SessionRepo, index: SessionRecallIndex,
 ) -> SessionRecallKnowledgeSource
@@ -414,6 +436,7 @@ senza.knowledge.history_recall_plugin(
 | `senza.knowledge.in_memory_session_recall_index()` | 内存会话索引 |
 | `senza.knowledge.sqlite_session_recall_index(path)` | SQLite 持久化会话索引 |
 | `senza.knowledge.in_memory_session_repo()` | 内存会话仓库 |
+| `senza.knowledge.jsonl_session_repo(path)` | JSONL 持久化会话仓库 |
 | `senza.knowledge.session_recall_knowledge_source(repo, index)` | 会话召回知识源 |
 | `senza.knowledge.history_recall_plugin(source, config=None)` | 自动注入历史会话上下文 |
 
@@ -448,6 +471,7 @@ python -m senza.viewer /path/to/sessions [--port PORT]
 ```python
 # 编程式
 import senza.viewer
+
 senza.viewer.serve("/path/to/sessions")  # 阻塞，自动打开浏览器
 ```
 

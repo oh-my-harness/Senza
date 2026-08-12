@@ -29,14 +29,14 @@ All strategy plugins are created via `create_*` functions and installed on a
 ```python
 import senza
 
-provider = senza.create_openai_provider(api_key="sk-...")
+provider = senza.providers.openai(api_key="sk-...")
 
 harness = (
     senza.HarnessBuilder("gpt-4o")
     .provider("*", provider)
-    .plugin(senza.create_safety_defaults_plugin())
-    .plugin(senza.create_loop_safety_plugin())
-    .plugin(senza.create_audit_plugin("/tmp/audit.jsonl"))
+    .plugin(senza.strategy.safety_defaults())
+    .plugin(senza.strategy.loop_safety())
+    .plugin(senza.strategy.audit("/tmp/audit.jsonl"))
     .build()
 )
 ```
@@ -46,7 +46,7 @@ harness = (
 ### SafetyDefaultsPlugin
 
 ```python
-senza.create_safety_defaults_plugin() -> Plugin
+senza.strategy.safety_defaults() -> Plugin
 ```
 
 Bundles two `BeforeToolCallHook` guards:
@@ -58,7 +58,7 @@ No configuration needed — install and go.
 ### LoopSafetyPlugin
 
 ```python
-senza.create_loop_safety_plugin(config: Optional[dict] = None) -> Plugin
+senza.strategy.loop_safety(config: Optional[dict] = None) -> Plugin
 ```
 
 A `ShouldStopHook` circuit breaker that detects three death-spiral patterns:
@@ -70,17 +70,19 @@ A `ShouldStopHook` circuit breaker that detects three death-spiral patterns:
 | Turn budget (total turns) | 50 | `"max_turns"` |
 
 ```python
-plugin = senza.create_loop_safety_plugin({
-    "max_repeated_tool_calls": 3,
-    "max_consecutive_failures": 5,
-    "max_turns": 30,
-})
+plugin = senza.strategy.loop_safety(
+    {
+        "max_repeated_tool_calls": 3,
+        "max_consecutive_failures": 5,
+        "max_turns": 30,
+    }
+)
 ```
 
 ### StatusPanelPlugin
 
 ```python
-senza.create_status_panel_plugin() -> Plugin
+senza.strategy.status_panel() -> Plugin
 ```
 
 Registers a `todo_write` tool the LLM can call to report task progress.
@@ -90,7 +92,7 @@ long-running agents that should narrate their plan.
 ### MemoryDefensePlugin + Builder
 
 ```python
-senza.create_memory_defense_plugin() -> Plugin
+senza.strategy.memory_defense() -> Plugin
 
 # Fluent builder for custom file sets:
 senza.MemoryDefensePluginBuilder()
@@ -119,7 +121,7 @@ plugin = (
 ### InjectionFilterPlugin
 
 ```python
-senza.create_injection_filter_plugin(patterns: Optional[list[str]] = None) -> Plugin
+senza.strategy.injection_filter(patterns: Optional[list[str]] = None) -> Plugin
 ```
 
 Detects prompt-injection attempts in tool output and user messages.
@@ -127,16 +129,18 @@ Default patterns catch common attacks (`"ignore previous instructions"`,
 `"system:"`, `"you are now"`, etc.). Pass custom regex patterns to extend:
 
 ```python
-plugin = senza.create_injection_filter_plugin([
-    r"(?i)disregard\s+(all|previous)",
-    r"(?i)reveal\s+your\s+system\s+prompt",
-])
+plugin = senza.strategy.injection_filter(
+    [
+        r"(?i)disregard\s+(all|previous)",
+        r"(?i)reveal\s+your\s+system\s+prompt",
+    ]
+)
 ```
 
 ### SourceTagPlugin
 
 ```python
-senza.create_source_tag_plugin(entries: list[dict]) -> Plugin
+senza.strategy.source_tag(entries: list[dict]) -> Plugin
 ```
 
 Wraps external content (tool output, RAG chunks, web fetches) with
@@ -144,16 +148,18 @@ Wraps external content (tool output, RAG chunks, web fetches) with
 Each entry describes a source:
 
 ```python
-plugin = senza.create_source_tag_plugin([
-    {"tool": "web_fetch", "tag": "web", "trusted": False},
-    {"tool": "knowledge_read", "tag": "kb", "trusted": True},
-])
+plugin = senza.strategy.source_tag(
+    [
+        {"tool": "web_fetch", "tag": "web", "trusted": False},
+        {"tool": "knowledge_read", "tag": "kb", "trusted": True},
+    ]
+)
 ```
 
 ### ProjectInstructionPlugin
 
 ```python
-senza.create_project_instruction_plugin(
+senza.strategy.project_instruction(
     env: ExecutionEnv, config: Optional[dict] = None,
 ) -> Plugin
 ```
@@ -165,13 +171,13 @@ working directory.
 
 ```python
 env = senza.create_os_env("/path/to/project")
-plugin = senza.create_project_instruction_plugin(env)
+plugin = senza.strategy.project_instruction(env)
 ```
 
 ### AuditPlugin
 
 ```python
-senza.create_audit_plugin(
+senza.strategy.audit(
     sink_path: str,
     trace_id: Optional[str] = None,
     task_id: Optional[str] = None,
@@ -182,7 +188,7 @@ Logs every tool call (name, args, result, timestamp) to a JSONL file.
 `trace_id` and `task_id` are included in each record for correlation.
 
 ```python
-plugin = senza.create_audit_plugin(
+plugin = senza.strategy.audit(
     "/var/log/senza/audit.jsonl",
     trace_id="trace-abc123",
     task_id="task-001",
@@ -192,7 +198,7 @@ plugin = senza.create_audit_plugin(
 ### NotifyPlugin
 
 ```python
-senza.create_notify_plugin() -> Plugin
+senza.strategy.notify() -> Plugin
 ```
 
 Registers a `notify_user` tool the LLM can call proactively when it
@@ -202,7 +208,7 @@ a completed milestone). Emits a `notification` event in the stream.
 ### ToolOutputGuardPlugin
 
 ```python
-senza.create_tool_output_guard_plugin(
+senza.strategy.tool_output_guard(
     env: ExecutionEnv, config: Optional[dict] = None,
 ) -> Plugin
 ```
@@ -212,16 +218,19 @@ configurable byte limit before they flood the context window.
 
 ```python
 env = senza.create_os_env(".")
-plugin = senza.create_tool_output_guard_plugin(env, {
-    "max_bytes": 50000,
-    "truncation_message": "[output truncated by guard]",
-})
+plugin = senza.strategy.tool_output_guard(
+    env,
+    {
+        "max_bytes": 50000,
+        "truncation_message": "[output truncated by guard]",
+    },
+)
 ```
 
 ### WebhookStream
 
 ```python
-senza.create_webhook_stream(buffer: int) -> tuple[WebhookChannel, EventStream]
+senza.strategy.webhook_stream(buffer: int) -> tuple[WebhookChannel, EventStream]
 ```
 
 Creates an external event trigger: push payloads from outside the agent
@@ -229,7 +238,7 @@ loop and they appear as events the agent can react to. `buffer` sets the
 channel capacity.
 
 ```python
-channel, stream = senza.create_webhook_stream(buffer=64)
+channel, stream = senza.strategy.webhook_stream(buffer=64)
 
 # External trigger (another thread / HTTP handler):
 channel.push({"event": "deploy_complete", "service": "api"})
@@ -241,7 +250,7 @@ channel.push({"event": "deploy_complete", "service": "api"})
 ### context_aware_compaction_prompt
 
 ```python
-senza.create_context_aware_compaction_prompt() -> tuple[str, str]
+senza.strategy.context_aware_compaction_prompt() -> tuple[str, str]
 ```
 
 Returns `(system_prompt, user_template)` — a compaction prompt pair that
@@ -250,12 +259,9 @@ questions) rather than blindly summarizing all messages. Use with
 `HarnessBuilder.compaction_prompt(system_prompt, user_template)`.
 
 ```python
-sys_p, user_t = senza.create_context_aware_compaction_prompt()
+sys_p, user_t = senza.strategy.context_aware_compaction_prompt()
 harness = (
-    senza.HarnessBuilder("gpt-4o")
-    .provider("*", provider)
-    .compaction_prompt(sys_p, user_t)
-    .build()
+    senza.HarnessBuilder("gpt-4o").provider("*", provider).compaction_prompt(sys_p, user_t).build()
 )
 ```
 
@@ -267,9 +273,9 @@ harness = (
 harness = (
     senza.HarnessBuilder("gpt-4o")
     .provider("*", provider)
-    .plugin(senza.create_safety_defaults_plugin())     # bash + path guards
-    .plugin(senza.create_loop_safety_plugin())          # death-spiral breaker
-    .plugin(senza.create_audit_plugin("/tmp/audit.jsonl"))
+    .plugin(senza.strategy.safety_defaults())  # bash + path guards
+    .plugin(senza.strategy.loop_safety())  # death-spiral breaker
+    .plugin(senza.strategy.audit("/tmp/audit.jsonl"))
     .build()
 )
 ```
@@ -280,12 +286,16 @@ harness = (
 harness = (
     senza.HarnessBuilder("gpt-4o")
     .provider("*", provider)
-    .plugin(senza.create_safety_defaults_plugin())
-    .plugin(senza.create_injection_filter_plugin())
-    .plugin(senza.create_memory_defense_plugin())
-    .plugin(senza.create_source_tag_plugin([
-        {"tool": "web_fetch", "tag": "web", "trusted": False},
-    ]))
+    .plugin(senza.strategy.safety_defaults())
+    .plugin(senza.strategy.injection_filter())
+    .plugin(senza.strategy.memory_defense())
+    .plugin(
+        senza.strategy.source_tag(
+            [
+                {"tool": "web_fetch", "tag": "web", "trusted": False},
+            ]
+        )
+    )
     .build()
 )
 ```
@@ -296,9 +306,9 @@ harness = (
 harness = (
     senza.HarnessBuilder("gpt-4o")
     .provider("*", provider)
-    .plugin(senza.create_status_panel_plugin())
-    .plugin(senza.create_audit_plugin("/tmp/audit.jsonl", trace_id="t1"))
-    .plugin(senza.create_notify_plugin())
+    .plugin(senza.strategy.status_panel())
+    .plugin(senza.strategy.audit("/tmp/audit.jsonl", trace_id="t1"))
+    .plugin(senza.strategy.notify())
     .build()
 )
 ```
@@ -306,12 +316,12 @@ harness = (
 ### External trigger (webhook)
 
 ```python
-channel, stream = senza.create_webhook_stream(buffer=32)
+channel, stream = senza.strategy.webhook_stream(buffer=32)
 
 harness = (
     senza.HarnessBuilder("gpt-4o")
     .provider("*", provider)
-    .plugin(senza.create_safety_defaults_plugin())
+    .plugin(senza.strategy.safety_defaults())
     .build()
 )
 # Feed stream events into harness via senza.stream_events(stream)
@@ -321,16 +331,16 @@ harness = (
 
 | Function | Returns | One-liner |
 |----------|---------|-----------|
-| `create_safety_defaults_plugin()` | `Plugin` | Bash blacklist + path traversal guard |
-| `create_loop_safety_plugin(config=None)` | `Plugin` | Death-spiral / repetition / failure circuit breaker |
-| `create_status_panel_plugin()` | `Plugin` | Status bar + `todo_write` tool |
-| `create_memory_defense_plugin()` | `Plugin` | Persistent memory injection defense (default files) |
+| `senza.strategy.safety_defaults()` | `Plugin` | Bash blacklist + path traversal guard |
+| `senza.strategy.loop_safety(config=None)` | `Plugin` | Death-spiral / repetition / failure circuit breaker |
+| `senza.strategy.status_panel()` | `Plugin` | Status bar + `todo_write` tool |
+| `senza.strategy.memory_defense()` | `Plugin` | Persistent memory injection defense (default files) |
 | `MemoryDefensePluginBuilder().extra_file(name).build()` | `Plugin` | Custom-file memory defense |
-| `create_injection_filter_plugin(patterns=None)` | `Plugin` | Prompt injection detection |
-| `create_source_tag_plugin(entries)` | `Plugin` | External content `<source>` wrapping |
-| `create_project_instruction_plugin(env, config=None)` | `Plugin` | Auto-inject CLAUDE.md etc |
-| `create_audit_plugin(sink_path, trace_id=None, task_id=None)` | `Plugin` | Tool call audit log (JSONL) |
-| `create_notify_plugin()` | `Plugin` | LLM proactively notifies user |
-| `create_tool_output_guard_plugin(env, config=None)` | `Plugin` | Output truncation safety net |
-| `create_webhook_stream(buffer)` | `(WebhookChannel, EventStream)` | External event trigger |
-| `create_context_aware_compaction_prompt()` | `tuple[str, str]` | Context-aware compaction prompt pair |
+| `senza.strategy.injection_filter(patterns=None)` | `Plugin` | Prompt injection detection |
+| `senza.strategy.source_tag(entries)` | `Plugin` | External content `<source>` wrapping |
+| `senza.strategy.project_instruction(env, config=None)` | `Plugin` | Auto-inject CLAUDE.md etc |
+| `senza.strategy.audit(sink_path, trace_id=None, task_id=None)` | `Plugin` | Tool call audit log (JSONL) |
+| `senza.strategy.notify()` | `Plugin` | LLM proactively notifies user |
+| `senza.strategy.tool_output_guard(env, config=None)` | `Plugin` | Output truncation safety net |
+| `senza.strategy.webhook_stream(buffer)` | `(WebhookChannel, EventStream)` | External event trigger |
+| `senza.strategy.context_aware_compaction_prompt()` | `tuple[str, str]` | Context-aware compaction prompt pair |

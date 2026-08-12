@@ -14,6 +14,7 @@ class ProviderError(SenzaError):
 
 class RateLimitError(ProviderError):
     """Rate limit exceeded. Carries retry_after."""
+
     retry_after: Optional[float]
 
 class ProviderTimeoutError(ProviderError):
@@ -30,6 +31,7 @@ class ForbiddenError(ProviderError):
 
 class OverloadedError(ProviderError):
     """Provider overloaded. Carries retry_after."""
+
     retry_after: Optional[float]
 
 class ServerError(ProviderError):
@@ -40,6 +42,7 @@ class StreamError(ProviderError):
 
 class StreamIncompleteError(ProviderError):
     """Stream ended before completion. Carries received_chunks and finish_reason."""
+
     received_chunks: int
     finish_reason: Optional[str]
 
@@ -51,6 +54,7 @@ class DecodeError(ProviderError):
 
 class ProviderCodeError(ProviderError):
     """Provider-returned error code. Carries code."""
+
     code: str
 
 class ToolError(SenzaError):
@@ -58,6 +62,7 @@ class ToolError(SenzaError):
 
 class ToolArgumentError(ToolError):
     """Invalid tool arguments."""
+
     tool_name: Optional[str]
 
 class ToolAbortedError(ToolError):
@@ -68,6 +73,7 @@ class ToolExecutionError(ToolError):
 
 class BudgetExceededError(SenzaError):
     """Budget limit exceeded. Carries limit and spent."""
+
     limit: float
     spent: float
 
@@ -76,11 +82,13 @@ class WorkflowError(SenzaError):
 
 class StepTimeoutError(WorkflowError):
     """Step timed out. Carries step_id and timeout_ms."""
+
     step_id: str
     timeout_ms: int
 
 class StepFailedError(WorkflowError):
     """Step failed. Carries step_id."""
+
     step_id: str
 
 class WorkflowPausedError(WorkflowError):
@@ -107,7 +115,6 @@ class RustPanicError(RuntimeError):
 
 def enable_debug() -> None: ...
 def disable_debug() -> None: ...
-
 def version() -> str: ...
 def set_event_loop(loop: Any) -> None: ...
 
@@ -124,9 +131,9 @@ def read_sessions(dir: str) -> dict: ...
 def viewer_html() -> str: ...
 def extract_text(events: list[dict]) -> str: ...
 
-
 class EventType:
     """String constants for event types."""
+
     TEXT_DELTA: str
     TOOL_CALL_START: str
     TOOL_CALL_END: str
@@ -174,7 +181,6 @@ def create_pricing_provider(table: dict) -> PricingProvider: ...
 def create_pricing_provider_callback(
     callback: Callable[[str, str], Optional[dict]],
 ) -> PricingProvider: ...
-
 
 # ── Usage ledger ──────────────────────────────────────────────────────────────
 
@@ -277,7 +283,6 @@ def create_tool(
     parameters_schema: Optional[Union[dict, str]] = ...,
     callback: Callable[..., Any] = ...,
 ) -> Tool: ...
-
 def create_sync_tool(
     name: str,
     description: str,
@@ -295,7 +300,6 @@ def create_plugin(
     tools: Optional[list[Tool]] = ...,
     hooks: Optional[list[Hook]] = ...,
 ) -> Plugin: ...
-
 def create_fs_tools_plugin() -> Plugin: ...
 
 # ── Knowledge ────────────────────────────────────────────────────────────────
@@ -361,7 +365,6 @@ class MemoryWritePolicy:
 class MemoryMutationGate:
     """Opaque memory mutation gate handle (from create_allow_all_gate)."""
 
-
 # ── Session Recall ──────────────────────────────────────────────────────────
 
 class SessionRecallIndex:
@@ -397,9 +400,7 @@ class strategy:
     @staticmethod
     def source_tag(entries: list[dict]) -> Plugin: ...
     @staticmethod
-    def project_instruction(
-        env: ExecutionEnv, config: Optional[dict] = None
-    ) -> Plugin: ...
+    def project_instruction(env: ExecutionEnv, config: Optional[dict] = None) -> Plugin: ...
     @staticmethod
     def audit(
         sink_path: str, trace_id: Optional[str] = None, task_id: Optional[str] = None
@@ -407,9 +408,7 @@ class strategy:
     @staticmethod
     def notify() -> Plugin: ...
     @staticmethod
-    def tool_output_guard(
-        env: ExecutionEnv, config: Optional[dict] = None
-    ) -> Plugin: ...
+    def tool_output_guard(env: ExecutionEnv, config: Optional[dict] = None) -> Plugin: ...
     @staticmethod
     def webhook_stream(buffer: int) -> tuple[WebhookChannel, EventStream]: ...
     @staticmethod
@@ -425,7 +424,6 @@ class WebhookChannel:
 class EventStream:
     """Consumer side of a webhook event stream (opaque)."""
 
-
 # ── Timer / Heartbeat / Shell monitor event streams ──────────────────────────
 
 class HeartbeatHandle:
@@ -439,15 +437,20 @@ class ShellMonitorHandle:
     def kill(self) -> None: ...
 
 def create_timer_stream(
-    delay_ms: int, label: str, task_id: str,
+    delay_ms: int,
+    label: str,
+    task_id: str,
 ) -> tuple[WaitForExternalEventTool]: ...
-
 def create_heartbeat_stream(
-    timeout_ms: int, label: str, task_id: str,
+    timeout_ms: int,
+    label: str,
+    task_id: str,
 ) -> tuple[HeartbeatHandle, WaitForExternalEventTool]: ...
-
 def create_shell_monitor_stream(
-    command: str, cwd: Optional[str], label: str, task_id: str,
+    command: str,
+    cwd: Optional[str],
+    label: str,
+    task_id: str,
 ) -> tuple[ShellMonitorHandle, WaitForExternalEventTool]: ...
 
 # ── Hook (11 types) ──────────────────────────────────────────────────────────
@@ -549,14 +552,12 @@ class McpServerConfig:
         cwd: Optional[str] = ...,
         timeout: Optional[int] = ...,
     ) -> McpServerConfig: ...
-
     @staticmethod
     def http(
         url: str,
         headers: Optional[dict[str, str]] = ...,
         timeout: Optional[int] = ...,
     ) -> McpServerConfig: ...
-
     @staticmethod
     def sse(
         url: str,
@@ -582,7 +583,6 @@ class HarnessBuilder:
     """Fluent builder for AgentHarness."""
 
     def __init__(self, model: str) -> None: ...
-
     def provider(self, pattern: str, provider: Provider) -> HarnessBuilder: ...
     def system_prompt(self, prompt: str) -> HarnessBuilder: ...
     def max_tokens(self, tokens: int) -> HarnessBuilder: ...
@@ -607,21 +607,29 @@ class HarnessBuilder:
     def skill(self, skill: Skill) -> HarnessBuilder: ...
     def skills(self, skills: list[Skill]) -> HarnessBuilder: ...
     def compaction_model(
-        self, model: str, context_window: int, max_tokens: int,
+        self,
+        model: str,
+        context_window: int,
+        max_tokens: int,
     ) -> HarnessBuilder: ...
     def compaction_prompt(
-        self, system_prompt: Optional[str] = ..., user_template: Optional[str] = ...,
+        self,
+        system_prompt: Optional[str] = ...,
+        user_template: Optional[str] = ...,
     ) -> HarnessBuilder: ...
     def compaction_query(self, query: Optional[str] = ...) -> HarnessBuilder: ...
     def pricing(self, provider: PricingProvider) -> HarnessBuilder: ...
     def usage_ledger(self, ledger: UsageLedger) -> HarnessBuilder: ...
     def stream_options(
-        self, timeout_ms: Optional[int] = ..., max_retries: Optional[int] = ...,
+        self,
+        timeout_ms: Optional[int] = ...,
+        max_retries: Optional[int] = ...,
     ) -> HarnessBuilder: ...
     def queue_capacity(self, capacity: Optional[int] = ...) -> HarnessBuilder: ...
-
     def budget(
-        self, limit: float, exceeded_hook: Optional[BudgetExceededHook] = ...,
+        self,
+        limit: float,
+        exceeded_hook: Optional[BudgetExceededHook] = ...,
     ) -> HarnessBuilder: ...
     def mcp_server(self, name: str, config: McpServerConfig) -> HarnessBuilder: ...
     def mcp_config_file(self, path: str) -> HarnessBuilder: ...
@@ -657,14 +665,16 @@ class AgentHarness:
     def chat(self, text: str, timeout_ms: int = 30000) -> str: ...
     async def chat_async(self, text: str, timeout_ms: int = 30000) -> str: ...
     def collect_until_settled(self, timeout_ms: int = ...) -> list[dict]: ...
-
-    def events(self, timeout_ms: int = ..., max_consecutive_timeouts: int = ...) -> HarnessEventIterator: ...
+    def events(
+        self, timeout_ms: int = ..., max_consecutive_timeouts: int = ...
+    ) -> HarnessEventIterator: ...
     def abort(self) -> None: ...
     def inspect(self) -> dict: ...
 
     # ── Dynamic config ──
     def set_model(
-        self, model: str,
+        self,
+        model: str,
         context_window: Optional[int] = ...,
         max_tokens: Optional[int] = ...,
     ) -> None: ...
@@ -709,7 +719,6 @@ class AgentHarness:
     def read_all_entries(self) -> list[dict]: ...
     def delete_branch(self, leaf: str) -> None: ...
     def generate_branch_summary(self, leaf: str) -> dict: ...
-
     def shutdown(self) -> None: ...
 
     # ── Context manager ──
@@ -743,7 +752,6 @@ class WorkflowEngine:
         session_base_dir: str = ...,
         env: Optional[ExecutionEnv] = ...,
     ) -> WorkflowEngine: ...
-
     @classmethod
     def restore_from_step(
         cls,
@@ -763,7 +771,9 @@ class WorkflowEngine:
     def with_executor(self, name: str, executor: Executor) -> WorkflowEngine: ...
     def with_hooks(self, hooks_list: list[Hook]) -> WorkflowEngine: ...
     def with_step_plugin(self, step_id: str, plugin: Plugin) -> WorkflowEngine: ...
-    def with_step_builder(self, step_id: str, customize: Callable[[HarnessBuilder], HarnessBuilder]) -> WorkflowEngine: ...
+    def with_step_builder(
+        self, step_id: str, customize: Callable[[HarnessBuilder], HarnessBuilder]
+    ) -> WorkflowEngine: ...
     def with_task_store(self, dir: str) -> WorkflowEngine: ...
     @classmethod
     def list_tasks(task_store_dir: str) -> list[dict]: ...
@@ -791,7 +801,9 @@ class WorkflowEngine:
     def task_id(self) -> str: ...
     def total_cost(self) -> dict: ...
     def checkpoint(self, description: str, payload: Any) -> None: ...
-    def subscribe(self, timeout_ms: int = ..., max_consecutive_timeouts: int = ...) -> WorkflowEventIterator: ...
+    def subscribe(
+        self, timeout_ms: int = ..., max_consecutive_timeouts: int = ...
+    ) -> WorkflowEventIterator: ...
     def inspect(self) -> dict: ...
 
     # ── Context manager ──
@@ -826,6 +838,7 @@ class Sandbox:
 
 class infra:
     """Submodule: infrastructure (audit sink, trace exporter, sandbox)."""
+
     jsonl_audit_sink: type[JsonlAuditSink]
     in_memory_trace_exporter: type[InMemoryTraceExporter]
     @staticmethod

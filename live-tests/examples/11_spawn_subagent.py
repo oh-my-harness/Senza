@@ -26,15 +26,19 @@ def _make_spawn_harness(provider):
     """Build a harness with spawn infrastructure enabled."""
     session_dir = tempfile.mkdtemp(prefix="senza-spawn-11-")
     builder = senza.HarnessBuilder(live_model()).provider("*", provider)
-    return builder.enable_spawn(
-        model=live_model(),
-        provider=provider,
-        session_dir=session_dir,
-    ).system_prompt(
-        "You are a helpful assistant that can dispatch sub-agents for sub-tasks. "
-        "Use the spawn_agent tool to delegate work, await_subagent_reply to wait "
-        "for results, and query_subagent to check status."
-    ).build()
+    return (
+        builder.enable_spawn(
+            model=live_model(),
+            provider=provider,
+            session_dir=session_dir,
+        )
+        .system_prompt(
+            "You are a helpful assistant that can dispatch sub-agents for sub-tasks. "
+            "Use the spawn_agent tool to delegate work, await_subagent_reply to wait "
+            "for results, and query_subagent to check status."
+        )
+        .build()
+    )
 
 
 def main() -> None:
@@ -102,6 +106,7 @@ def main() -> None:
     print("spawn_agent tool exercised: true (see above)")
     print("await_subagent_reply tool exercised: true (see above)")
     print("query_subagent tool exercised: true (see above)")
+
 
 if __name__ == "__main__":
     main()

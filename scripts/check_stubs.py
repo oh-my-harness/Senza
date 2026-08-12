@@ -12,6 +12,7 @@ module, and exits 1 if signatures diverge.
 This script always runs under the repo virtualenv (.venv/). If invoked
 from another interpreter, it re-executes itself under .venv/bin/python.
 """
+
 from __future__ import annotations
 
 import os
@@ -33,6 +34,7 @@ from dataclasses import dataclass, field
 @dataclass
 class FuncSig:
     """A function/method signature extracted from .pyi or runtime."""
+
     params: list[str] = field(default_factory=list)
     defaults: set[str] = field(default_factory=set)
 
@@ -44,8 +46,14 @@ SKIP_DUNDER = {"__init__", "__enter__", "__exit__"}
 # RustPanicError) is correct for type-checkers but trips the runtime drift
 # check, so skip the existence/param comparison for them entirely.
 SKIP_BASEEXCEPTION_METHODS = {
-    "add_note", "with_traceback", "args", "__cause__", "__context__",
-    "__traceback__", "__suppress_context__", "__notes__",
+    "add_note",
+    "with_traceback",
+    "args",
+    "__cause__",
+    "__context__",
+    "__traceback__",
+    "__suppress_context__",
+    "__notes__",
 }
 
 # Methods that only exist when built with --features test-utils.
@@ -70,14 +78,16 @@ SKIP_RUNTIME_ONLY = {
 # instances — not types — so check_stubs skips their methods entirely.
 # We list the class names here so the parser skips them before the
 # "in .pyi but not in runtime" check fires.
-SUBMODULE_GROUPS = frozenset({
-    "providers",
-    "hooks",
-    "strategy",
-    "knowledge",
-    "infra",
-    "rules",
-})
+SUBMODULE_GROUPS = frozenset(
+    {
+        "providers",
+        "hooks",
+        "strategy",
+        "knowledge",
+        "infra",
+        "rules",
+    }
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PYI_PATH = REPO_ROOT / "senza-pkg" / "senza" / "__init__.pyi"
@@ -89,6 +99,7 @@ def _is_property(func: ast.FunctionDef) -> bool:
         if isinstance(dec, ast.Name) and dec.id == "property":
             return True
     return False
+
 
 def _parse_pyi_from_string(pyi_source: str) -> dict[str, FuncSig]:
     """Parse .pyi source text into {qualified_name: FuncSig}."""
@@ -111,7 +122,6 @@ def _parse_pyi_from_string(pyi_source: str) -> dict[str, FuncSig]:
 def _is_func_def(node: ast.AST) -> bool:
     """True for both sync (FunctionDef) and async (AsyncFunctionDef) defs."""
     return isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-
 
 
 def _ast_func_to_sig(func: ast.FunctionDef) -> FuncSig:
@@ -141,10 +151,14 @@ def _ast_func_to_sig(func: ast.FunctionDef) -> FuncSig:
 
 
 # Expose from_string for testing
-parse_pyi_signatures = type("parse_pyi_signatures", (), {
-    "from_string": staticmethod(_parse_pyi_from_string),
-    "__call__": staticmethod(lambda path: _parse_pyi_from_string(Path(path).read_text())),
-})
+parse_pyi_signatures = type(
+    "parse_pyi_signatures",
+    (),
+    {
+        "from_string": staticmethod(_parse_pyi_from_string),
+        "__call__": staticmethod(lambda path: _parse_pyi_from_string(Path(path).read_text())),
+    },
+)
 
 
 import inspect
@@ -277,7 +291,11 @@ def _parse_inspect_signature(sig: "inspect.Signature") -> FuncSig:
 
 def _is_synthetic_init(sig: FuncSig) -> bool:
     """Check if a signature is PyO3's synthetic *args/**kwargs placeholder."""
-    return set(sig.params) == {"self", "*args", "**kwargs"} or set(sig.params) == {"*args", "**kwargs"}
+    return set(sig.params) == {"self", "*args", "**kwargs"} or set(sig.params) == {
+        "*args",
+        "**kwargs",
+    }
+
 
 def compare_signatures(
     pyi_sigs: dict[str, FuncSig],

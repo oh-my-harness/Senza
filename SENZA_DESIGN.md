@@ -127,7 +127,7 @@ PyO3 module 名：`senza`（已从 `llm_harness_py` 改名）。
 | — | ~~`AgentHarness` 缺 context manager~~ `__enter__`/`__exit__` 已添加 | ~~P1~~ | ✅ 已实现 |
 | — | ~~eda-agent-py 仍引用旧 `llm_harness_sdk`~~ **已迁移到 PyO3**（commit efba9a1） | ✅ | ✅ |
 | — | ~~`ShellExecutor` / `HttpCallExecutor` 未暴露~~ `create_shell_executor()` / `create_http_executor()` 已添加（不自动注册，安全设计） | ~~P2~~ | ✅ 已实现 |
-| — | `WorkflowEngine.run()` 是同步阻塞，无 async 版本 | P2 | ❌ 待做 |
+| — | ~~WorkflowEngine.run() 是同步阻塞，无 async 版本~~ `run_async()` / `prompt_async()` 已添加（线程池非阻塞） | ~~P2~~ | ✅ 已实现 |
 | — | ~~compaction 配置、active_tools、queue 清除、session/branch 管理~~ | ~~P2~~ | ✅ 已完成 |
 | — | ~~PyO3 module 名为 `llm_harness_py`，需改名为 `senza`~~ | ~~P0~~ | ✅ 已完成 |
 | — | ~~Senza 仓库缺 `pyproject.toml`，无法 `pip install senza-sdk`~~ | ~~P0~~ | ✅ 已完成 |
@@ -156,7 +156,7 @@ PyO3 module 名：`senza`（已从 `llm_harness_py` 改名）。
 
 ```
 senza/                           # 本仓库 (github.com/oh-my-harness/Senza)
-├── Cargo.toml                   # 独立 crate，git 依赖 runtime（rev=5eae99e）
+├── Cargo.toml                   # 独立 crate，git 依赖 runtime（SHA 由 senza-pkg/runtime.lock 注入）
 ├── build.rs                     # PyO3 build script
 ├── pyproject.toml               # package name = "senza-sdk"，maturin 后端
 ├── README.md                    # 面向用户：pip install senza-sdk + 快速上手
@@ -175,7 +175,7 @@ senza/                           # 本仓库 (github.com/oh-my-harness/Senza)
 │   │   ├── pytool.rs            # create_tool / Tool trait
 │   │   ├── pyplugin.rs          # PyPluginWrapper (Plugin 包装)
 │   │   ├── pyprovider.rs        # create_openai_provider / create_anthropic_provider
-│   │   ├── pyhooks.rs           # 11 种 hook 创建函数
+│   │   ├── pyhooks.rs           # 12 种 hook 创建函数
 │   │   ├── pyeventstream.rs     # 事件通道 + human-in-the-loop
 │   │   ├── pyresponseformat.rs  # JSON response format
 │   │   ├── pyagent.rs           # Agent 类（test-utils only）
@@ -222,16 +222,16 @@ senza/                           # 本仓库 (github.com/oh-my-harness/Senza)
 ├── .github/
 │   └── workflows/
 │       └── build-wheel.yml      # CI：注入 rev → maturin build → stub 检查 → PyPI
-├── skills/                      # AI 助手过程性知识包（3 个 SKILL.md）
+├── skills/                      # AI 助手过程性知识包（5 个 senza-* SKILL.md）
 │   ├── senza-agent/
 │   ├── senza-workflow/
-│   └── senza-advanced/
-└── examples/
-    ├── agent/                   # agent 层示例（18 个）
-    ├── runtime/                 # runtime 层示例（11 个）
-    ├── strategy/                # 策略层示例（12 个）
-    ├── knowledge/               # 知识层示例（3 个）
-    └── infra/                   # 基础设施示例（3 个）
+│   ├── senza-advanced/
+│   ├── senza-knowledge/
+│   └── senza-strategy/
+├── live-tests/
+│   ├── examples/                # 可运行示例（40 个：01–46，驱动真实 LLM）
+│   └── ...                      # 按架构层组织的真实 LLM 集成测试
+└── (仓库根 examples/ 已废弃删除，统一收拢到 live-tests/examples/)
 ```
 
 ### 与旧 cffi 架构的区别
@@ -264,15 +264,15 @@ import senza
 # OpenAI 兼容（含 DeepSeek、本地模型等）
 provider = senza.providers.openai(
     api_key="sk-...",
-    base_url="https://api.openai.com",       # 可选，空则用默认
-    parse_reasoning_content=True,              # 解析 DeepSeek reasoning_content
-    tolerant_keepalive=True,                   # 容忍 keepalive 消息
+    base_url="https://api.openai.com",  # 可选，空则用默认
+    parse_reasoning_content=True,  # 解析 DeepSeek reasoning_content
+    tolerant_keepalive=True,  # 容忍 keepalive 消息
 )
 
 # Anthropic
 provider = senza.providers.anthropic(
     api_key="sk-ant-...",
-    base_url="https://api.anthropic.com",    # 可选
+    base_url="https://api.anthropic.com",  # 可选
 )
 ```
 
@@ -286,8 +286,8 @@ harness = (
     .system_prompt("You are a helpful assistant.")
     .max_tokens(1024)
     .temperature(0.7)
-    .tool(my_tool)           # create_tool() 创建的 Tool
-    .plugin(my_plugin)       # create_plugin() 创建的 Plugin
+    .tool(my_tool)  # create_tool() 创建的 Tool
+    .plugin(my_plugin)  # create_plugin() 创建的 Plugin
     .build()
 )
 
@@ -306,7 +306,7 @@ for event in harness.events(timeout_ms=5000):
     print(event)
 
 # 获取状态
-print(harness.phase())          # "idle" / "turning" / "compacting" / "branching"
+print(harness.phase())  # "idle" / "turning" / "compacting" / "branching"
 print(harness.message_count())  # 消息数
 
 # 取消
@@ -334,21 +334,25 @@ import json
 my_tool = senza.create_tool(
     name="search",
     description="Search the web",
-    parameters_schema=json.dumps({
-        "type": "object",
-        "properties": {"query": {"type": "string"}},
-        "required": ["query"],
-    }),
+    parameters_schema=json.dumps(
+        {
+            "type": "object",
+            "properties": {"query": {"type": "string"}},
+            "required": ["query"],
+        }
+    ),
     callback=lambda args, ctx: {
         "content": [{"type": "text", "text": f"Results for {args['query']}"}],
         "terminate": False,
     },
 )
 
+
 # 异步 tool
 async def async_search(args, ctx):
     results = await some_async_api(args["query"])
     return {"content": [{"type": "text", "text": results}], "terminate": False}
+
 
 my_async_tool = senza.create_tool(
     name="async_search",
@@ -368,16 +372,27 @@ workflow = {
         # LLM step
         {"id": "step1", "name": "分析", "prompt": "分析数据", "allowed_tools": ["search"]},
         # Executor step
-        {"id": "step2", "name": "转换", "executor": "transform", "executor_config": {"fields": {"result": "/output"}}},
+        {
+            "id": "step2",
+            "name": "转换",
+            "executor": "transform",
+            "executor_config": {"fields": {"result": "/output"}},
+        },
     ],
     "edges": [
         {"from": "step1", "to": "step2"},
-        {"from": "step2", "to": "step1", "condition": {"op": "eq", "pointer": "/status", "value": "retry"}},
+        {
+            "from": "step2",
+            "to": "step1",
+            "condition": {"op": "eq", "pointer": "/status", "value": "retry"},
+        },
     ],
 }
 
 # 创建 judge
-judge = senza.create_judge(lambda ctx: "to:step2" if ctx.get("structured", {}).get("ok") else "retry")
+judge = senza.create_judge(
+    lambda ctx: "to:step2" if ctx.get("structured", {}).get("ok") else "retry"
+)
 
 # 创建 executor
 executor = senza.create_executor(lambda ctx: {"output": "done", "structured": {"status": "ok"}})
@@ -435,6 +450,7 @@ def my_judge(ctx: dict) -> str:
     else:
         return "fail:quality gate failed"
 
+
 judge = senza.create_judge(my_judge)
 ```
 
@@ -454,6 +470,7 @@ def my_executor(ctx: dict) -> dict:
         "structured": {"status": "ok", "result": 42},
     }
 
+
 executor = senza.create_executor(my_executor)
 ```
 
@@ -464,10 +481,7 @@ executor = senza.create_executor(my_executor)
 handle, wait_tool = senza.create_event_channel("review-task")
 
 # 注册 wait_tool 到 engine（LLM 可调用它等待外部事件）
-engine = (
-    senza.WorkflowEngine(workflow, provider, "gpt-4o", judge)
-    .with_external_tool(wait_tool)
-)
+engine = senza.WorkflowEngine(workflow, provider, "gpt-4o", judge).with_external_tool(wait_tool)
 
 # 在另一个线程/协程中推送事件
 handle.submit("审核通过", {"approved": True, "reviewer": "alice"})
@@ -496,7 +510,12 @@ handle.submit("审核通过", {"approved": True, "reviewer": "alice"})
 {"id": "step1", "name": "分析", "prompt": "请分析...", "allowed_tools": ["search", "spawn_agent"]}
 
 # Executor step
-{"id": "step2", "name": "转换", "executor": "transform", "executor_config": {"fields": {"result": "/output"}}}
+{
+    "id": "step2",
+    "name": "转换",
+    "executor": "transform",
+    "executor_config": {"fields": {"result": "/output"}},
+}
 ```
 
 **判断逻辑**（`dict_to_workflow`）：step dict 含 `"executor"` 键 → Executor step；否则 → LLM step。
@@ -513,9 +532,13 @@ handle.submit("审核通过", {"approved": True, "reviewer": "alice"})
 ### Edge
 
 ```python
-{"from": "step1", "to": "step2"}                                          # 无条件
-{"from": "step1", "to": "step2", "condition": "success"}                  # label（judge 解析）
-{"from": "step1", "to": "step2", "condition": {"op": "eq", "pointer": "/status", "value": "ok"}}  # 声明式
+{"from": "step1", "to": "step2"}  # 无条件
+{"from": "step1", "to": "step2", "condition": "success"}  # label（judge 解析）
+{
+    "from": "step1",
+    "to": "step2",
+    "condition": {"op": "eq", "pointer": "/status", "value": "ok"},
+}  # 声明式
 ```
 
 ### ConditionExpr（`op` tag）
@@ -632,9 +655,9 @@ LLM step 的 `allowed_tools` 含 `"spawn_agent"` 时，引擎自动注册 **7 �
 | Checkpoint | `checkpoint()` | ✅ **已暴露** | ~~P2~~ |
 | Cost 追踪 | `total_cost()` | ✅ **已暴露** | ~~P2~~ |
 | Step plugin | `with_step_plugin()` | ✅ `engine.with_step_plugin()` | 每步可注入 plugin |
-| Hooks (11 种) | `with_hooks()` | ✅ `engine.with_hooks()` + 11 个 `create_*_hook()` | 全部暴露 |
+| Hooks (12 种) | `with_hooks()` | ✅ `engine.with_hooks()` + 12 个 `senza.hooks.*()` | 全部暴露 |
 | Extra tools | `with_tool()` | ✅ `engine.with_tool()` | 引擎级注入 |
-| spawn_agent + 6 communication tools | `SpawnAgentTool` + 6 tools + MessageBus | ✅ LLM step 内部自动注册（7 个 tool 一组） | `allowed_tools` 含 `"spawn_agent"` |
+| spawn_agent + 6 communication tools | `SpawnAgentTool` + 6 tools + MessageBus | ✅ `enable_spawn()` 或 LLM step `allowed_tools` 含 `"spawn_agent"` 时自动注册（7 个 tool 一组） | `allowed_tools` 含 `"spawn_agent"` 或 builder 调 `enable_spawn()` |
 | Human-in-the-loop | `WaitForExternalEventTool` | ✅ `create_event_channel()` | 外部事件注入 |
 | 内置 executor (json_transform) | `builtin_executors()` | ✅ 自动注册 | 不再被 Python callback 覆盖 |
 | max_tokens | `with_max_tokens()` | ✅ `engine.with_max_tokens()` | 每步最大输出 |
@@ -646,9 +669,9 @@ LLM step 的 `allowed_tools` 含 `"spawn_agent"` 时，引擎自动注册 **7 �
 
 ### P0：必须先做
 
-#### 8.1 补 `WorkflowEngine.restore()` Python 包装
+#### 8.1 ~~补 `WorkflowEngine.restore()` Python 包装~~ 已完成
 
-Rust `WorkflowEngine::restore()` 已实现（从 TaskStore 恢复），PyO3 `PyWorkflowEngine` 未暴露。
+PyO3 已暴露 `WorkflowEngine.restore(store_dir, task_id, provider, model, judge)`（见 README 崩溃恢复示例），从 TaskStore 断点续跑。
 
 ```python
 # 目标 API
@@ -665,7 +688,7 @@ engine.run()  # 从断点续跑
 
 #### 8.2 ~~Docstrings~~ 已完成
 
-PyO3 0.29 自动导出 Rust doc comments 为 Python `__doc__`，全部 `#[pymethods]` 已覆盖。`#[pyo3(text_signature = "...")]` 已用于所有公开方法，`.pyi` stubs 与运行时 `__text_signature__` 通过 `check_stubs.py` 自动验证（112 签名零偏差）。
+PyO3 0.29 自动导出 Rust doc comments 为 Python `__doc__`，全部 `#[pymethods]` 已覆盖。`#[pyo3(text_signature = "...")]` 已用于所有公开方法，`.pyi` stubs 与运行时 `__text_signature__` 通过 `check_stubs.py` 自动验证（185 签名零偏差）。
 
 #### 8.3 ~~自动化 wheel 构建 CI~~ 已完成
 
@@ -678,7 +701,7 @@ PyO3 0.29 自动导出 Rust doc comments 为 Python `__doc__`，全部 `#[pymeth
 
 ### P1：应做
 
-#### 8.4 WorkflowEngine 缺失方法
+#### 8.4 ~~WorkflowEngine 缺失方法~~ 已完成
 
 | 方法 | Rust 来源 | 说明 |
 |------|-----------|------|
@@ -690,7 +713,7 @@ PyO3 0.29 自动导出 Rust doc comments 为 Python `__doc__`，全部 `#[pymeth
 | `checkpoint(desc, payload)` | `engine.checkpoint()` | 保存检查点 |
 | `total_cost()` | `engine.total_cost()` | 聚合开销 |
 
-#### 8.5 AgentHarness 缺 context manager
+#### 8.5 ~~AgentHarness 缺 context manager~~ 已完成
 
 当前无 `__enter__` / `__exit__` / `close()`。需要补充以支持 `with` 语法。
 
@@ -713,11 +736,13 @@ eda-agent-py 的 `import llm_harness_py` 已改为 `import senza`（commit 22555
 
 - `max_steps` / `max_retries` 配置暴露
 - `ShellExecutor` / `HttpCallExecutor` 注册到 `builtin_executors()`
-- `WorkflowEngine.run()` async 版本
+- ~~`WorkflowEngine.run()` async 版本~~ `run_async()` 已添加（线程池非阻塞）
 
 ---
 
 ## 9. Examples 规划
+
+> 注：仓库根 `examples/` 已废弃删除，下述示例已统一收拢到 `live-tests/examples/`（见 live-tests/README.md）。
 
 ### Agent 层 (`examples/agent/`)
 
@@ -756,7 +781,7 @@ eda-agent-py 的 `import llm_harness_py` 已改为 `import senza`（commit 22555
 |-------|---------|---------|
 | `senza-agent` | 单轮 LLM 调用、tool 注册、streaming、provider 创建 | HarnessBuilder 链式 API、create_tool、AgentHarness 方法、event 类型 |
 | `senza-workflow` | 多步 workflow、条件路由、judge/executor、共享 context | workflow dict schema、edge condition、Transition 编码、WorkflowEngine 方法 |
-| `senza-advanced` | sub-agent、hooks、human-in-the-loop、event streaming | 7 个 spawn tool + MessageBus、11 种 hook、create_event_channel、plugin |
+| `senza-advanced` | sub-agent、hooks、human-in-the-loop、event streaming | 7 个 spawn tool + MessageBus、12 种 hook、create_event_channel、plugin |
 
 ### 目录结构
 

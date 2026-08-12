@@ -1,7 +1,14 @@
 """Strategy layer live tests: safety, injection filter, loop safety, status/memory/source/notify/compact."""
 
 import senza
-from base import assert_no_error, assert_settled, live_model, make_harness, provider_or_skip, run_prompt
+from base import (
+    assert_no_error,
+    assert_settled,
+    live_model,
+    make_harness,
+    provider_or_skip,
+    run_prompt,
+)
 
 
 def bash_tool():

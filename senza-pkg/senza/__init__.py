@@ -16,16 +16,12 @@ _STOP = object()
 def _get_event_iterator(obj: Any, timeout_ms: int, max_consecutive_timeouts: int) -> Any:
     """Return the sync event iterator for *obj*, regardless of class."""
     if hasattr(obj, "events"):
-        return obj.events(
-            timeout_ms=timeout_ms, max_consecutive_timeouts=max_consecutive_timeouts
-        )
+        return obj.events(timeout_ms=timeout_ms, max_consecutive_timeouts=max_consecutive_timeouts)
     if hasattr(obj, "subscribe"):
         return obj.subscribe(
             timeout_ms=timeout_ms, max_consecutive_timeouts=max_consecutive_timeouts
         )
-    raise TypeError(
-        f"{type(obj).__name__} has no events() or subscribe() method"
-    )
+    raise TypeError(f"{type(obj).__name__} has no events() or subscribe() method")
 
 
 async def _next_event(it: Any) -> Any:
@@ -174,11 +170,7 @@ def extract_text(events):
     Returns:
         Concatenated text string.
     """
-    return "".join(
-        event.get("text", "")
-        for event in events
-        if event.get("type") == "text_delta"
-    )
+    return "".join(event.get("text", "") for event in events if event.get("type") == "text_delta")
 
 
 # ── Event type constants ─────────────────────────────────────────────
@@ -206,6 +198,7 @@ class EventType:
     WORKFLOW_DONE = "workflow_done"
     WORKFLOW_FAILED = "workflow_failed"
 
+
 # ── create_tool Python wrapper ───────────────────────────────────────
 # Rust-layer create_tool already accepts dict schema, but we add a Python
 # wrapper to: (1) accept `parameters` as canonical name (alias for
@@ -225,8 +218,7 @@ def _wrap_tool_callback(callback):
     try:
         sig = _inspect.signature(callback)
         params = [
-            p for p in sig.parameters.values()
-            if p.kind not in (p.VAR_POSITIONAL, p.VAR_KEYWORD)
+            p for p in sig.parameters.values() if p.kind not in (p.VAR_POSITIONAL, p.VAR_KEYWORD)
         ]
         if len(params) <= 1:
             return lambda args, ctx: callback(args)
@@ -256,13 +248,12 @@ def create_tool(name, description, parameters=None, parameters_schema=None, call
 
     schema = parameters if parameters is not None else parameters_schema
     if schema is None:
-        raise TypeError(
-            "create_tool() missing required argument: 'parameters'"
-        )
+        raise TypeError("create_tool() missing required argument: 'parameters'")
     if callback is None:
         raise TypeError("create_tool() missing required argument: 'callback'")
     wrapped = _wrap_tool_callback(callback)
     return _create_tool_rust(name, description, schema, wrapped)
+
 
 # ── @senza.tool decorator ────────────────────────────────────────────
 
@@ -322,10 +313,12 @@ def _create_tool_from_function(func):
     param_names = list(sig.parameters.keys())
 
     if is_async:
+
         async def wrapper(args, ctx):
             kwargs = {k: args.get(k) for k in param_names if k in args}
             return await func(**kwargs)
     else:
+
         def wrapper(args, ctx):
             kwargs = {k: args.get(k) for k in param_names if k in args}
             return func(**kwargs)
@@ -366,9 +359,7 @@ def tool(*args, **kwargs):
     callback = kwargs.get("callback")
 
     if name is None or description is None or parameters is None or callback is None:
-        raise TypeError(
-            "senza.tool() requires name, description, parameters, and callback"
-        )
+        raise TypeError("senza.tool() requires name, description, parameters, and callback")
 
     # Wrap callback to handle both (args) and (args, ctx) signatures
     cb_sig = _inspect.signature(callback)
@@ -376,11 +367,14 @@ def tool(*args, **kwargs):
     if cb_nparams == 1:
         _orig = callback
         if _inspect.iscoroutinefunction(callback):
+
             async def _wrapped(args, ctx):
                 return await _orig(args)
         else:
+
             def _wrapped(args, ctx):
                 return _orig(args)
+
         callback = _wrapped
 
     return create_tool(name, description, parameters, callback)
@@ -410,6 +404,7 @@ async def _harness_prompt_async(self, text: str, timeout_ms: int = 30000):
 
 WorkflowEngine.run_async = _workflow_run_async
 AgentHarness.prompt_async = _harness_prompt_async
+
 
 def _harness_chat(self, text: str, timeout_ms: int = 30000) -> str:
     """Send a prompt and return the concatenated text response.
@@ -473,7 +468,9 @@ def _harness_inspect(self):
     return {
         "message_count": msg_count,
         "usage": usage,
-        "queued_messages": self.has_queued_messages() if hasattr(self, "has_queued_messages") else False,
+        "queued_messages": self.has_queued_messages()
+        if hasattr(self, "has_queued_messages")
+        else False,
     }
 
 
@@ -645,48 +642,118 @@ rules = _rules
 # ── Public API whitelist ─────────────────────────────────────────────
 __all__ = [
     # Classes
-    "HarnessBuilder", "AgentHarness", "WorkflowEngine",
-    "UsageLedger", "Provider", "Tool", "ToolContext",
-    "Plugin", "Judge", "CompositeJudge", "Executor", "ExecutionEnv",
-    "ResponseFormat", "Skill", "Hook",
-    "KnowledgeSource", "MemoryStore", "MemoryWritePolicy",
-    "MemoryMutationGate", "SessionRepo", "SessionRecallIndex",
+    "HarnessBuilder",
+    "AgentHarness",
+    "WorkflowEngine",
+    "UsageLedger",
+    "Provider",
+    "Tool",
+    "ToolContext",
+    "Plugin",
+    "Judge",
+    "CompositeJudge",
+    "Executor",
+    "ExecutionEnv",
+    "ResponseFormat",
+    "Skill",
+    "Hook",
+    "KnowledgeSource",
+    "MemoryStore",
+    "MemoryWritePolicy",
+    "MemoryMutationGate",
+    "SessionRepo",
+    "SessionRecallIndex",
     "SessionRecallKnowledgeSource",
-    "JsonlAuditSink", "InMemoryTraceExporter", "Sandbox",
-    "PricingProvider", "BudgetExceededHook",
-    "Predicate", "RuleChain", "RuleChainBuilder",
-    "McpServerConfig", "McpManager",
-    "WebhookChannel", "EventStream",
-    "HeartbeatHandle", "ShellMonitorHandle",
-    "EventStreamHandle", "WaitForExternalEventTool",
-    "HarnessEventIterator", "WorkflowEventIterator", "EventIterator",
+    "JsonlAuditSink",
+    "InMemoryTraceExporter",
+    "Sandbox",
+    "PricingProvider",
+    "BudgetExceededHook",
+    "Predicate",
+    "RuleChain",
+    "RuleChainBuilder",
+    "McpServerConfig",
+    "McpManager",
+    "WebhookChannel",
+    "EventStream",
+    "HeartbeatHandle",
+    "ShellMonitorHandle",
+    "EventStreamHandle",
+    "WaitForExternalEventTool",
+    "HarnessEventIterator",
+    "WorkflowEventIterator",
+    "EventIterator",
     "MemoryDefensePluginBuilder",
     # Factory functions (top-level)
-    "create_tool", "create_sync_tool", "create_judge", "create_composite_judge",
-    "create_plugin", "create_fs_tools_plugin",
-    "create_os_env", "create_event_channel",
-    "create_executor", "create_shell_executor", "create_http_executor",
-    "create_pricing_provider", "create_pricing_provider_callback",
+    "create_tool",
+    "create_sync_tool",
+    "create_judge",
+    "create_composite_judge",
+    "create_plugin",
+    "create_fs_tools_plugin",
+    "create_os_env",
+    "create_event_channel",
+    "create_executor",
+    "create_shell_executor",
+    "create_http_executor",
+    "create_pricing_provider",
+    "create_pricing_provider_callback",
     "create_budget_exceeded_hook",
-    "create_json_object_format", "create_json_schema_format",
-    "create_timer_stream", "create_heartbeat_stream", "create_shell_monitor_stream",
+    "create_json_object_format",
+    "create_json_schema_format",
+    "create_timer_stream",
+    "create_heartbeat_stream",
+    "create_shell_monitor_stream",
     "load_skills",
     # Submodules
-    "providers", "hooks", "strategy", "knowledge", "infra", "rules",
+    "providers",
+    "hooks",
+    "strategy",
+    "knowledge",
+    "infra",
+    "rules",
     # Decorators and helpers
-    "tool", "extract_text", "EventType",
-    "stream_events", "stream_prompt", "stream_run",
+    "tool",
+    "extract_text",
+    "EventType",
+    "stream_events",
+    "stream_prompt",
+    "stream_run",
     # Debug / utilities
-    "enable_debug", "disable_debug", "version", "set_event_loop",
-    "to_json", "from_json", "read_sessions",
+    "enable_debug",
+    "disable_debug",
+    "version",
+    "set_event_loop",
+    "to_json",
+    "from_json",
+    "read_sessions",
     # Exceptions
-    "SenzaError", "ProviderError", "RateLimitError", "ProviderTimeoutError",
-    "InvalidRequestError", "UnauthorizedError", "ForbiddenError",
-    "OverloadedError", "ServerError", "StreamError", "StreamIncompleteError",
-    "NetworkError", "DecodeError", "ProviderCodeError",
-    "ToolError", "ToolArgumentError", "ToolAbortedError", "ToolExecutionError",
-    "BudgetExceededError", "WorkflowError", "StepTimeoutError",
-    "StepFailedError", "WorkflowPausedError", "ValidationError",
-    "HarnessStateError", "CompactionError", "StreamIdleTimeoutError",
+    "SenzaError",
+    "ProviderError",
+    "RateLimitError",
+    "ProviderTimeoutError",
+    "InvalidRequestError",
+    "UnauthorizedError",
+    "ForbiddenError",
+    "OverloadedError",
+    "ServerError",
+    "StreamError",
+    "StreamIncompleteError",
+    "NetworkError",
+    "DecodeError",
+    "ProviderCodeError",
+    "ToolError",
+    "ToolArgumentError",
+    "ToolAbortedError",
+    "ToolExecutionError",
+    "BudgetExceededError",
+    "WorkflowError",
+    "StepTimeoutError",
+    "StepFailedError",
+    "WorkflowPausedError",
+    "ValidationError",
+    "HarnessStateError",
+    "CompactionError",
+    "StreamIdleTimeoutError",
     "RustPanicError",
 ]

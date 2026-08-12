@@ -29,7 +29,7 @@
 
 ### 需要预算管控？
 
-→ `builder.budget(limit)` + `builder.pricing(senza.providers.pricing_provider(...))`
+→ `builder.budget(limit)` + `builder.pricing(senza.create_pricing_provider(table))`
 
 ### 需要审计 / 沙箱？
 
@@ -46,7 +46,7 @@
 
 ### 需要 Hooks？
 
-→ `senza.hooks.*` (11 种 lifecycle hooks)
+→ `senza.hooks.*` (12 种 lifecycle hooks)
 
 ### 需要 Provider？
 

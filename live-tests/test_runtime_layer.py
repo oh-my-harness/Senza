@@ -126,6 +126,7 @@ def test_runtime_constructs_offline():
 
 # ── Spawn tests (mirrors runtime runtime_layer/spawn.rs) ─────────────────
 
+
 def _make_spawn_harness(provider, session_dir):
     """Build a harness with spawn infrastructure enabled."""
     builder = senza.HarnessBuilder(live_model()).provider("*", provider)
@@ -148,11 +149,11 @@ def test_spawn_async_completes():
     h = _make_spawn_harness(provider, session_dir)
     ev = run_prompt(
         h,
-        "Use the spawn_agent tool to spawn a sub-agent with the prompt "
-        "'Say hello in one word.'",
+        "Use the spawn_agent tool to spawn a sub-agent with the prompt 'Say hello in one word.'",
         timeout_ms=120_000,
     )
     from base import assert_settled, assert_tool_called
+
     assert_settled(ev)
     assert_tool_called(ev, "spawn_agent")
 
@@ -169,6 +170,7 @@ def test_await_subagent_reply():
         timeout_ms=120_000,
     )
     from base import assert_settled, assert_tool_called
+
     assert_settled(ev)
     assert_tool_called(ev, "spawn_agent")
     assert_tool_called(ev, "await_subagent_reply")
@@ -186,6 +188,7 @@ def test_query_subagent_status():
         timeout_ms=120_000,
     )
     from base import assert_settled, assert_tool_called
+
     assert_settled(ev)
     assert_tool_called(ev, "spawn_agent")
     assert_tool_called(ev, "query_subagent")

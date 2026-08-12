@@ -46,7 +46,8 @@ pip install senza-sdk
 
 ```python
 import senza
-print(senza.version())  # e.g. "1.0.0"
+
+print(senza.version())  # e.g. "1.1.0"
 ```
 
 ---
@@ -80,14 +81,12 @@ harness = (
     .build()
 )
 
-events = harness.prompt_and_collect("用一句话解释闭包。")
-
-text = ""
-for event in events:
-    if event["type"] == "text_delta":
-        text += event.get("text", "")
-print(text)
+print(harness.chat("用一句话解释闭包。"))
 ```
+
+`harness.chat(text)` 是 1.1.0 新增的便捷方法，内部等价于
+`senza.extract_text(harness.prompt_and_collect(text))` —— 一步取回纯文本回复。
+如需逐 token 流式或原始事件，用 `stream_prompt()` 或 `prompt_and_collect()`。
 
 ### Workflow 示例
 
@@ -105,15 +104,16 @@ workflow = {
     "edges": [{"from": "writer", "to": "reviewer"}],
 }
 
+
 def judge(ctx):
     if ctx["step_id"] == "writer":
         return "to:reviewer"
     return "done"
 
-engine = (
-    senza.WorkflowEngine(workflow, provider, "gpt-4o", senza.create_judge(judge))
-    .with_max_tokens(256)
-)
+
+engine = senza.WorkflowEngine(
+    workflow, provider, "gpt-4o", senza.create_judge(judge)
+).with_max_tokens(256)
 
 engine.run()
 
@@ -138,15 +138,16 @@ for record in engine.step_history():
 import tempfile
 
 with tempfile.TemporaryDirectory() as store_dir:
-    engine = (
-        senza.WorkflowEngine(workflow, provider, "gpt-4o", senza.create_judge(judge))
-        .with_task_store(store_dir)
-    )
+    engine = senza.WorkflowEngine(
+        workflow, provider, "gpt-4o", senza.create_judge(judge)
+    ).with_task_store(store_dir)
     task_id = engine.task_id()
     engine.run()
 
     # 崩溃后恢复
-    restored = senza.WorkflowEngine.restore(store_dir, task_id, provider, "gpt-4o", senza.create_judge(judge))
+    restored = senza.WorkflowEngine.restore(
+        store_dir, task_id, provider, "gpt-4o", senza.create_judge(judge)
+    )
     print(restored.state(), restored.current_step())
 ```
 
@@ -156,17 +157,14 @@ with tempfile.TemporaryDirectory() as store_dir:
 import asyncio
 import senza
 
+
 async def main():
     provider = senza.providers.openai(api_key="sk-...")
-    harness = (
-        senza.HarnessBuilder("gpt-4o")
-        .provider("*", provider)
-        .max_tokens(256)
-        .build()
-    )
+    harness = senza.HarnessBuilder("gpt-4o").provider("*", provider).max_tokens(256).build()
     async for event in senza.stream_prompt(harness, "用一句话解释闭包。", timeout_ms=30000):
         if event["type"] == "text_delta":
             print(event.get("text", ""), end="", flush=True)
+
 
 asyncio.run(main())
 ```
@@ -180,7 +178,7 @@ harness = (
     senza.HarnessBuilder("gpt-4o")
     .provider("*", provider)
     .plugin(senza.create_fs_tools_plugin())  # bash/read/write/edit
-    .env(senza.create_os_env("."))           # 真实文件系统 + shell
+    .env(senza.create_os_env("."))  # 真实文件系统 + shell
     .build()
 )
 ```
@@ -195,8 +193,8 @@ Senza 内置 12 个策略插件，覆盖安全防护、循环断路、审计日�
 harness = (
     senza.HarnessBuilder("gpt-4o")
     .provider("*", provider)
-    .plugin(senza.strategy.safety_defaults())   # bash 黑名单 + 路径穿越防护
-    .plugin(senza.strategy.loop_safety())        # 死循环/重复/连续失败断路器
+    .plugin(senza.strategy.safety_defaults())  # bash 黑名单 + 路径穿越防护
+    .plugin(senza.strategy.loop_safety())  # 死循环/重复/连续失败断路器
     .build()
 )
 ```
@@ -208,7 +206,8 @@ harness = (
 ```python
 # 本地知识源 RAG
 docs = senza.knowledge.local_source(
-    path="/data/wiki", source_id="wiki",
+    path="/data/wiki",
+    source_id="wiki",
 )
 knowledge = senza.knowledge.plugin(sources=[docs])
 
@@ -219,6 +218,26 @@ harness = (
     .build()
 )
 ```
+
+### 子 Agent 派发
+
+通过 `enable_spawn()` 在 Agent 上启用子 Agent 派发能力。启用后，LLM 可调用 `spawn_agent`、`await_subagent_reply`、`query_subagent` 等工具进行多 Agent 协作：
+
+```python
+harness = (
+    senza.HarnessBuilder("gpt-4o")
+    .provider("*", provider)
+    .enable_spawn(
+        model="gpt-4o",
+        provider=provider,
+        session_dir="/tmp/sessions",
+    )
+    .system_prompt("你是任务协调者，派发子 Agent 并行处理子任务。")
+    .build()
+)
+```
+
+> `enable_spawn` 自动注册 MessageBus + 7 个 spawn 通信 tool。spawn 是异步的——`spawn_agent` 立即返回 `agent_id`，子 Agent 完成后结果自动注入主对话。
 
 ## 示例（Live Tests）
 
@@ -253,7 +272,7 @@ Senza 的公开 API 分两层：
   `create_plugin`、`create_fs_tools_plugin`、`create_os_env` 等 —— 每个Agent都会用到的函数。
 - **子模块分组**：较低频 API 按领域组织：
   - `senza.providers` — LLM 提供商工厂（`openai`、`anthropic`）
-  - `senza.hooks` — 11 个生命周期 hook 工厂
+  - `senza.hooks` — 12 个生命周期 hook 工厂
   - `senza.strategy` — 12 个策略插件工厂
   - `senza.knowledge` — 知识源、记忆、会话召回工厂
   - `senza.rules` — 规则链和谓词工厂
@@ -269,6 +288,7 @@ Senza 的公开 API 分两层：
 
 ```python
 import senza
+
 
 @senza.tool
 def search(query: str) -> str:

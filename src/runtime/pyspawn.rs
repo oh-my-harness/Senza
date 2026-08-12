@@ -1,10 +1,11 @@
 //! Sub-agent spawn infrastructure — Python-facing `enable_spawn()` wiring.
 //!
-//! Mirrors the runtime live-test's `make_spawn_harness` assembly:
+//! Mirrors the runtime's `WorkflowEngine` spawn assembly:
 //! 1. `MessageBus` via `message_bus_pair()`.
 //! 2. `HarnessSubAgentSpawner` (model, client, session_dir, bus, NoopPlugin).
 //! 3. `AsyncSpawnHook` via `async_spawn_pair(bus)`.
-//! 4. Three tools: `SpawnAgentTool`, `AwaitSubagentReplyTool`, `QuerySubagentTool`.
+//! 4. Five tools: `SpawnAgentTool`, `MessageSubagentTool`, `AwaitSubagentReplyTool`,
+//!    `QuerySubagentTool`, `AbortSubagentTool`.
 //! 5. Builder: tools + `after_turn_hook(async_hook)` + `convert_to_llm(...)`.
 //! 6. Post-build: `set_idle_watcher`, `set_async_spawn_hook`, `set_abort_cascade_hook`.
 
@@ -20,7 +21,8 @@ use llm_harness_runtime::spawn::delivery::{
 use llm_harness_runtime::spawn::message_bus::{MAIN_AGENT_ID, message_bus_pair};
 use llm_harness_runtime::spawn::spawner::{HarnessSubAgentSpawner, JsonlSessionFactory};
 use llm_harness_runtime::spawn::tools::{
-    AwaitSubagentReplyTool, QuerySubagentTool, SpawnAgentTool,
+    AbortSubagentTool, AwaitSubagentReplyTool, MessageSubagentTool, QuerySubagentTool,
+    SpawnAgentTool,
 };
 use llm_harness_runtime_sandbox_os::OsEnvFactory;
 use llm_harness_types::Tool;
@@ -64,7 +66,8 @@ impl Plugin for NoopPlugin {
 
 /// Wire spawn infrastructure into the builder and return post-build wiring state.
 ///
-/// - Adds `SpawnAgentTool`, `AwaitSubagentReplyTool`, `QuerySubagentTool` to the builder.
+/// - Adds `SpawnAgentTool`, `MessageSubagentTool`, `AwaitSubagentReplyTool`,
+///   `QuerySubagentTool`, `AbortSubagentTool` to the builder.
 /// - Sets `after_turn_hook(async_hook)` and `convert_to_llm(DefaultConvertToLlm + SubAgentMessageConverter)`.
 /// - Returns `(modified_builder, SpawnWiring)` for post-build hook application.
 pub(crate) fn wire_spawn(
@@ -92,8 +95,10 @@ pub(crate) fn wire_spawn(
     // 4. Register tools + after_turn_hook + convert_to_llm.
     builder = builder
         .tool(Arc::new(SpawnAgentTool::new(spawner.clone())) as Arc<dyn Tool>)
+        .tool(Arc::new(MessageSubagentTool::new(bus.clone(), MAIN_AGENT_ID)) as Arc<dyn Tool>)
         .tool(Arc::new(AwaitSubagentReplyTool::new(bus.clone(), MAIN_AGENT_ID)) as Arc<dyn Tool>)
         .tool(Arc::new(QuerySubagentTool::new(bus.clone())) as Arc<dyn Tool>)
+        .tool(Arc::new(AbortSubagentTool::new(bus.clone())) as Arc<dyn Tool>)
         .after_turn_hook(async_hook.clone())
         .convert_to_llm(Some(Arc::new(
             DefaultConvertToLlm::new().with_custom_converter(Arc::new(SubAgentMessageConverter)),

@@ -154,6 +154,7 @@ def test_shell_monitor_stream():
     assert_settled(ev)
     assert_tool_called(ev, "wait_for_external_event")
 
+
 @pytest.mark.skip(reason="requires MCP server (npx @modelcontextprotocol/server-everything)")
 def test_mcp_tool_discovery():
     """MCP tools are discovered from a stdio MCP server."""
@@ -165,6 +166,7 @@ def test_mcp_tool_discovery():
     manager.add_server("everything", config)
     # Wait for server initialization
     import time
+
     time.sleep(3)
     tools = manager.list_tools()
     assert len(tools) >= 1, f"expected >=1 MCP tool, got {len(tools)}"

@@ -33,14 +33,15 @@ workflow = {
 }
 
 # 2. Create provider, judge, executor
-provider = senza.create_openai_provider(api_key="sk-...")
-judge = senza.create_judge(lambda ctx: "to:transform" if ctx.get("structured", {}).get("ok") else "retry")
+provider = senza.providers.openai(api_key="sk-...")
+judge = senza.create_judge(
+    lambda ctx: "to:transform" if ctx.get("structured", {}).get("ok") else "retry"
+)
 executor = senza.create_executor(lambda ctx: {"output": "done", "structured": {"status": "ok"}})
 
 # 3. Build engine (fluent chain)
-engine = (
-    senza.WorkflowEngine(workflow, provider, "gpt-4o", judge)
-    .with_executor("transform", executor)
+engine = senza.WorkflowEngine(workflow, provider, "gpt-4o", judge).with_executor(
+    "transform", executor
 )
 
 # 4. Run
@@ -51,9 +52,9 @@ engine.run()
 
 ```python
 {
-    "entry_step": "step1",       # must be in steps
-    "steps": [...],               # list of step dicts
-    "edges": [...],               # list of edge dicts
+    "entry_step": "step1",  # must be in steps
+    "steps": [...],  # list of step dicts
+    "edges": [...],  # list of edge dicts
 }
 ```
 
@@ -68,7 +69,12 @@ The engine auto-detects step type: **has `"executor"` key → Executor step; oth
 
 **Executor step** — calls a registered deterministic executor:
 ```python
-{"id": "step2", "name": "转换", "executor": "transform", "executor_config": {"fields": {"result": "/output"}}}
+{
+    "id": "step2",
+    "name": "转换",
+    "executor": "transform",
+    "executor_config": {"fields": {"result": "/output"}},
+}
 ```
 
 | Field | LLM | Executor | Type |
@@ -83,9 +89,13 @@ The engine auto-detects step type: **has `"executor"` key → Executor step; oth
 ### Edges
 
 ```python
-{"from": "step1", "to": "step2"}                                           # unconditional
-{"from": "step1", "to": "step2", "condition": "pass"}                      # label (judge interprets)
-{"from": "step1", "to": "step2", "condition": {"op": "eq", "pointer": "/status", "value": "ok"}}  # declarative
+{"from": "step1", "to": "step2"}  # unconditional
+{"from": "step1", "to": "step2", "condition": "pass"}  # label (judge interprets)
+{
+    "from": "step1",
+    "to": "step2",
+    "condition": {"op": "eq", "pointer": "/status", "value": "ok"},
+}  # declarative
 ```
 
 ### Declarative ConditionExpr
@@ -114,6 +124,7 @@ def my_judge(ctx: dict) -> str:
     else:
         return "fail:quality gate failed"
 
+
 judge = senza.create_judge(my_judge)
 ```
 
@@ -133,6 +144,7 @@ def my_executor(ctx: dict) -> dict:
         "output": "处理完成",
         "structured": {"status": "ok", "result": 42},
     }
+
 
 executor = senza.create_executor(my_executor)
 ```
@@ -163,6 +175,7 @@ Return dict must have `"output"` (str). `"structured"` is optional.
 engine.set_context_variable("user_input", "hello")
 engine.set_context_variable("count", 42)
 
+
 # Executor reads context
 def my_executor(ctx):
     user_input = ctx["context"]["user_input"]  # dict of shared vars
@@ -192,7 +205,11 @@ workflow = {
         {"id": "fix", "name": "修复", "prompt": "修复问题", "allowed_tools": []},
     ],
     "edges": [
-        {"from": "check", "to": "fix", "condition": {"op": "eq", "pointer": "/status", "value": "fail"}},
+        {
+            "from": "check",
+            "to": "fix",
+            "condition": {"op": "eq", "pointer": "/status", "value": "fail"},
+        },
         {"from": "fix", "to": "check"},  # retry loop
     ],
 }
@@ -207,8 +224,18 @@ workflow = {
     "entry_step": "llm_analyze",
     "steps": [
         {"id": "llm_analyze", "name": "LLM分析", "prompt": "分析并返回JSON", "allowed_tools": []},
-        {"id": "data_transform", "name": "数据转换", "executor": "json_transform", "executor_config": {"fields": {"result": "/output"}}},
-        {"id": "llm_report", "name": "生成报告", "prompt": "根据转换结果写报告", "allowed_tools": []},
+        {
+            "id": "data_transform",
+            "name": "数据转换",
+            "executor": "json_transform",
+            "executor_config": {"fields": {"result": "/output"}},
+        },
+        {
+            "id": "llm_report",
+            "name": "生成报告",
+            "prompt": "根据转换结果写报告",
+            "allowed_tools": [],
+        },
     ],
     "edges": [
         {"from": "llm_analyze", "to": "data_transform"},
