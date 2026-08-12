@@ -302,7 +302,7 @@ fn create_sync_tool<'py>(
     py: Python<'py>,
     name: &str,
     description: &str,
-    parameters_schema: &str,
+    parameters_schema: &Bound<'py, PyAny>,
     callback: Py<PyAny>,
 ) -> PyResult<Bound<'py, crate::core::pytool::PyToolWrapper>> {
     create_tool(py, name, description, parameters_schema, callback)
@@ -318,11 +318,20 @@ fn create_tool<'py>(
     py: Python<'py>,
     name: &str,
     description: &str,
-    parameters_schema: &str,
+    parameters_schema: &Bound<'py, PyAny>,
     callback: Py<PyAny>,
 ) -> PyResult<Bound<'py, crate::core::pytool::PyToolWrapper>> {
-    let schema: serde_json::Value = serde_json::from_str(parameters_schema)
-        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+    // Accept dict or str for parameters_schema.
+    // If dict, convert to serde_json::Value directly via pyobject_to_value.
+    // If str, parse as JSON string (existing behavior).
+    use pyo3::types::PyDict;
+    let schema: serde_json::Value = if parameters_schema.is_instance_of::<PyDict>() {
+        crate::shared::value_conv::pyobject_to_value(parameters_schema)?
+    } else {
+        let s: &str = parameters_schema.extract()?;
+        serde_json::from_str(s)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?
+    };
     let tool = crate::core::pytool::PyTool::new(
         name.to_string(),
         description.to_string(),
