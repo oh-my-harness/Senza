@@ -1,3 +1,5 @@
+"""Senza — Python SDK for llm-harness runtime."""
+
 from .senza import *  # noqa: F401, F403
 
 import asyncio as _asyncio
@@ -533,3 +535,52 @@ strategy = _strategy
 knowledge = _knowledge
 infra = _infra
 rules = _rules
+
+# ── Public API whitelist ─────────────────────────────────────────────
+__all__ = [
+    # Classes
+    "HarnessBuilder", "AgentHarness", "WorkflowEngine",
+    "UsageLedger", "Provider", "Tool", "ToolContext",
+    "Plugin", "Judge", "CompositeJudge", "Executor", "ExecutionEnv",
+    "ResponseFormat", "Skill", "Hook",
+    "KnowledgeSource", "MemoryStore", "MemoryWritePolicy",
+    "MemoryMutationGate", "SessionRepo", "SessionRecallIndex",
+    "SessionRecallKnowledgeSource",
+    "JsonlAuditSink", "InMemoryTraceExporter", "Sandbox",
+    "PricingProvider", "BudgetExceededHook",
+    "Predicate", "RuleChain", "RuleChainBuilder",
+    "McpServerConfig", "McpManager",
+    "WebhookChannel", "EventStream",
+    "HeartbeatHandle", "ShellMonitorHandle",
+    "EventStreamHandle", "WaitForExternalEventTool",
+    "HarnessEventIterator", "WorkflowEventIterator", "EventIterator",
+    "MemoryDefensePluginBuilder",
+    # Factory functions (top-level)
+    "create_tool", "create_sync_tool", "create_judge", "create_composite_judge",
+    "create_plugin", "create_fs_tools_plugin",
+    "create_os_env", "create_event_channel",
+    "create_executor", "create_shell_executor", "create_http_executor",
+    "create_pricing_provider", "create_pricing_provider_callback",
+    "create_budget_exceeded_hook",
+    "create_json_object_format", "create_json_schema_format",
+    "create_timer_stream", "create_heartbeat_stream", "create_shell_monitor_stream",
+    "load_skills",
+    # Submodules
+    "providers", "hooks", "strategy", "knowledge", "infra", "rules",
+    # Decorators and helpers
+    "tool", "extract_text",
+    "stream_events", "stream_prompt", "stream_run",
+    # Debug / utilities
+    "enable_debug", "disable_debug", "version", "set_event_loop",
+    "to_json", "from_json", "read_sessions",
+    # Exceptions
+    "SenzaError", "ProviderError", "RateLimitError", "ProviderTimeoutError",
+    "InvalidRequestError", "UnauthorizedError", "ForbiddenError",
+    "OverloadedError", "ServerError", "StreamError", "StreamIncompleteError",
+    "NetworkError", "DecodeError", "ProviderCodeError",
+    "ToolError", "ToolArgumentError", "ToolAbortedError", "ToolExecutionError",
+    "BudgetExceededError", "WorkflowError", "StepTimeoutError",
+    "StepFailedError", "WorkflowPausedError", "ValidationError",
+    "HarnessStateError", "CompactionError", "StreamIdleTimeoutError",
+    "RustPanicError",
+]
