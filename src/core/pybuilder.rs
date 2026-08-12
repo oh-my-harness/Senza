@@ -51,6 +51,10 @@ pub struct PyHarnessBuilder {
     mcp_manager: Option<Arc<llm_harness_runtime_mcp::manager::McpManager>>,
     /// Spawn 配置（model, client, session_dir），在 build() 时完成 spawn 基础设施粘合。
     spawn_config: Option<SpawnConfig>,
+    /// Optional session repo for persistent sessions.
+    session_repo: Option<Arc<dyn llm_harness_agent::SessionRepo>>,
+    /// Optional session ID to restore an existing session.
+    session_id: Option<String>,
 }
 
 /// Spawn 配置：`enable_spawn()` 存储的参数，`build()` 时消费。
@@ -71,6 +75,8 @@ impl PyHarnessBuilder {
             mcp_config_files: Vec::new(),
             mcp_manager: None,
             spawn_config: None,
+            session_repo: None,
+            session_id: None,
         }
     }
 
@@ -594,6 +600,23 @@ impl PyHarnessBuilder {
         }
     }
 
+    /// Set a session repo for persistent (JSONL-backed) sessions.
+    ///
+    /// If `session_id` is given, opens an existing session; otherwise creates
+    /// a new one. When set, `build()` uses `build_with_session()` instead of
+    /// the default in-memory session.
+    #[pyo3(text_signature = "($self, repo, session_id=None)")]
+    #[pyo3(signature = (repo, session_id=None))]
+    fn session_repo<'a>(
+        mut slf: PyRefMut<'a, Self>,
+        repo: &Bound<'_, crate::knowledge::pysessionrecall::PySessionRepo>,
+        session_id: Option<String>,
+    ) -> PyRefMut<'a, Self> {
+        slf.session_repo = Some(repo.borrow().repo.clone());
+        slf.session_id = session_id;
+        slf
+    }
+
     /// 构建 harness 并返回 `AgentHarness`。
     ///
     /// 执行环境为 `.env()` 设置的 env；未设置时使用 `UnsupportedEnv`
@@ -616,6 +639,42 @@ impl PyHarnessBuilder {
             || self.mcp_manager.is_some();
 
         let spawn_config = self.spawn_config.take();
+        let session_repo = self.session_repo.take();
+        let session_id = self.session_id.take();
+
+        // If a session repo is set, load/create a session and use
+        // build_with_session() instead of the default in-memory build.
+        if let Some(repo) = session_repo {
+            let storage = if let Some(id) = session_id {
+                crate::shared::pyerror::detach_catch_panic_result(py, move || {
+                    rt.block_on(async move { repo.open(&id).await })
+                })?
+            } else {
+                crate::shared::pyerror::detach_catch_panic_result(py, move || {
+                    rt.block_on(async move {
+                        repo.create(llm_harness_agent::session::CreateSessionOptions::default())
+                            .await
+                    })
+                })?
+            };
+            let session = llm_harness_agent::Session::new(storage);
+
+            let (builder, spawn_wiring) = match spawn_config {
+                Some(cfg) => wire_spawn(builder, cfg),
+                None => (builder, None),
+            };
+
+            let harness = crate::shared::pyerror::detach_catch_panic_result(py, move || {
+                builder.build_with_session(env, session)
+            })?;
+            let harness = Arc::new(harness);
+
+            if let Some(wiring) = spawn_wiring {
+                wiring.post_build(&harness);
+            }
+
+            return Py::new(py, PyAgentHarness::new_base(harness));
+        }
 
         if has_mcp {
             // 提升为 McpHarnessBuilder 并追加 MCP 配置。
@@ -673,6 +732,8 @@ impl PyHarnessBuilder {
             mcp_config_files: Vec::new(),
             mcp_manager: None,
             spawn_config: None,
+            session_repo: None,
+            session_id: None,
         }
     }
 }

@@ -72,6 +72,22 @@ pub fn create_in_memory_session_repo<'py>(py: Python<'py>) -> PyResult<Bound<'py
     Ok(Py::new(py, PySessionRepo { repo })?.into_bound(py))
 }
 
+/// Create a file-system-backed `JsonlSessionRepo`.
+///
+/// Each session is stored in its own subdirectory: `{root_dir}/{session_id}/`.
+/// Sessions persist across process restarts and can be loaded with
+/// `HarnessBuilder.session_repo(repo, session_id=...)`.
+#[pyfunction]
+#[pyo3(text_signature = "(root_dir)")]
+pub fn create_jsonl_session_repo<'py>(
+    py: Python<'py>,
+    root_dir: &str,
+) -> PyResult<Bound<'py, PySessionRepo>> {
+    let repo: Arc<dyn llm_harness_agent::SessionRepo> =
+        Arc::new(llm_harness_agent::JsonlSessionRepo::new(root_dir));
+    Ok(Py::new(py, PySessionRepo { repo })?.into_bound(py))
+}
+
 /// Create a `SessionRecallKnowledgeSource` from a session repo and recall index.
 #[pyfunction]
 #[pyo3(signature = (repo, index))]

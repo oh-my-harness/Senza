@@ -288,6 +288,10 @@ fn senza(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
         m
     )?)?;
     m.add_function(wrap_pyfunction!(
+        knowledge::pysessionrecall::create_jsonl_session_repo,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
         knowledge::pysessionrecall::create_session_recall_knowledge_source,
         m
     )?)?;

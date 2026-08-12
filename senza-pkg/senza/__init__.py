@@ -555,6 +555,7 @@ _knowledge = _SimpleNamespace(
     in_memory_session_recall_index=create_in_memory_session_recall_index,
     sqlite_session_recall_index=create_sqlite_session_recall_index,
     in_memory_session_repo=create_in_memory_session_repo,
+    jsonl_session_repo=create_jsonl_session_repo,
     session_recall_knowledge_source=create_session_recall_knowledge_source,
     history_recall_plugin=create_history_recall_plugin,
 )
@@ -615,6 +616,7 @@ del create_allow_all_gate
 del create_in_memory_session_recall_index
 del create_sqlite_session_recall_index
 del create_in_memory_session_repo
+del create_jsonl_session_repo
 del create_session_recall_knowledge_source
 del create_history_recall_plugin
 del create_rule_chain
