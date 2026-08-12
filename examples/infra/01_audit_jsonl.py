@@ -23,8 +23,11 @@ def main():
 
     audit_path = os.path.join(tempfile.gettempdir(), "senza_infra_audit.jsonl")
 
-    # 1. Create the sink directly (infra-level)
-    senza.JsonlAuditSink(path=audit_path)  # create directly (keeps file handle/logging open)
+    # 1. Create the sink directly (infra-level). The file is opened lazily,
+    #    so touch an empty file here so validate() can read it immediately.
+    senza.JsonlAuditSink(path=audit_path)
+    with open(audit_path, "w"):
+        pass
     print(f"JsonlAuditSink created at: {audit_path}")
 
     # 2. Also wire it via AuditPlugin on a harness
