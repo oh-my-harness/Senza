@@ -240,6 +240,19 @@ fn senza(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<crate::runtime::pyworkflow::PyWorkflowEventIterator>()?;
     m.add_class::<crate::runtime::pymcp::PyMcpServerConfig>()?;
     m.add_class::<crate::runtime::pymcp::PyMcpManager>()?;
+    m.add_class::<crate::infra::pyaudit::PyJsonlAuditSink>()?;
+    m.add_class::<crate::infra::pytrace::PyInMemoryTraceExporter>()?;
+    m.add_class::<crate::infra::pysandbox::PySandbox>()?;
+    #[cfg(target_os = "macos")]
+    m.add_function(wrap_pyfunction!(
+        crate::infra::pysandbox::create_seatbelt_sandbox,
+        m
+    )?)?;
+    #[cfg(target_os = "linux")]
+    m.add_function(wrap_pyfunction!(
+        crate::infra::pysandbox::create_bwrap_sandbox,
+        m
+    )?)?;
     Ok(())
 }
 

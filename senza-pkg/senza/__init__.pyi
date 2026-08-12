@@ -593,3 +593,27 @@ class WorkflowEngine:
 
 class EventIterator:
     """Generic event iterator."""
+
+# ── Infra: Audit / Trace / Sandbox ──────────────────────────────────────────
+
+class JsonlAuditSink:
+    """JSONL file-backed audit sink with SHA-256 hash-chain integrity."""
+
+    def __init__(self, path: str) -> None: ...
+    @staticmethod
+    def validate(path: str) -> int: ...
+
+class InMemoryTraceExporter:
+    """In-memory trace exporter for testing. Accumulates SpanEvent values."""
+
+    def exported_spans(self) -> list[dict]: ...
+    def exported_span_count(self) -> int: ...
+
+class Sandbox:
+    """Sandbox wrapper (SeatbeltSandbox on macOS, BwrapSandbox on Linux)."""
+
+    def is_running(self) -> bool: ...
+    def start(self) -> None: ...
+
+def create_seatbelt_sandbox(config: Optional[dict] = None) -> Sandbox: ...
+def create_bwrap_sandbox(config: Optional[dict] = None) -> Sandbox: ...

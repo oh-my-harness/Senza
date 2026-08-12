@@ -57,6 +57,11 @@ SKIP_RUNTIME_ONLY = {
     "Agent.abort",
     "Agent.message_count",
     "Agent.phase",
+    # Platform-specific sandbox factories: only one of seatbelt/bwrap is
+    # registered at runtime (seatbelt on macOS, bwrap on Linux), but both
+    # are listed in .pyi for type-checker completeness.
+    "create_bwrap_sandbox",
+    "create_seatbelt_sandbox",
 }
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
