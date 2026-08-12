@@ -326,3 +326,76 @@ async def _harness_prompt_async(self, text: str, timeout_ms: int = 30000):
 
 WorkflowEngine.run_async = _workflow_run_async
 AgentHarness.prompt_async = _harness_prompt_async
+
+
+# ── Debug helpers ────────────────────────────────────────────────────
+
+import logging as _logging
+
+
+def enable_debug():
+    """Enable DEBUG-level logging for the senza logger.
+
+    This sets the Python-side ``senza`` logger to DEBUG. The Rust-side
+    tracing filter is controlled by the ``SENZA_LOG`` / ``RUST_LOG``
+    environment variable; if you need Rust-side debug output, set
+    ``SENZA_LOG=senza=debug`` before importing senza.
+    """
+    _logging.getLogger("senza").setLevel(_logging.DEBUG)
+
+
+def disable_debug():
+    """Restore INFO-level logging for the senza logger."""
+    _logging.getLogger("senza").setLevel(_logging.INFO)
+
+
+def _harness_inspect(self):
+    """Return a snapshot of the harness state for debugging.
+
+    Aggregates phase, message count, token usage, queued messages,
+    and active tools into a single dict.
+    """
+    try:
+        messages = self.get_messages()
+        msg_count = len(messages) if messages else 0
+    except Exception:
+        msg_count = 0
+
+    try:
+        usage = self.usage()
+    except Exception:
+        usage = {}
+
+    return {
+        "message_count": msg_count,
+        "usage": usage,
+        "queued_messages": self.has_queued_messages() if hasattr(self, "has_queued_messages") else False,
+    }
+
+
+def _workflow_inspect(self):
+    """Return a snapshot of the workflow engine state for debugging.
+
+    Aggregates state, current step, step count, and total cost.
+    """
+    try:
+        history = self.step_history()
+        step_count = len(history) if history else 0
+    except Exception:
+        step_count = 0
+
+    try:
+        cost = self.total_cost()
+    except Exception:
+        cost = 0.0
+
+    return {
+        "state": self.state(),
+        "current_step": self.current_step(),
+        "step_count": step_count,
+        "total_cost": cost,
+    }
+
+
+AgentHarness.inspect = _harness_inspect
+WorkflowEngine.inspect = _workflow_inspect

@@ -123,16 +123,15 @@ where
 /// 初始化日志桥接：安装 `PythonLoggingLayer` 到全局 tracing subscriber。
 ///
 /// 使用 `EnvFilter` 从 `SENZA_LOG` / `RUST_LOG` 环境变量读取过滤规则，
-/// 默认级别 WARN。若已有全局 subscriber（其他库先初始化了 tracing），
+/// 默认级别 INFO。若已有全局 subscriber（其他库先初始化了 tracing），
 /// 打印一次 warning 到 stderr 而非静默失败。
 pub fn init_logging() {
     use tracing_subscriber::EnvFilter;
-
     let filter = EnvFilter::try_from_env("SENZA_LOG")
         .or_else(|_| EnvFilter::try_from_env("RUST_LOG"))
         .unwrap_or_else(|_| {
             EnvFilter::builder()
-                .with_default_directive(tracing::level_filters::LevelFilter::WARN.into())
+                .with_default_directive(tracing::level_filters::LevelFilter::INFO.into())
                 .from_env_lossy()
         });
 
