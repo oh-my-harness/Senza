@@ -70,7 +70,7 @@ print(senza.version())  # e.g. "1.0.0"
 ```python
 import senza
 
-provider = senza.create_openai_provider(api_key="sk-...")
+provider = senza.providers.openai(api_key="sk-...")
 
 harness = (
     senza.HarnessBuilder("gpt-4o")
@@ -94,7 +94,7 @@ print(text)
 ```python
 import senza
 
-provider = senza.create_openai_provider(api_key="sk-...")
+provider = senza.providers.openai(api_key="sk-...")
 
 workflow = {
     "entry_step": "writer",
@@ -130,7 +130,7 @@ for record in engine.step_history():
 
 ### Provider 配置
 
-`create_openai_provider` 支持 `base_url` 参数，任何兼容 OpenAI Chat Completions API 的服务都能直接接入（通义千问、DeepSeek、Ollama 等）。见 [Provider 配置指南](docs/providers.md)。
+`senza.providers.openai` 支持 `base_url` 参数，任何兼容 OpenAI Chat Completions API 的服务都能直接接入（通义千问、DeepSeek、Ollama 等）。见 [Provider 配置指南](docs/providers.md)。
 
 ### 崩溃恢复
 
@@ -157,7 +157,7 @@ import asyncio
 import senza
 
 async def main():
-    provider = senza.create_openai_provider(api_key="sk-...")
+    provider = senza.providers.openai(api_key="sk-...")
     harness = (
         senza.HarnessBuilder("gpt-4o")
         .provider("*", provider)
@@ -195,8 +195,8 @@ Senza 内置 12 个策略插件，覆盖安全防护、循环断路、审计日�
 harness = (
     senza.HarnessBuilder("gpt-4o")
     .provider("*", provider)
-    .plugin(senza.create_safety_defaults_plugin())   # bash 黑名单 + 路径穿越防护
-    .plugin(senza.create_loop_safety_plugin())        # 死循环/重复/连续失败断路器
+    .plugin(senza.strategy.safety_defaults())   # bash 黑名单 + 路径穿越防护
+    .plugin(senza.strategy.loop_safety())        # 死循环/重复/连续失败断路器
     .build()
 )
 ```
@@ -207,10 +207,10 @@ harness = (
 
 ```python
 # 本地知识源 RAG
-docs = senza.create_local_knowledge_source(
+docs = senza.knowledge.local_source(
     path="/data/wiki", source_id="wiki",
 )
-knowledge = senza.create_knowledge_plugin(sources=[docs])
+knowledge = senza.knowledge.plugin(sources=[docs])
 
 harness = (
     senza.HarnessBuilder("gpt-4o")
@@ -245,9 +245,52 @@ python -m pytest live-tests/ -v                           # 跑 5 层测试（�
 
 ---
 
-## API 参考
+## API 结构
+
+Senza 的公开 API 分两层：
+
+- **顶层高频 API**：`HarnessBuilder`、`create_tool`、`create_judge`、
+  `create_plugin`、`create_fs_tools_plugin`、`create_os_env` 等 —— 每个Agent都会用到的函数。
+- **子模块分组**：较低频 API 按领域组织：
+  - `senza.providers` — LLM 提供商工厂（`openai`、`anthropic`）
+  - `senza.hooks` — 11 个生命周期 hook 工厂
+  - `senza.strategy` — 12 个策略插件工厂
+  - `senza.knowledge` — 知识源、记忆、会话召回工厂
+  - `senza.rules` — 规则链和谓词工厂
+  - `senza.infra` — 审计 sink、trace exporter、sandbox 工厂
 
 完整 API 速查（含所有方法签名、事件类型、judge ctx 字段、hooks、rules 等）见 [docs/api-reference.md](docs/api-reference.md)。
+
+## 工具创建
+
+### 用 `@senza.tool` 装饰器创建工具
+
+创建工具的推荐方式是使用 `@senza.tool` 装饰器，它从类型提示自动推导 JSON Schema：
+
+```python
+import senza
+
+@senza.tool
+def search(query: str) -> str:
+    """搜索网络信息。"""
+    # 实现...
+    return results
+```
+
+函数名成为工具名，docstring 成为描述，类型注解定义参数 schema。同步和异步函数均支持。
+
+### 用 `create_tool` 手动创建工具
+
+```python
+tool = senza.create_tool(
+    name="search",
+    description="搜索网络信息",
+    parameters={"type": "object", "properties": {"query": {"type": "string"}}},
+    callback=lambda args, ctx: {"content": [{"type": "text", "text": "结果"}], "terminate": False},
+)
+```
+
+`parameters` 接受 dict 或 JSON 字符串。回调签名可以是 `(args, ctx)` 或仅 `(args)`。
 
 ## Skills
 
