@@ -17,10 +17,10 @@ import senza
 
 def main():
     api_key = os.environ.get("OPENAI_API_KEY", "sk-test")
-    provider = senza.create_openai_provider(api_key=api_key)
+    provider = senza.providers.openai(api_key=api_key)
     env = senza.create_os_env(".")
 
-    channel, stream = senza.create_webhook_stream(buffer=64)
+    channel, stream = senza.strategy.webhook_stream(buffer=64)
 
     # Simulate an external webhook firing
     channel.push({"event": "ci_complete", "status": "passed", "build_id": 42})

@@ -47,7 +47,7 @@ def test_catch_as_senza_error():
 
 def test_workflow_validation_error_is_value_error():
     """Invalid workflow raises ValidationError (subclass of ValueError)."""
-    provider = senza.create_openai_provider(api_key="sk-test")
+    provider = senza.providers.openai(api_key="sk-test")
 
     bad_workflow = {
         "entry_step": "nonexistent",

@@ -7,7 +7,7 @@ import senza
 
 def test_workflow_engine_full_construction():
     """End-to-end: build engine, add tools/hooks/executor, verify wiring."""
-    provider = senza.create_openai_provider(api_key="test-key")
+    provider = senza.providers.openai(api_key="test-key")
     workflow = {
         "entry_step": "run",
         "steps": [{"id": "run", "name": "Run", "prompt": "Call echo", "allowed_tools": ["echo"]}],
@@ -33,7 +33,7 @@ def test_workflow_engine_full_construction():
 
 
 def test_harness_full_build():
-    provider = senza.create_openai_provider(api_key="test-key")
+    provider = senza.providers.openai(api_key="test-key")
     harness = (
         senza.HarnessBuilder("gpt-4o")
         .provider("gpt-*", provider)

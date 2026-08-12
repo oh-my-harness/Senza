@@ -4,18 +4,18 @@ import senza
 
 
 def test_history_recall_plugin_creates():
-    index = senza.create_in_memory_session_recall_index()
-    repo = senza.create_in_memory_session_repo()
-    recall_source = senza.create_session_recall_knowledge_source(repo=repo, index=index)
-    plugin = senza.create_history_recall_plugin(source=recall_source)
+    index = senza.knowledge.in_memory_session_recall_index()
+    repo = senza.knowledge.in_memory_session_repo()
+    recall_source = senza.knowledge.session_recall_knowledge_source(repo=repo, index=index)
+    plugin = senza.knowledge.history_recall_plugin(source=recall_source)
     assert plugin is not None
 
 
 def test_history_recall_plugin_with_config():
-    index = senza.create_in_memory_session_recall_index()
-    repo = senza.create_in_memory_session_repo()
-    recall_source = senza.create_session_recall_knowledge_source(repo=repo, index=index)
-    plugin = senza.create_history_recall_plugin(
+    index = senza.knowledge.in_memory_session_recall_index()
+    repo = senza.knowledge.in_memory_session_repo()
+    recall_source = senza.knowledge.session_recall_knowledge_source(repo=repo, index=index)
+    plugin = senza.knowledge.history_recall_plugin(
         source=recall_source,
         config={"max_hits": 5, "timeout_ms": 1000},
     )
@@ -23,11 +23,11 @@ def test_history_recall_plugin_with_config():
 
 
 def test_history_recall_plugin_in_builder():
-    index = senza.create_in_memory_session_recall_index()
-    repo = senza.create_in_memory_session_repo()
-    recall_source = senza.create_session_recall_knowledge_source(repo=repo, index=index)
-    plugin = senza.create_history_recall_plugin(source=recall_source)
-    provider = senza.create_openai_provider(api_key="sk-test")
+    index = senza.knowledge.in_memory_session_recall_index()
+    repo = senza.knowledge.in_memory_session_repo()
+    recall_source = senza.knowledge.session_recall_knowledge_source(repo=repo, index=index)
+    plugin = senza.knowledge.history_recall_plugin(source=recall_source)
+    provider = senza.providers.openai(api_key="sk-test")
     harness = (
         senza.HarnessBuilder("gpt-4o")
         .provider("*", provider)

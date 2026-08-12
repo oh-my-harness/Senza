@@ -26,7 +26,7 @@ def test_disable_debug_restores_info_level():
 
 def test_workflow_engine_inspect():
     """WorkflowEngine.inspect() returns a dict with expected keys."""
-    provider = senza.create_openai_provider(api_key="sk-test")
+    provider = senza.providers.openai(api_key="sk-test")
     workflow = {
         "entry_step": "step1",
         "steps": [{"id": "step1", "name": "Step 1", "prompt": "test", "allowed_tools": []}],
@@ -48,7 +48,7 @@ def test_workflow_engine_inspect():
 
 def test_agent_harness_inspect():
     """AgentHarness.inspect() returns a dict with expected keys."""
-    provider = senza.create_openai_provider(api_key="sk-test")
+    provider = senza.providers.openai(api_key="sk-test")
     harness = (
         senza.HarnessBuilder("gpt-4o")
         .provider("*", provider)

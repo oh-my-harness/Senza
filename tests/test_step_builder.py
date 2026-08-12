@@ -31,7 +31,7 @@ def _provider():
     # Point at an unreachable port so the LLM call fails fast, but only
     # *after* the engine has constructed the per-step harness — which is
     # when the with_step_builder callback runs.
-    return senza.create_openai_provider(
+    return senza.providers.openai(
         api_key="test-key",
         base_url="http://127.0.0.1:1",
     )

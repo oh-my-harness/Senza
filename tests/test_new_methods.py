@@ -17,7 +17,7 @@ def _make_workflow():
 
 
 def _make_provider():
-    return senza.create_openai_provider(api_key="test-key")
+    return senza.providers.openai(api_key="test-key")
 
 
 def _make_judge():
@@ -132,7 +132,7 @@ def test_workflow_engine_chained_build():
 
 
 def _make_harness():
-    provider = senza.create_openai_provider(api_key="test-key")
+    provider = senza.providers.openai(api_key="test-key")
     return (
         senza.HarnessBuilder("gpt-4o")
         .provider("gpt-*", provider)
@@ -216,7 +216,7 @@ def test_harness_set_model():
 
 def test_harness_context_manager():
     """AgentHarness supports `with` statement."""
-    provider = senza.create_openai_provider(api_key="test-key")
+    provider = senza.providers.openai(api_key="test-key")
     harness = (
         senza.HarnessBuilder("gpt-4o")
         .provider("gpt-*", provider)
@@ -232,7 +232,7 @@ def test_harness_context_manager():
 
 def test_harness_context_manager_no_suppress():
     """Context manager does not suppress exceptions."""
-    provider = senza.create_openai_provider(api_key="test-key")
+    provider = senza.providers.openai(api_key="test-key")
     harness = senza.HarnessBuilder("gpt-4o").provider("gpt-*", provider).build()
     with pytest.raises(ValueError, match="test error"):
         with harness:
@@ -244,7 +244,7 @@ def test_docstrings_present():
     assert senza.version.__doc__ is not None
     assert senza.create_tool.__doc__ is not None
     assert senza.create_event_channel.__doc__ is not None
-    assert senza.create_openai_provider.__doc__ is not None
+    assert senza.providers.openai.__doc__ is not None
     assert senza.WorkflowEngine.__doc__ is not None
     assert senza.WorkflowEngine.run.__doc__ is not None
     assert senza.WorkflowEngine.restore.__doc__ is not None

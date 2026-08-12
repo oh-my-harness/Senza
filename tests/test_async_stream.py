@@ -74,7 +74,7 @@ def test_stream_run_yields_workflow_events():
             ],
             "edges": [],
         }
-        provider = senza.create_openai_provider(api_key="test-key")
+        provider = senza.providers.openai(api_key="test-key")
         judge = senza.create_judge(lambda ctx: "abort:done")
 
         def my_executor(ctx):

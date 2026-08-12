@@ -18,18 +18,18 @@ import senza
 
 def main():
     api_key = os.environ.get("OPENAI_API_KEY", "sk-test")
-    provider = senza.create_openai_provider(api_key=api_key)
+    provider = senza.providers.openai(api_key=api_key)
     env = senza.create_os_env(".")
 
     # SQLite-backed index for persistence; in-memory repo for entries
     index_path = os.path.join(tempfile.gettempdir(), "senza_recall.db")
-    index = senza.create_sqlite_session_recall_index(path=index_path)
-    repo = senza.create_in_memory_session_repo()
+    index = senza.knowledge.sqlite_session_recall_index(path=index_path)
+    repo = senza.knowledge.in_memory_session_repo()
 
-    recall_source = senza.create_session_recall_knowledge_source(
+    recall_source = senza.knowledge.session_recall_knowledge_source(
         repo=repo, index=index
     )
-    plugin = senza.create_history_recall_plugin(source=recall_source)
+    plugin = senza.knowledge.history_recall_plugin(source=recall_source)
 
     harness = (
         senza.HarnessBuilder("gpt-4o")

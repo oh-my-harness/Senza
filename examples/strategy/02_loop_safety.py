@@ -16,14 +16,14 @@ import senza
 
 def main():
     api_key = os.environ.get("OPENAI_API_KEY", "sk-test")
-    provider = senza.create_openai_provider(api_key=api_key)
+    provider = senza.providers.openai(api_key=api_key)
     env = senza.create_os_env(".")
 
     config = {
         "max_repeats": 3,          # stop after 3 identical calls
         "window_turns": 10,        # look back across last 10 turns
     }
-    plugin = senza.create_loop_safety_plugin(config=config)
+    plugin = senza.strategy.loop_safety(config=config)
 
     harness = (
         senza.HarnessBuilder("gpt-4o")

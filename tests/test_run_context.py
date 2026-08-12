@@ -21,7 +21,7 @@ def test_before_turn_hook_callback_receives_run_id():
     def hook(ctx):
         captured.update(ctx)
 
-    senza.create_before_turn_hook(hook)
+    senza.hooks.before_turn(hook)
 
     # Verify the hook was created successfully.
     # Full integration test requires MockLlmClient wiring.

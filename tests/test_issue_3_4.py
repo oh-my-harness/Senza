@@ -46,7 +46,7 @@ def test_workflow_engine_accepts_env_parameter():
     env = senza.create_os_env(working_dir=".")
     engine = senza.WorkflowEngine(
         workflow,
-        senza.create_openai_provider(api_key="test-key"),
+        senza.providers.openai(api_key="test-key"),
         "gpt-4o",
         senza.create_judge(lambda ctx: "abort:done"),
         env=env,
@@ -80,7 +80,7 @@ def test_shell_executor_runs_real_command_with_os_env():
     env = senza.create_os_env(working_dir=".")
     engine = senza.WorkflowEngine(
         workflow,
-        senza.create_openai_provider(api_key="test-key"),
+        senza.providers.openai(api_key="test-key"),
         "gpt-4o",
         judge,
         env=env,
@@ -118,7 +118,7 @@ def test_shell_executor_without_env_fails():
     # No env= → UnsupportedEnv → execute_shell errors.
     engine = senza.WorkflowEngine(
         workflow,
-        senza.create_openai_provider(api_key="test-key"),
+        senza.providers.openai(api_key="test-key"),
         "gpt-4o",
         judge,
     ).with_executor("shell", senza.create_shell_executor(["echo"]))
@@ -159,7 +159,7 @@ def _make_engine(judge, *, max_retries=3):
     return (
         senza.WorkflowEngine(
             _two_step_shell_workflow(),
-            senza.create_openai_provider(api_key="test-key"),
+            senza.providers.openai(api_key="test-key"),
             "gpt-4o",
             judge,
             env=env,

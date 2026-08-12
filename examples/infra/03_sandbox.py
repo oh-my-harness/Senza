@@ -19,7 +19,7 @@ import senza
 
 def main():
     api_key = os.environ.get("OPENAI_API_KEY", "sk-test")
-    provider = senza.create_openai_provider(api_key=api_key)
+    provider = senza.providers.openai(api_key=api_key)
     env = senza.create_os_env(".")
 
     system = platform.system()
@@ -29,7 +29,7 @@ def main():
             "write_only_paths": ["/tmp/senza-sandbox"],
             "no_network": True,
         }
-        sandbox = senza.create_seatbelt_sandbox(config=config)
+        sandbox = senza.infra.seatbelt_sandbox(config=config)
         print(f"SeatbeltSandbox created (macOS).")
     else:
         config = {
@@ -37,7 +37,7 @@ def main():
             "bind": {"/tmp/senza-sandbox": "/tmp"},
             "unshare_net": True,
         }
-        sandbox = senza.create_bwrap_sandbox(config=config)
+        sandbox = senza.infra.bwrap_sandbox(config=config)
         print(f"BwrapSandbox created (Linux).")
 
     print(f"  is_running (pre-start): {sandbox.is_running()}")

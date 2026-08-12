@@ -36,7 +36,7 @@ import senza
 def main():
     api_key = os.environ.get("OPENAI_API_KEY", "sk-demo-key")
     base_url = os.environ.get("OPENAI_API_BASE") or None
-    provider = senza.create_openai_provider(api_key=api_key, base_url=base_url)
+    provider = senza.providers.openai(api_key=api_key, base_url=base_url)
     model = os.environ.get("SENZA_MODEL", "gpt-4o")
 
     workflow = {
@@ -89,8 +89,8 @@ def main():
         print(f"  [after_turn]  turn #{turn_counter['n']} new_messages={n}")
 
     hooks = [
-        senza.create_before_turn_hook(on_before_turn),
-        senza.create_after_turn_hook(on_after_turn),
+        senza.hooks.before_turn(on_before_turn),
+        senza.hooks.after_turn(on_after_turn),
     ]
 
     with tempfile.TemporaryDirectory() as store_dir:

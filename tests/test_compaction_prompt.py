@@ -5,7 +5,7 @@ import senza
 
 
 def _make_provider():
-    return senza.create_openai_provider(api_key="test-key")
+    return senza.providers.openai(api_key="test-key")
 
 
 # ── compaction_prompt ────────────────────────────────────────────────────────

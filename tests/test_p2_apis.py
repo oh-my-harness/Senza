@@ -5,7 +5,7 @@ import senza
 
 
 def _make_harness():
-    provider = senza.create_openai_provider(api_key="sk-test")
+    provider = senza.providers.openai(api_key="sk-test")
     return senza.HarnessBuilder("gpt-4o").provider("gpt-*", provider).build()
 
 
@@ -13,21 +13,21 @@ def _make_harness():
 
 
 def test_builder_auto_compact():
-    provider = senza.create_openai_provider(api_key="sk-test")
+    provider = senza.providers.openai(api_key="sk-test")
     b = senza.HarnessBuilder("gpt-4o").provider("gpt-*", provider).auto_compact(False)
     h = b.build()
     assert h is not None
 
 
 def test_builder_compaction_reserve_tokens():
-    provider = senza.create_openai_provider(api_key="sk-test")
+    provider = senza.providers.openai(api_key="sk-test")
     b = senza.HarnessBuilder("gpt-4o").provider("gpt-*", provider).compaction_reserve_tokens(2048)
     h = b.build()
     assert h is not None
 
 
 def test_builder_compaction_keep_recent_tokens():
-    provider = senza.create_openai_provider(api_key="sk-test")
+    provider = senza.providers.openai(api_key="sk-test")
     b = (
         senza.HarnessBuilder("gpt-4o")
         .provider("gpt-*", provider)
@@ -38,7 +38,7 @@ def test_builder_compaction_keep_recent_tokens():
 
 
 def test_builder_all_compaction_combined():
-    provider = senza.create_openai_provider(api_key="sk-test")
+    provider = senza.providers.openai(api_key="sk-test")
     b = (
         senza.HarnessBuilder("gpt-4o")
         .provider("gpt-*", provider)

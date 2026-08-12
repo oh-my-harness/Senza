@@ -18,23 +18,23 @@ import senza
 
 def main():
     api_key = os.environ.get("OPENAI_API_KEY", "sk-test")
-    provider = senza.create_openai_provider(api_key=api_key)
+    provider = senza.providers.openai(api_key=api_key)
     env = senza.create_os_env(".")
 
     doc_dir = tempfile.mkdtemp(prefix="senza_mem_")
-    source = senza.create_local_knowledge_source(
+    source = senza.knowledge.local_source(
         path=doc_dir, source_id="memory-store"
     )
-    store = senza.create_in_memory_store(read_source_id="memory-store")
+    store = senza.knowledge.memory_store(read_source_id="memory-store")
 
     policy_config = {
         "max_value_bytes": 2048,
         "allowed_keys": ["preference", "fact", "decision", "entity"],
     }
-    policy = senza.create_secure_write_policy(config=policy_config)
-    gate = senza.create_allow_all_gate()
+    policy = senza.knowledge.secure_write_policy(config=policy_config)
+    gate = senza.knowledge.allow_all_gate()
 
-    plugin = senza.create_memory_plugin(
+    plugin = senza.knowledge.memory_plugin(
         source=source, store=store, policy=policy, gate=gate
     )
 

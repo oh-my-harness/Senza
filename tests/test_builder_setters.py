@@ -4,12 +4,12 @@ import senza
 
 
 def _make_provider():
-    return senza.create_openai_provider(api_key="test-key")
+    return senza.providers.openai(api_key="test-key")
 
 
 def test_should_stop_hook():
     """should_stop_hook() accepts a Hook and chains."""
-    hook = senza.create_should_stop_hook(lambda ctx: False)
+    hook = senza.hooks.should_stop(lambda ctx: False)
     builder = senza.HarnessBuilder("gpt-4o").provider("gpt-*", _make_provider())
     result = builder.should_stop_hook(hook)
     assert result is builder
@@ -17,7 +17,7 @@ def test_should_stop_hook():
 
 def test_hooks():
     """hooks() accepts a list of Hooks and chains."""
-    hook = senza.create_before_turn_hook(lambda ctx: None)
+    hook = senza.hooks.before_turn(lambda ctx: None)
     builder = senza.HarnessBuilder("gpt-4o").provider("gpt-*", _make_provider())
     result = builder.hooks([hook])
     assert result is builder

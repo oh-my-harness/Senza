@@ -2,7 +2,7 @@ import senza
 
 
 def test_memory_defense_default():
-    plugin = senza.create_memory_defense_plugin()
+    plugin = senza.strategy.memory_defense()
     assert plugin is not None
 
 
@@ -21,8 +21,8 @@ def test_memory_defense_builder_extra_files():
 
 
 def test_memory_defense_in_builder():
-    provider = senza.create_openai_provider(api_key="sk-test")
-    plugin = senza.create_memory_defense_plugin()
+    provider = senza.providers.openai(api_key="sk-test")
+    plugin = senza.strategy.memory_defense()
     harness = (
         senza.HarnessBuilder("gpt-4o")
         .provider("*", provider)

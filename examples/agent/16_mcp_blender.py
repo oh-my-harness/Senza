@@ -48,7 +48,7 @@ def main():
     base_url = os.environ.get("OPENAI_API_BASE") or None
     model = os.environ.get("SENZA_MODEL") or os.environ.get("OPENAI_MODEL", "gpt-4o")
 
-    provider = senza.create_openai_provider(api_key=api_key, base_url=base_url)
+    provider = senza.providers.openai(api_key=api_key, base_url=base_url)
 
     # ── 1. MCP lifecycle check (no LLM needed) ──────────────────────────
     manager = senza.McpManager()

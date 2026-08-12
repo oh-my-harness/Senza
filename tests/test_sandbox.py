@@ -13,7 +13,7 @@ import senza
     reason="SeatbeltSandbox is only available on macOS",
 )
 def test_seatbelt_sandbox_creates():
-    sandbox = senza.create_seatbelt_sandbox()
+    sandbox = senza.infra.seatbelt_sandbox()
     assert sandbox is not None
     assert sandbox.is_running() is False
 
@@ -23,7 +23,7 @@ def test_seatbelt_sandbox_creates():
     reason="SeatbeltSandbox is only available on macOS",
 )
 def test_seatbelt_sandbox_creates_with_config():
-    sandbox = senza.create_seatbelt_sandbox(
+    sandbox = senza.infra.seatbelt_sandbox(
         {
             "fs_allowlist": ["/tmp"],
             "work_dir": "/tmp/sandbox",
@@ -42,6 +42,6 @@ def test_seatbelt_sandbox_creates_with_config():
 )
 def test_seatbelt_sandbox_start_fails_closed():
     """SeatbeltSandbox::start() returns error (fail-closed, not yet implemented)."""
-    sandbox = senza.create_seatbelt_sandbox()
+    sandbox = senza.infra.seatbelt_sandbox()
     with pytest.raises(RuntimeError):
         sandbox.start()

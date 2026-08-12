@@ -17,7 +17,7 @@ import senza
 
 def test_workflow_engine_constructs_with_basic_workflow():
     """WorkflowEngine constructs and reports idle state before run()."""
-    provider = senza.create_openai_provider(api_key="sk-test")
+    provider = senza.providers.openai(api_key="sk-test")
 
     workflow = {
         "entry_step": "step1",
@@ -45,7 +45,7 @@ def test_workflow_engine_constructs_with_basic_workflow():
 
 def test_workflow_engine_accepts_rich_workflow_dict():
     """A workflow dict with edges and multiple steps is accepted."""
-    provider = senza.create_openai_provider(api_key="sk-test")
+    provider = senza.providers.openai(api_key="sk-test")
 
     workflow = {
         "entry_step": "step1",
@@ -69,7 +69,7 @@ def test_workflow_engine_accepts_rich_workflow_dict():
 
 def test_workflow_engine_invalid_dict_raises():
     """An invalid workflow dict (missing entry_step) raises ValueError."""
-    provider = senza.create_openai_provider(api_key="sk-test")
+    provider = senza.providers.openai(api_key="sk-test")
 
     workflow = {
         # entry_step intentionally omitted

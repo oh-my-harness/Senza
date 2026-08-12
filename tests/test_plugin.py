@@ -21,7 +21,7 @@ def test_create_plugin_with_tools_and_hooks():
         pass
 
     tool = senza.create_tool("echo", "Echo", json.dumps({"type": "object"}), echo)
-    hook = senza.create_before_turn_hook(my_hook)
+    hook = senza.hooks.before_turn(my_hook)
 
     plugin = senza.create_plugin("full-plugin", tools=[tool], hooks=[hook])
     assert plugin is not None
@@ -51,9 +51,9 @@ def test_create_plugin_multiple_hook_types():
     def should_stop_cb(ctx):
         return False
 
-    h1 = senza.create_before_turn_hook(before_turn_cb)
-    h2 = senza.create_after_turn_hook(after_turn_cb)
-    h3 = senza.create_should_stop_hook(should_stop_cb)
+    h1 = senza.hooks.before_turn(before_turn_cb)
+    h2 = senza.hooks.after_turn(after_turn_cb)
+    h3 = senza.hooks.should_stop(should_stop_cb)
 
     plugin = senza.create_plugin("multi-hooks", tools=None, hooks=[h1, h2, h3])
     assert plugin is not None

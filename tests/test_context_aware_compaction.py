@@ -2,7 +2,7 @@ import senza
 
 
 def test_context_aware_compaction_prompt_returns_tuple():
-    result = senza.create_context_aware_compaction_prompt()
+    result = senza.strategy.context_aware_compaction_prompt()
     assert isinstance(result, tuple)
     assert len(result) == 2
     system_prompt, user_template = result
@@ -12,8 +12,8 @@ def test_context_aware_compaction_prompt_returns_tuple():
 
 
 def test_context_aware_compaction_prompt_usable_in_builder():
-    provider = senza.create_openai_provider(api_key="sk-test")
-    system_prompt, user_template = senza.create_context_aware_compaction_prompt()
+    provider = senza.providers.openai(api_key="sk-test")
+    system_prompt, user_template = senza.strategy.context_aware_compaction_prompt()
     builder = (
         senza.HarnessBuilder("gpt-4o")
         .provider("*", provider)

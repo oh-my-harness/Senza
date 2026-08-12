@@ -2,18 +2,18 @@ import senza
 
 
 def test_injection_filter_default():
-    plugin = senza.create_injection_filter_plugin()
+    plugin = senza.strategy.injection_filter()
     assert plugin is not None
 
 
 def test_injection_filter_custom_patterns():
-    plugin = senza.create_injection_filter_plugin(["ignore.*instructions", "system:.*"])
+    plugin = senza.strategy.injection_filter(["ignore.*instructions", "system:.*"])
     assert plugin is not None
 
 
 def test_injection_filter_in_builder():
-    provider = senza.create_openai_provider(api_key="sk-test")
-    plugin = senza.create_injection_filter_plugin()
+    provider = senza.providers.openai(api_key="sk-test")
+    plugin = senza.strategy.injection_filter()
     harness = (
         senza.HarnessBuilder("gpt-4o")
         .provider("*", provider)

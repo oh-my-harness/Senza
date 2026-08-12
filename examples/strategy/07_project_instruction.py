@@ -16,7 +16,7 @@ import senza
 
 def main():
     api_key = os.environ.get("OPENAI_API_KEY", "sk-test")
-    provider = senza.create_openai_provider(api_key=api_key)
+    provider = senza.providers.openai(api_key=api_key)
 
     working_dir = os.getcwd()
     env = senza.create_os_env(working_dir)
@@ -25,7 +25,7 @@ def main():
         "files": ["CLAUDE.md", "AGENTS.md"],
         "max_bytes": 8192,
     }
-    plugin = senza.create_project_instruction_plugin(env=env, config=config)
+    plugin = senza.strategy.project_instruction(env=env, config=config)
 
     harness = (
         senza.HarnessBuilder("gpt-4o")

@@ -17,10 +17,10 @@ import senza
 
 def main():
     api_key = os.environ.get("OPENAI_API_KEY", "sk-test")
-    provider = senza.create_openai_provider(api_key=api_key)
+    provider = senza.providers.openai(api_key=api_key)
     env = senza.create_os_env(".")
 
-    system_prompt, user_template = senza.create_context_aware_compaction_prompt()
+    system_prompt, user_template = senza.strategy.context_aware_compaction_prompt()
 
     harness = (
         senza.HarnessBuilder("gpt-4o")

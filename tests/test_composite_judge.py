@@ -24,7 +24,7 @@ def test_composite_judge_fallback():
 
 def test_composite_judge_accepted_by_workflow_engine():
     """WorkflowEngine.__new__ should accept CompositeJudge as judge param."""
-    provider = senza.create_openai_provider(api_key="sk-test")
+    provider = senza.providers.openai(api_key="sk-test")
 
     workflow = {
         "entry_step": "s1",
@@ -46,7 +46,7 @@ def test_composite_judge_accepted_by_workflow_engine():
 
 def test_composite_judge_with_edge_fallback():
     """Steps without .on() handler should fall back to declarative Expr edges."""
-    provider = senza.create_openai_provider(api_key="sk-test")
+    provider = senza.providers.openai(api_key="sk-test")
 
     workflow = {
         "entry_step": "custom",
@@ -80,7 +80,7 @@ def test_composite_judge_with_edge_fallback():
 
 def test_mixed_judge_and_composite_judge():
     """Both create_judge and create_composite_judge should work with WorkflowEngine."""
-    provider = senza.create_openai_provider(api_key="sk-test")
+    provider = senza.providers.openai(api_key="sk-test")
 
     workflow = {
         "entry_step": "s1",

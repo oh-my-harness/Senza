@@ -16,7 +16,7 @@ import senza
 
 def main():
     api_key = os.environ.get("OPENAI_API_KEY", "sk-test")
-    provider = senza.create_openai_provider(api_key=api_key)
+    provider = senza.providers.openai(api_key=api_key)
     env = senza.create_os_env(".")
 
     entries = [
@@ -24,7 +24,7 @@ def main():
         {"tool": "read_file", "label": "Local File", "trust": "high"},
         {"tool": "bash", "label": "Shell Output", "trust": "medium"},
     ]
-    plugin = senza.create_source_tag_plugin(entries=entries)
+    plugin = senza.strategy.source_tag(entries=entries)
 
     harness = (
         senza.HarnessBuilder("gpt-4o")

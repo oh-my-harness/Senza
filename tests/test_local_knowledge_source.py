@@ -8,7 +8,7 @@ def test_local_knowledge_source_creates():
         # Create a test markdown file
         with open(os.path.join(tmpdir, "test.md"), "w") as f:
             f.write("# Test\nThis is a test document.\n")
-        source = senza.create_local_knowledge_source(
+        source = senza.knowledge.local_source(
             path=tmpdir,
             source_id="test-docs",
             name="Test Documents",
@@ -20,7 +20,7 @@ def test_local_knowledge_source_with_config():
     with tempfile.TemporaryDirectory() as tmpdir:
         with open(os.path.join(tmpdir, "doc1.md"), "w") as f:
             f.write("# Doc 1\nContent here.\n")
-        source = senza.create_local_knowledge_source(
+        source = senza.knowledge.local_source(
             path=tmpdir,
             source_id="my-docs",
             name="My Docs",

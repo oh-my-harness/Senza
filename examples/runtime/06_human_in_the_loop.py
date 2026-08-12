@@ -19,7 +19,7 @@ import senza
 def main():
     api_key = os.environ.get("OPENAI_API_KEY", "sk-demo-key")
     base_url = os.environ.get("OPENAI_API_BASE") or None
-    provider = senza.create_openai_provider(api_key=api_key, base_url=base_url)
+    provider = senza.providers.openai(api_key=api_key, base_url=base_url)
 
     # Create an event channel — the wait_for_external_event tool will be
     # available to the LLM. When it calls this tool, execution pauses until

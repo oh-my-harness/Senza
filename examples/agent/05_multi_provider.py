@@ -19,8 +19,8 @@ def main():
 
     openai_base_url = os.environ.get("OPENAI_API_BASE") or None
     anthropic_base_url = os.environ.get("ANTHROPIC_API_BASE") or None
-    openai_provider = senza.create_openai_provider(api_key=openai_key, base_url=openai_base_url)
-    anthropic_provider = senza.create_anthropic_provider(
+    openai_provider = senza.providers.openai(api_key=openai_key, base_url=openai_base_url)
+    anthropic_provider = senza.providers.anthropic(
         api_key=anthropic_key, base_url=anthropic_base_url
     )
 

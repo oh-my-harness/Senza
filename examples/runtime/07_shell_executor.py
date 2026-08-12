@@ -21,7 +21,7 @@ ALLOWED_COMMANDS = ["echo", "python3", "date", "whoami"]
 def main():
     api_key = os.environ.get("OPENAI_API_KEY", "sk-demo-key")
     base_url = os.environ.get("OPENAI_API_BASE") or None
-    provider = senza.create_openai_provider(api_key=api_key, base_url=base_url)
+    provider = senza.providers.openai(api_key=api_key, base_url=base_url)
 
     workflow = {
         "entry_step": "greet",

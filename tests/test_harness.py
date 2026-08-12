@@ -6,7 +6,7 @@ import senza
 
 def test_builder_with_provider_returns_harness():
     """build() with a provider returns an AgentHarness, not an Agent."""
-    provider = senza.create_openai_provider(api_key="test-key")
+    provider = senza.providers.openai(api_key="test-key")
     harness = (
         senza.HarnessBuilder("gpt-4o")
         .provider("gpt-*", provider)
@@ -19,21 +19,21 @@ def test_builder_with_provider_returns_harness():
 
 def test_harness_has_prompt_method():
     """AgentHarness exposes a prompt() method."""
-    provider = senza.create_openai_provider(api_key="test-key")
+    provider = senza.providers.openai(api_key="test-key")
     harness = senza.HarnessBuilder("gpt-4o").provider("gpt-*", provider).build()
     assert hasattr(harness, "prompt")
 
 
 def test_harness_has_events_method():
     """AgentHarness exposes an events() method."""
-    provider = senza.create_openai_provider(api_key="test-key")
+    provider = senza.providers.openai(api_key="test-key")
     harness = senza.HarnessBuilder("gpt-4o").provider("gpt-*", provider).build()
     assert hasattr(harness, "events")
 
 
 def test_harness_has_message_count():
     """AgentHarness exposes message_count()."""
-    provider = senza.create_openai_provider(api_key="test-key")
+    provider = senza.providers.openai(api_key="test-key")
     harness = senza.HarnessBuilder("gpt-4o").provider("gpt-*", provider).build()
     assert hasattr(harness, "message_count")
     assert harness.message_count() == 0
@@ -41,7 +41,7 @@ def test_harness_has_message_count():
 
 def test_harness_has_phase():
     """AgentHarness exposes phase()."""
-    provider = senza.create_openai_provider(api_key="test-key")
+    provider = senza.providers.openai(api_key="test-key")
     harness = senza.HarnessBuilder("gpt-4o").provider("gpt-*", provider).build()
     assert hasattr(harness, "phase")
     assert harness.phase() == "idle"
@@ -56,7 +56,7 @@ def test_build_without_provider_raises():
 
 def test_build_consumed_builder_raises():
     """Calling build() twice raises RuntimeError."""
-    provider = senza.create_openai_provider(api_key="test-key")
+    provider = senza.providers.openai(api_key="test-key")
     builder = senza.HarnessBuilder("gpt-4o").provider("gpt-*", provider)
     builder.build()
     with pytest.raises(RuntimeError):
@@ -65,7 +65,7 @@ def test_build_consumed_builder_raises():
 
 def test_provider_chaining_returns_builder():
     """provider() returns self for chaining."""
-    provider = senza.create_openai_provider(api_key="test-key")
+    provider = senza.providers.openai(api_key="test-key")
     builder = senza.HarnessBuilder("gpt-4o")
     result = builder.provider("gpt-*", provider)
     assert result is builder

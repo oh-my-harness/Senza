@@ -15,7 +15,7 @@ def _make_workflow():
 
 
 def _make_provider():
-    return senza.create_openai_provider(api_key="test-key")
+    return senza.providers.openai(api_key="test-key")
 
 
 def _make_judge():
@@ -69,7 +69,7 @@ def test_workflow_engine_subscribe():
 
 def test_workflow_engine_with_hooks():
     """with_hooks() accepts a list of hooks and returns self."""
-    hook = senza.create_before_turn_hook(lambda ctx: None)
+    hook = senza.hooks.before_turn(lambda ctx: None)
     engine = senza.WorkflowEngine(_make_workflow(), _make_provider(), "gpt-4o", _make_judge())
     result = engine.with_hooks([hook])
     assert result is engine

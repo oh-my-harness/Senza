@@ -41,7 +41,7 @@ import senza
 def main():
     api_key = os.environ.get("OPENAI_API_KEY", "sk-demo-key")
     base_url = os.environ.get("OPENAI_API_BASE") or None
-    provider = senza.create_openai_provider(api_key=api_key, base_url=base_url)
+    provider = senza.providers.openai(api_key=api_key, base_url=base_url)
 
     # ── A simple tool so before_tool_call / after_tool_call fire ────────────
     def get_weather(args, ctx):
@@ -100,12 +100,12 @@ def main():
         return reason == "end_turn"
 
     hooks = [
-        senza.create_before_turn_hook(on_before_turn),
-        senza.create_after_turn_hook(on_after_turn),
-        senza.create_before_provider_request_hook(on_before_provider_request),
-        senza.create_after_provider_response_hook(on_after_provider_response),
-        senza.create_before_tool_call_hook(on_before_tool_call),
-        senza.create_after_tool_call_hook(on_after_tool_call),
+        senza.hooks.before_turn(on_before_turn),
+        senza.hooks.after_turn(on_after_turn),
+        senza.hooks.before_provider_request(on_before_provider_request),
+        senza.hooks.after_provider_response(on_after_provider_response),
+        senza.hooks.before_tool_call(on_before_tool_call),
+        senza.hooks.after_tool_call(on_after_tool_call),
     ]
 
     harness = (
@@ -114,7 +114,7 @@ def main():
         .system_prompt("You are a weather assistant. Use the get_weather tool to answer.")
         .tool(weather_tool)
         .hooks(hooks)
-        .should_stop_hook(senza.create_should_stop_hook(on_should_stop))
+        .should_stop_hook(senza.hooks.should_stop(on_should_stop))
         .max_tokens(512)
         .build()
     )

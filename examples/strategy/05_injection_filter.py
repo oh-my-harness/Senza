@@ -17,7 +17,7 @@ import senza
 
 def main():
     api_key = os.environ.get("OPENAI_API_KEY", "sk-test")
-    provider = senza.create_openai_provider(api_key=api_key)
+    provider = senza.providers.openai(api_key=api_key)
     env = senza.create_os_env(".")
 
     patterns = [
@@ -26,7 +26,7 @@ def main():
         r"(?i)system:\s",
         r"(?i)forget everything",
     ]
-    plugin = senza.create_injection_filter_plugin(patterns=patterns)
+    plugin = senza.strategy.injection_filter(patterns=patterns)
 
     harness = (
         senza.HarnessBuilder("gpt-4o")

@@ -45,7 +45,7 @@ def main():
     # messages_path defaults to /v1/messages; override for proxies/gateways
     messages_path = os.environ.get("ANTHROPIC_MESSAGES_PATH") or None
 
-    provider = senza.create_anthropic_provider(
+    provider = senza.providers.anthropic(
         api_key=api_key,
         base_url=base_url,
         messages_path=messages_path,

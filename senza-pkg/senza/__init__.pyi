@@ -322,6 +322,12 @@ class SessionRecallKnowledgeSource:
 
 # ── Strategy plugins ──────────────────────────────────────────────────────────
 
+class MemoryDefensePluginBuilder:
+    """Builder for MemoryDefensePlugin with fluent configuration."""
+    def extra_file(self, name: str) -> "MemoryDefensePluginBuilder": ...
+    def extra_files(self, names: list[str]) -> "MemoryDefensePluginBuilder": ...
+    def build(self) -> Plugin: ...
+
 class strategy:
     """Submodule: strategy plugin factories."""
     @staticmethod
