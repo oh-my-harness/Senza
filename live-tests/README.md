@@ -38,3 +38,10 @@ OPENAI_API_BASE=http://... SENZA_LIVE_MODEL=gpt-4o OPENAI_API_KEY=sk-... \
 每个层文件含一个不依赖 key 的 `test_*_constructs_offline`，用于无 key 时验证 API 签名。
 
 设计见 `docs/superpowers/specs/2026-08-12-senza-live-tests-design.md`。
+
+## 可运行示例
+
+全部可运行示例统一在 [`examples/`](examples/)（23 个运行时同名镜像 `01`–`23` + 17 个
+仓库根迁入示例 `30`–`46`）。仓库根 `examples/` 目录已废弃删除。每个示例驱动真实 LLM，
+无 key 时打印 SKIP 并 exit 0。可逐个跑，也能与 `llm-harness-runtime` 同名示例在同一
+DeepSeek 端点 1:1 对照（写规范见 `examples/_AUTHORING.md`，目录说明见 `examples/README.md`）。

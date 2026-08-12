@@ -220,32 +220,28 @@ harness = (
 )
 ```
 
-## 示例
-见 [`examples/`](examples/) 目录（32 个示例，均可直接运行）：
+## 示例（Live Tests）
+
+全部可运行的示例已统一收拢到 [`live-tests/examples/`](live-tests/examples/)（仓库根 `examples/`
+目录已废弃删除）：23 个运行时同名镜像（`01_prompt_streaming` … `23_infra_integration`）
++ 17 个仓库根迁入示例（`30` … `46`），每个都是驱动真实 LLM 的独立脚本。
 
 ```bash
-export OPENAI_API_KEY=sk-...
-python examples/agent/01_basic_prompt.py
-python examples/runtime/01_linear_workflow.py
+cd live-tests/examples
+source ~/.omp_llm_env && python 01_prompt_streaming.py   # 跑真实 DeepSeek
+python 30_basic_prompt.py                                # 无 key → 打印 SKIP 并 exit 0
 ```
 
-- `examples/agent/` — 18 个示例（基础对话、工具调用、流式输出、动态配置、多 provider、hooks、rules、skills、plugins、budget/pricing、steering、session 分支、Anthropic、代码审查模板、RAG 问答模板、grep/glob、compaction prompt）
-- `examples/runtime/` — 11 个示例（线性工作流、条件路由、执行器、崩溃恢复、暂停/取消、人工介入、Shell、HTTP、CompositeJudge、hooks+重试、数据分析流水线模板）
-- `examples/infra/` — 基础设施示例（审计 sink、trace 导出、沙箱）
-
-> **strategy（安全防护/循环断路/审计/注入检测等）与 knowledge（RAG/记忆/会话召回）能力**
-> 现由 [`live-tests/`](live-tests/) 用真实 LLM 驱动，见下方「Live Tests」。
-
-## Live Tests（真实 LLM）
-
-[`live-tests/`](live-tests/) 是按架构层（agent / loop / tools / runtime / strategy）组织的
-真实 LLM 集成测试，镜像 runtime 仓库的 `llm-harness-live-tests` 惯例。默认打当前 OMP 的
-DeepSeek 端点（`http://api.hyper-op.com/v1` + `DeepSeek-V4-Flash`），无 API key 时自动 skip，
-每个层文件含一个不依赖 key 的离线构造冒烟。详见 [`live-tests/README.md`](live-tests/README.md)。
+`live-tests/` 另含按架构层组织的**真实 LLM 集成测试**（agent / loop / tools / runtime /
+strategy），镜像 runtime 仓库的 `llm-harness-live-tests` 惯例；每层含一个不依赖 key 的
+离线构造冒烟。详见 [`live-tests/README.md`](live-tests/README.md)。
 
 ```bash
-source ~/.omp_llm_env && python -m pytest live-tests/ -v   # 跑真实 DeepSeek
+python -m pytest live-tests/ -v                           # 跑 5 层测试（真实 DeepSeek）
 ```
+
+> `live-tests/examples/` 中的每个示例都能与 `llm-harness-runtime` 同名示例 1:1 对照
+>（同一 DeepSeek-V4-Flash 端点），用于交叉验证两套实现。
 
 ---
 

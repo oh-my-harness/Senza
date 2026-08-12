@@ -1,0 +1,111 @@
+"""34 — Anthropic Provider & Utilities.
+
+Port of the original repo-root `examples/agent/13_anthropic_standalone.py`.
+Demonstrates:
+  - ``senza.providers.anthropic(api_key, base_url, messages_path)`` —
+    use Anthropic (Claude) as the LLM provider, with optional
+    ``base_url`` / ``messages_path`` for proxies, gateways, or
+    Anthropic-compatible endpoints (Azure, Bedrock, self-hosted).
+  - ``HarnessBuilder.provider(pattern, provider)`` — route a model name
+    pattern to the Anthropic provider.
+  - Utilities: ``version()``, ``to_json(obj)``, ``from_json(json_str)``
+    — SDK version introspection and JSON serialization helpers for
+    event/data round-tripping.
+
+Anthropic vs OpenAI provider:
+  - ``create_openai_provider`` uses the OpenAI chat completions wire
+    format (``chat_path`` configurable).
+  - ``create_anthropic_provider`` uses the Anthropic messages API
+    (``messages_path`` configurable, defaults to ``/v1/messages``).
+  - Both return an opaque ``Provider`` handle; the rest of the API is
+    identical — only the wire format differs.
+
+Scenario: answer a question, then demonstrate the JSON utilities by
+round-tripping the collected events.
+
+If ANTHROPIC_API_KEY is set we exercise the Anthropic provider path with
+its tunables; otherwise we fall back to the first provider configured in
+the environment (see ``require_provider``) and still show the utilities.
+
+Run:
+  source ~/.omp_llm_env && python live-tests/examples/34_anthropic_standalone.py
+"""
+
+import os
+import sys
+
+import senza
+from _common import make_example_harness, require_provider, run_prompt
+
+
+def main() -> None:
+    print("=== 34: Anthropic Provider & Utilities ===\n")
+
+    # Gate on any configured key: SKIP + exit 0 when none present.
+    require_provider()
+
+    # ── SDK version ───────────────────────────────────────────────────────
+    print(f"Senza SDK version: {senza.version()}")
+
+    # ── Anthropic provider path ───────────────────────────────────────────
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if api_key:
+        base_url = os.environ.get("ANTHROPIC_API_BASE") or None
+        # messages_path defaults to /v1/messages; override for proxies/gateways
+        messages_path = os.environ.get("ANTHROPIC_MESSAGES_PATH") or None
+        provider = senza.providers.anthropic(
+            api_key=api_key,
+            base_url=base_url,
+            messages_path=messages_path,
+        )
+        model = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+        harness = (
+            senza.HarnessBuilder(model)
+            .provider("*", provider)
+            .system_prompt("You are a concise, helpful assistant.")
+            .max_tokens(512)
+            .build()
+        )
+        print(f"Using Anthropic provider with model: {model}")
+    else:
+        print("No ANTHROPIC_API_KEY set; using the first configured provider.")
+        harness = make_example_harness()
+
+    print("Prompting...\n")
+    events = run_prompt(
+        harness,
+        "Explain the difference between TCP and UDP in two sentences.",
+        timeout_ms=60_000,
+    )
+
+    # ── JSON utilities: round-trip the events ─────────────────────────────
+    # to_json serializes a Python object (list[dict]) to a JSON string
+    json_str = senza.to_json(events)
+    print(f"Serialized {len(events)} events to {len(json_str)} bytes of JSON")
+
+    # from_json parses it back
+    restored = senza.from_json(json_str)
+    print(f"Deserialized back to {len(restored)} events")
+
+    # Verify round-trip integrity
+    assert len(restored) == len(events), "round-trip mismatch!"
+    print("Round-trip integrity: OK")
+
+    # Extract text from restored events
+    text = ""
+    for event in restored:
+        t = event["type"]
+        if t == "text_delta":
+            text += event.get("text", "")
+        elif t == "error":
+            print(f"\n[error] {event.get('message', event)}", file=sys.stderr)
+            sys.exit(1)
+
+    print(f"\nResponse:\n{text}")
+
+    cost = harness.usage()
+    print(f"\nTokens: {cost['total_input_tokens']} in / {cost['total_output_tokens']} out")
+
+
+if __name__ == "__main__":
+    main()
