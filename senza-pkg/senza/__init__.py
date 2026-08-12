@@ -300,3 +300,29 @@ def tool(*args, **kwargs):
         callback = _wrapped
 
     return create_tool(name, description, parameters, callback)
+
+
+# ── Async wrappers for blocking methods ──────────────────────────────
+
+
+async def _workflow_run_async(self, timeout_ms: int = 300000):
+    """Async version of run(). Does not block the event loop.
+
+    Runs ``self.run()`` in a thread pool via ``asyncio.to_thread``.
+    For event-streaming async usage, prefer ``senza.stream_run(engine)``.
+    """
+    return await _asyncio.to_thread(self.run)
+
+
+async def _harness_prompt_async(self, text: str, timeout_ms: int = 30000):
+    """Async version of prompt_and_collect(). Does not block the event loop.
+
+    Runs ``self.prompt_and_collect(text, timeout_ms)`` in a thread pool
+    via ``asyncio.to_thread``. For streaming async usage, prefer
+    ``senza.stream_prompt(harness, text)``.
+    """
+    return await _asyncio.to_thread(self.prompt_and_collect, text, timeout_ms)
+
+
+WorkflowEngine.run_async = _workflow_run_async
+AgentHarness.prompt_async = _harness_prompt_async
