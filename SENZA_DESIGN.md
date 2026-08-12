@@ -144,6 +144,11 @@ PyO3 module 名：`senza`（已从 `llm_harness_py` 改名）。
 | — | WorkflowRunRequest 路径未验证 | P2 | ✅ 已验证 |
 | — | src/ 目录结构 flat，22 文件 | P2 | ✅ 已重组为 shared/core/runtime/strategy/knowledge/infra 子目录 |
 | — | stub 数从 138 增至 173 | — | ✅ 已验证 |
+| — | Strategy crate 12 个 plugin 绑定未暴露 | P1 | ✅ 阶段 2 完成（SafetyDefaults/LoopSafety/StatusPanel/MemoryDefense/InjectionFilter/SourceTag/ProjectInstruction/Audit/Notify/ToolOutputGuard/WebhookStream/context_aware_compaction） |
+| — | Knowledge + Memory + SessionRecall 绑定未暴露 | P1 | ✅ 阶段 3 完成（LocalDocumentSource/KnowledgePlugin/InMemoryStore/SecureMemoryWritePolicy/MemoryPlugin/SessionRecallIndex/HistoryRecallPlugin） |
+| — | Infra 层绑定未暴露 | P2 | ✅ 阶段 4 完成（JsonlAuditSink/InMemoryTraceExporter/SeatbeltSandbox/BwrapSandbox） |
+| — | examples 未覆盖 strategy/knowledge/infra 能力 | P2 | ✅ 阶段 4 完成（18 个新 example） |
+| — | stub 数从 173 增至 209 | — | ✅ 已验证 |
 
 ---
 
@@ -151,30 +156,65 @@ PyO3 module 名：`senza`（已从 `llm_harness_py` 改名）。
 
 ```
 senza/                           # 本仓库 (github.com/oh-my-harness/Senza)
-├── Cargo.toml                   # 独立 crate，git 依赖 runtime（rev=PLACEHOLDER）
+├── Cargo.toml                   # 独立 crate，git 依赖 runtime（rev=5eae99e）
 ├── build.rs                     # PyO3 build script
 ├── pyproject.toml               # package name = "senza-sdk"，maturin 后端
 ├── README.md                    # 面向用户：pip install senza-sdk + 快速上手
 ├── DEVELOPMENT.md               # 面向贡献者：dev_setup.sh + 本地测试
 ├── SENZA_DESIGN.md              # 本文档
-├── src/                         # ← PyO3 crate 源码（从 runtime 仓库迁入）
-│   ├── lib.rs                   # module 入口
-│   ├── pyharness.rs             # AgentHarness
-│   ├── pyworkflow.rs            # WorkflowEngine
-│   ├── pybuilder.rs             # HarnessBuilder
-│   ├── pytool.rs                # create_tool / Tool trait
-│   ├── pyprovider.rs            # provider 创建
-│   ├── pyhooks.rs               # 11 种 hook
-│   ├── pyplugin.rs              # create_plugin
-│   ├── pyeventstream.rs         # 事件通道
-│   ├── pyagent.rs               # Agent 类（test-utils only）
-│   ├── event_stream.rs          # 事件转 dict
-│   └── value_conv.rs            # Python ↔ Value 转换
+├── src/                         # ← PyO3 crate 源码（按 crate 分子目录）
+│   ├── lib.rs                   # module 入口，注册所有 class + function
+│   ├── shared/                  # 跨 crate 共享基础设施
+│   │   ├── value_conv.rs        # Python ↔ serde_json::Value 转换
+│   │   ├── event_stream.rs      # Agent 事件转 Python dict
+│   │   ├── pyerror.rs           # panic 隔离 (RustPanicError)
+│   │   └── pylogging.rs         # Rust tracing → Python logging 桥接
+│   ├── core/                    # llm-harness-agent + loop + types
+│   │   ├── pyharness.rs         # AgentHarness
+│   │   ├── pybuilder.rs         # HarnessBuilder + UsageLedger
+│   │   ├── pytool.rs            # create_tool / Tool trait
+│   │   ├── pyplugin.rs          # PyPluginWrapper (Plugin 包装)
+│   │   ├── pyprovider.rs        # create_openai_provider / create_anthropic_provider
+│   │   ├── pyhooks.rs           # 11 种 hook 创建函数
+│   │   ├── pyeventstream.rs     # 事件通道 + human-in-the-loop
+│   │   ├── pyresponseformat.rs  # JSON response format
+│   │   ├── pyagent.rs           # Agent 类（test-utils only）
+│   │   ├── pyloop.rs            # asyncio 事件循环桥接
+│   │   └── pyviewer.rs          # session-viewer
+│   ├── runtime/                 # llm-harness-runtime
+│   │   ├── pyworkflow.rs        # WorkflowEngine + judge/executor/env wrapper
+│   │   ├── pybudget.rs          # BudgetExceededHook
+│   │   ├── pyrules.rs           # Rules 审批系统
+│   │   ├── pyskills.rs          # Skills 加载
+│   │   ├── pymcp.rs             # MCP server 管理
+│   │   └── pypricing.rs         # PricingProvider
+│   ├── strategy/                # llm-harness-strategy (阶段 2)
+│   │   ├── pysafety.rs          # SafetyDefaultsPlugin
+│   │   ├── pyloopsafety.rs      # LoopSafetyPlugin
+│   │   ├── pystatuspanel.rs     # StatusPanelPlugin
+│   │   ├── pymemorydefense.rs   # MemoryDefensePlugin + builder
+│   │   ├── pyinjection.rs       # InjectionFilterPlugin
+│   │   ├── pysourcetag.rs       # SourceTagPlugin
+│   │   ├── pyprojectinstr.rs    # ProjectInstructionPlugin
+│   │   ├── pyaudit.rs           # AuditPlugin
+│   │   ├── pynotify.rs          # NotifyPlugin
+│   │   ├── pytoolguard.rs       # ToolOutputGuardPlugin
+│   │   ├── pyeventstreams.rs    # WebhookStream
+│   │   └── pycompaction.rs      # context_aware_prompt_spec
+│   ├── knowledge/               # knowledge + memory + session-recall (阶段 3)
+│   │   ├── pylocalsource.rs     # LocalDocumentSource + KnowledgeSource wrapper
+│   │   ├── pyknowledge.rs       # KnowledgePlugin + registry builder
+│   │   ├── pymemory.rs          # InMemoryStore + SecureMemoryWritePolicy + MemoryPlugin
+│   │   └── pysessionrecall.rs   # SessionRecallIndex + HistoryRecallPlugin
+│   └── infra/                   # infra crate (阶段 4)
+│       ├── pyaudit.rs           # JsonlAuditSink
+│       ├── pytrace.rs           # InMemoryTraceExporter
+│       └── pysandbox.rs         # SeatbeltSandbox + BwrapSandbox
 ├── senza-pkg/
 │   ├── runtime.lock             # runtime crate 固定 SHA（唯一真实来源）
 │   └── senza/
-│       └── __init__.pyi         # 手写 .pyi type stubs（112 签名）
-├── tests/                       # 3 个 .rs 集成测试 + 19 个 .py 测试
+│       └── __init__.pyi         # 手写 .pyi type stubs（209 签名）
+├── tests/                       # Python 测试（342 passed, 31 skipped）
 ├── scripts/
 │   ├── build_wheel.sh           # 注入 SHA → maturin build → 恢复 Cargo.toml
 │   ├── dev_setup.sh             # 建 venv → 安装 maturin/pytest → 构建+安装 wheel
@@ -187,22 +227,11 @@ senza/                           # 本仓库 (github.com/oh-my-harness/Senza)
 │   ├── senza-workflow/
 │   └── senza-advanced/
 └── examples/
-    ├── agent/                   # agent 层示例（HarnessBuilder + AgentHarness）
-    │   ├── 01_basic_prompt.py
-    │   ├── 02_tool_calling.py
-    │   ├── 03_streaming.py
-    │   ├── 04_dynamic_config.py
-    │   └── 05_multi_provider.py
-    └── runtime/                 # runtime 层示例（WorkflowEngine）
-        ├── 01_linear_workflow.py
-        ├── 02_conditional_routing.py
-        ├── 03_executor_steps.py
-        ├── 04_crash_recovery.py
-        ├── 05_pause_cancel.py
-        ├── 06_human_in_the_loop.py
-        ├── 07_shell_executor.py
-        ├── 08_http_executor.py
-        └── 09_composite_judge.py
+    ├── agent/                   # agent 层示例（18 个）
+    ├── runtime/                 # runtime 层示例（11 个）
+    ├── strategy/                # 策略层示例（12 个）
+    ├── knowledge/               # 知识层示例（3 个）
+    └── infra/                   # 基础设施示例（3 个）
 ```
 
 ### 与旧 cffi 架构的区别
