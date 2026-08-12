@@ -154,3 +154,149 @@ async def stream_run(
         t.join(timeout=120)
         if errors:
             raise errors[0]
+
+
+# ── extract_text helper ──────────────────────────────────────────────
+
+
+def extract_text(events):
+    """Extract concatenated text from a list of agent events.
+
+    Filters for ``text_delta`` events and concatenates their ``text``
+    field. Non-text events are skipped. Missing ``text`` fields are
+    treated as empty strings.
+
+    Args:
+        events: List of event dicts (e.g. from ``harness.prompt_and_collect()``).
+
+    Returns:
+        Concatenated text string.
+    """
+    return "".join(
+        event.get("text", "")
+        for event in events
+        if event.get("type") == "text_delta"
+    )
+
+
+# ── @senza.tool decorator ────────────────────────────────────────────
+
+import inspect as _inspect
+import typing as _typing
+
+_PY_TO_JSON_SCHEMA = {
+    str: "string",
+    int: "integer",
+    float: "number",
+    bool: "boolean",
+    list: "array",
+    dict: "object",
+}
+
+
+def _build_schema_from_hints(func):
+    """Build a JSON Schema dict from function type hints."""
+    try:
+        hints = _typing.get_type_hints(func)
+    except Exception:
+        hints = {}
+
+    sig = _inspect.signature(func)
+    properties = {}
+    required = []
+
+    for pname, param in sig.parameters.items():
+        annotation = hints.get(pname, str)
+        json_type = _PY_TO_JSON_SCHEMA.get(annotation, "string")
+        prop = {"type": json_type}
+
+        if param.default is _inspect.Parameter.empty:
+            required.append(pname)
+        else:
+            prop["default"] = param.default
+
+        properties[pname] = prop
+
+    schema = {
+        "type": "object",
+        "properties": properties,
+    }
+    if required:
+        schema["required"] = required
+
+    return schema
+
+
+def _create_tool_from_function(func):
+    """Create a Tool from a function with type hints."""
+    name = func.__name__
+    description = (func.__doc__ or func.__name__).strip()
+    schema = _build_schema_from_hints(func)
+
+    is_async = _inspect.iscoroutinefunction(func)
+    sig = _inspect.signature(func)
+    param_names = list(sig.parameters.keys())
+
+    if is_async:
+        async def wrapper(args, ctx):
+            kwargs = {k: args.get(k) for k in param_names if k in args}
+            return await func(**kwargs)
+    else:
+        def wrapper(args, ctx):
+            kwargs = {k: args.get(k) for k in param_names if k in args}
+            return func(**kwargs)
+
+    return create_tool(name, description, schema, wrapper)
+
+
+def tool(*args, **kwargs):
+    """Create a Tool from a function or explicit parameters.
+
+    As a decorator (no parens)::
+
+        @senza.tool
+        def search(query: str, limit: int = 10) -> str:
+            \"\"\"Search the web.\"\"\"
+            return f"Results for {query}"
+
+    As a function call::
+
+        tool = senza.tool(
+            name="search",
+            description="Search the web",
+            parameters={"query": {"type": "string"}},
+            callback=lambda args: f"Results for {args['query']}",
+        )
+
+    Type hints are used to auto-generate the JSON Schema when used as a
+    decorator. The docstring becomes the tool description.
+    """
+    # Decorator form: @senza.tool (no parentheses)
+    if len(args) == 1 and callable(args[0]) and not kwargs:
+        return _create_tool_from_function(args[0])
+
+    # Function form: senza.tool(name=..., description=..., parameters=..., callback=...)
+    name = kwargs.get("name")
+    description = kwargs.get("description")
+    parameters = kwargs.get("parameters")
+    callback = kwargs.get("callback")
+
+    if name is None or description is None or parameters is None or callback is None:
+        raise TypeError(
+            "senza.tool() requires name, description, parameters, and callback"
+        )
+
+    # Wrap callback to handle both (args) and (args, ctx) signatures
+    cb_sig = _inspect.signature(callback)
+    cb_nparams = len(cb_sig.parameters)
+    if cb_nparams == 1:
+        _orig = callback
+        if _inspect.iscoroutinefunction(callback):
+            async def _wrapped(args, ctx):
+                return await _orig(args)
+        else:
+            def _wrapped(args, ctx):
+                return _orig(args)
+        callback = _wrapped
+
+    return create_tool(name, description, parameters, callback)
