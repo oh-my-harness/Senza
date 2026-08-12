@@ -181,6 +181,31 @@ def extract_text(events):
     )
 
 
+# ── Event type constants ─────────────────────────────────────────────
+
+
+class EventType:
+    """String constants for event types.
+
+    Use these instead of raw strings to avoid typos::
+
+        if event["type"] == senza.EventType.TEXT_DELTA:
+            text += event["text"]
+    """
+
+    TEXT_DELTA = "text_delta"
+    TOOL_CALL_START = "tool_call_start"
+    TOOL_CALL_END = "tool_call_end"
+    TOOL_RESULT = "tool_result"
+    MESSAGE_END = "message_end"
+    THINKING_DELTA = "thinking_delta"
+    ERROR = "error"
+    AGENT_END = "agent_end"
+    SETTLED = "settled"
+    ABORTED = "aborted"
+    WORKFLOW_DONE = "workflow_done"
+    WORKFLOW_FAILED = "workflow_failed"
+
 # ── @senza.tool decorator ────────────────────────────────────────────
 
 import inspect as _inspect
@@ -588,7 +613,7 @@ __all__ = [
     # Submodules
     "providers", "hooks", "strategy", "knowledge", "infra", "rules",
     # Decorators and helpers
-    "tool", "extract_text",
+    "tool", "extract_text", "EventType",
     "stream_events", "stream_prompt", "stream_run",
     # Debug / utilities
     "enable_debug", "disable_debug", "version", "set_event_loop",

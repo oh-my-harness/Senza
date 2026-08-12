@@ -123,6 +123,23 @@ def from_json(json_str: str) -> Any: ...
 def read_sessions(dir: str) -> dict: ...
 def viewer_html() -> str: ...
 def extract_text(events: list[dict]) -> str: ...
+
+
+class EventType:
+    """String constants for event types."""
+    TEXT_DELTA: str
+    TOOL_CALL_START: str
+    TOOL_CALL_END: str
+    TOOL_RESULT: str
+    MESSAGE_END: str
+    THINKING_DELTA: str
+    ERROR: str
+    AGENT_END: str
+    SETTLED: str
+    ABORTED: str
+    WORKFLOW_DONE: str
+    WORKFLOW_FAILED: str
+
 def tool(*args, **kwargs) -> Tool: ...
 
 # ── Provider ─────────────────────────────────────────────────────────────────
