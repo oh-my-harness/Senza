@@ -221,7 +221,7 @@ harness = (
 ```
 
 ## 示例
-见 [`examples/`](examples/) 目录（47 个示例，均可直接运行）：
+见 [`examples/`](examples/) 目录（32 个示例，均可直接运行）：
 
 ```bash
 export OPENAI_API_KEY=sk-...
@@ -229,11 +229,23 @@ python examples/agent/01_basic_prompt.py
 python examples/runtime/01_linear_workflow.py
 ```
 
-- `examples/agent/` — 15 个示例（基础对话、工具调用、流式输出、动态配置、多 provider、hooks、rules、skills、plugins、budget/pricing、steering、session 分支、Anthropic、代码审查模板、RAG 问答模板）
+- `examples/agent/` — 18 个示例（基础对话、工具调用、流式输出、动态配置、多 provider、hooks、rules、skills、plugins、budget/pricing、steering、session 分支、Anthropic、代码审查模板、RAG 问答模板、grep/glob、compaction prompt）
 - `examples/runtime/` — 11 个示例（线性工作流、条件路由、执行器、崩溃恢复、暂停/取消、人工介入、Shell、HTTP、CompositeJudge、hooks+重试、数据分析流水线模板）
-- `examples/strategy/` — 策略插件示例（安全防护、循环断路器、审计日志、注入过滤、内存防御等）
-- `examples/knowledge/` — 知识与记忆示例（本地知识源 RAG、长期记忆、会话历史召回）
 - `examples/infra/` — 基础设施示例（审计 sink、trace 导出、沙箱）
+
+> **strategy（安全防护/循环断路/审计/注入检测等）与 knowledge（RAG/记忆/会话召回）能力**
+> 现由 [`live-tests/`](live-tests/) 用真实 LLM 驱动，见下方「Live Tests」。
+
+## Live Tests（真实 LLM）
+
+[`live-tests/`](live-tests/) 是按架构层（agent / loop / tools / runtime / strategy）组织的
+真实 LLM 集成测试，镜像 runtime 仓库的 `llm-harness-live-tests` 惯例。默认打当前 OMP 的
+DeepSeek 端点（`http://api.hyper-op.com/v1` + `DeepSeek-V4-Flash`），无 API key 时自动 skip，
+每个层文件含一个不依赖 key 的离线构造冒烟。详见 [`live-tests/README.md`](live-tests/README.md)。
+
+```bash
+source ~/.omp_llm_env && python -m pytest live-tests/ -v   # 跑真实 DeepSeek
+```
 
 ---
 
