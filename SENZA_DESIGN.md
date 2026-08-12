@@ -57,8 +57,8 @@ PyO3 module 名：`senza`（已从 `llm_harness_py` 改名）。
 | `AgentHarness` | `AgentHarness` (`llm-harness-agent`) | 单轮 LLM prompt → streaming events；tool calling；abort |
 | `create_tool()` | `PyTool` → `Tool` trait | 从 Python callable 创建 Tool（支持 sync/async） |
 | `create_sync_tool()` | 同上（别名） | 显式同步 tool |
-| `create_openai_provider()` | `OpenAIProvider` | 创建 OpenAI 兼容 provider |
-| `create_anthropic_provider()` | `AnthropicProvider` | 创建 Anthropic provider |
+| `senza.providers.openai()` | `OpenAIProvider` | 创建 OpenAI 兼容 provider |
+| `senza.providers.anthropic()` | `AnthropicProvider` | 创建 Anthropic provider |
 | `create_plugin()` | `PyPlugin` → `Plugin` trait | 从 tools + hooks 组装 plugin |
 | `create_event_channel()` | `EventStream` + `WaitForExternalEventTool` | Human-in-the-loop 事件通道 |
 
@@ -75,17 +75,17 @@ PyO3 module 名：`senza`（已从 `llm_harness_py` 改名）。
 
 | 函数 | Hook 类型 | callback 签名 |
 |------|-----------|--------------|
-| `create_before_turn_hook()` | `BeforeTurnHook` | `callback(ctx: dict) -> None` |
-| `create_after_turn_hook()` | `AfterTurnHook` | `callback(ctx: dict) -> None` |
-| `create_before_run_hook()` | `BeforeRunHook` | `callback(ctx: dict) -> None` |
-| `create_after_provider_response_hook()` | `AfterProviderResponseHook` | `callback(ctx: dict) -> None` |
-| `create_before_provider_request_hook()` | `BeforeProviderRequestHook` | `callback(ctx: dict) -> None` |
-| `create_before_tool_call_hook()` | `BeforeToolCallHook` | `callback(ctx: dict) -> str \| None` |
-| `create_after_tool_call_hook()` | `AfterToolCallHook` | `callback(ctx: dict) -> str \| dict` |
-| `create_should_stop_hook()` | `ShouldStopHook` | `callback(ctx: dict) -> bool` |
-| `create_before_compact_hook()` | `BeforeCompactHook` | `callback(ctx: dict) -> str \| dict` |
-| `create_transform_context_hook()` | `TransformContextHook` | `callback(ctx: dict) -> dict` |
-| `create_prepare_next_turn_hook()` | `PrepareNextTurnHook` | `callback(ctx: dict) -> dict \| None` |
+| `senza.hooks.before_turn()` | `BeforeTurnHook` | `callback(ctx: dict) -> None` |
+| `senza.hooks.after_turn()` | `AfterTurnHook` | `callback(ctx: dict) -> None` |
+| `senza.hooks.before_run()` | `BeforeRunHook` | `callback(ctx: dict) -> None` |
+| `senza.hooks.after_provider_response()` | `AfterProviderResponseHook` | `callback(ctx: dict) -> None` |
+| `senza.hooks.before_provider_request()` | `BeforeProviderRequestHook` | `callback(ctx: dict) -> None` |
+| `senza.hooks.before_tool_call()` | `BeforeToolCallHook` | `callback(ctx: dict) -> str \| None` |
+| `senza.hooks.after_tool_call()` | `AfterToolCallHook` | `callback(ctx: dict) -> str \| dict` |
+| `senza.hooks.should_stop()` | `ShouldStopHook` | `callback(ctx: dict) -> bool` |
+| `senza.hooks.before_compact()` | `BeforeCompactHook` | `callback(ctx: dict) -> str \| dict` |
+| `senza.hooks.transform_context()` | `TransformContextHook` | `callback(ctx: dict) -> dict` |
+| `senza.hooks.prepare_next_turn()` | `PrepareNextTurnHook` | `callback(ctx: dict) -> dict \| None` |
 
 所有 hook 均支持 `async def` 回调。
 
@@ -101,7 +101,7 @@ PyO3 module 名：`senza`（已从 `llm_harness_py` 改名）。
   - `pyworkflow.rs` — `WorkflowEngine` Python 类 + judge/executor wrapper
   - `pybuilder.rs` — `HarnessBuilder` Python 类
   - `pytool.rs` — `create_tool()` / Tool trait 实现
-  - `pyprovider.rs` — `create_openai_provider()` / `create_anthropic_provider()`
+  - `pyprovider.rs` — `senza.providers.openai()` / `senza.providers.anthropic()`
   - `pyhooks.rs` — 11 种 hook 创建函数
   - `pyplugin.rs` — `create_plugin()`
   - `pyeventstream.rs` — `create_event_channel()` + human-in-the-loop
@@ -135,7 +135,7 @@ PyO3 module 名：`senza`（已从 `llm_harness_py` 改名）。
 | — | ~~HarnessBuilder 缺 budget/pricing/skills/compaction_model/should_stop_hook/hooks/retry/model_info/final_answer_mode/stream_options/queue_capacity/disable_skill_read_tool~~ | ~~P1~~ | ✅ 已暴露 |
 | — | ~~PricingProvider 未暴露~~ `create_pricing_provider(dict)` / `create_pricing_provider_callback(cb)` 已添加 | ~~P1~~ | ✅ 已实现 |
 | — | ~~BudgetExceededHook 未暴露~~ `create_budget_exceeded_hook(cb)` + `builder.budget()` 已添加 | ~~P1~~ | ✅ 已实现 |
-| — | ~~Rules 审批系统未暴露~~ `create_*_predicate` + `RuleChainBuilder` + `create_rule_approval_hook()` 已添加 | ~~P1~~ | ✅ 已实现 |
+| — | ~~Rules 审批系统未暴露~~ `senza.rules.*_predicate` + `RuleChainBuilder` + `senza.rules.approval_hook()` 已添加 | ~~P1~~ | ✅ 已实现 |
 | — | ~~Skills 加载未暴露~~ `load_skills(path)` + `builder.skill()/skills()` 已添加 | ~~P2~~ | ✅ 已实现 |
 | — | stub 数从 112 增至 138 | — | ✅ 已验证 |
 | — | grep/glob 工具未暴露 | P2 | ✅ runtime v0.5.0 FsToolsPlugin 自动注册 |
@@ -262,7 +262,7 @@ senza/                           # 本仓库 (github.com/oh-my-harness/Senza)
 import senza
 
 # OpenAI 兼容（含 DeepSeek、本地模型等）
-provider = senza.create_openai_provider(
+provider = senza.providers.openai(
     api_key="sk-...",
     base_url="https://api.openai.com",       # 可选，空则用默认
     parse_reasoning_content=True,              # 解析 DeepSeek reasoning_content
@@ -270,7 +270,7 @@ provider = senza.create_openai_provider(
 )
 
 # Anthropic
-provider = senza.create_anthropic_provider(
+provider = senza.providers.anthropic(
     api_key="sk-ant-...",
     base_url="https://api.anthropic.com",    # 可选
 )
@@ -700,7 +700,7 @@ eda-agent-py 已完成从 cffi `llm_harness_sdk` 到 PyO3 `llm_harness_py` 的�
 
 迁移内容：
 - `agent_call.py`：`Harness(**kwargs)` → `HarnessBuilder(model).provider(model, provider).max_tokens(n).system_prompt(sp).build()` + `collect_until_settled()`
-- `config.py`：新增 `create_py_provider()` → `create_openai_provider()` / `create_anthropic_provider()`
+- `config.py`：新增 `create_py_provider()` → `senza.providers.openai()` / `senza.providers.anthropic()`
 - `ffi_bridge.py`：重写为 PyO3 路径，新增 `run_workflow()` 入口，用 `WorkflowEngine(workflow, provider, model, judge).with_executor(name, executor)` + `set_context_variable()` + `run()`
 - `cli.py`：简化为 `run_workflow(pipeline, eda_config, llm_config, on_step=...)`
 - `test_ffi_gaps.py`：从 cffi gap 测试重写为 PyO3 能力测试（12 个测试）

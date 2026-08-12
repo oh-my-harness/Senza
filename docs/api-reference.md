@@ -3,8 +3,8 @@
 ## Provider
 
 ```python
-senza.create_openai_provider(api_key, base_url=None, chat_path=None, thinking_scheme=None, parse_reasoning_content=True, tolerant_keepalive=True)
-senza.create_anthropic_provider(api_key, base_url=None, messages_path=None)
+senza.providers.openai(api_key, base_url=None, chat_path=None, thinking_scheme=None, parse_reasoning_content=True, tolerant_keepalive=True)
+senza.providers.anthropic(api_key, base_url=None, messages_path=None)
 ```
 
 > 接入通义千问 / DeepSeek / Ollama 等 OpenAI 兼容模型？见 [Provider 配置指南](providers.md)。
@@ -94,7 +94,7 @@ tool = senza.create_tool(
 )
 ```
 
-- `parameters_schema`: JSON Schema 字符串（不是 dict，需 `json.dumps`）。
+- `parameters` / `parameters_schema`: JSON Schema，接受 dict 或 JSON 字符串。`parameters` 是推荐名称。
 - `callback`: `(args: dict, ctx: ToolContext) -> dict`。`ctx` 可选——函数接受 2 参时传 `ctx`，1 参时只传 `args`。
 - 返回 dict: `{"content": [ContentBlock...], "terminate": bool}`。`terminate=True` 停止 agent 循环。
 - **Async 工具**: 传 `async def` 回调，通过 `asyncio.run()` 在阻塞线程上运行。
@@ -258,17 +258,17 @@ def my_executor(ctx):
 ## Hooks（11 种）
 
 ```python
-senza.create_before_turn_hook(cb)         # cb(ctx: dict) -> None
-senza.create_after_turn_hook(cb)          # cb(ctx: dict) -> None
-senza.create_before_run_hook(cb)          # cb(ctx: dict) -> None
-senza.create_after_provider_response_hook(cb)  # cb(ctx: dict) -> None
-senza.create_before_provider_request_hook(cb)  # cb(ctx: dict) -> None
-senza.create_before_tool_call_hook(cb)    # cb(ctx: dict) -> str | None
-senza.create_after_tool_call_hook(cb)     # cb(ctx: dict) -> str | dict
-senza.create_should_stop_hook(cb)         # cb(ctx: dict) -> bool
-senza.create_before_compact_hook(cb)      # cb(ctx: dict) -> Any
-senza.create_transform_context_hook(cb)   # cb(ctx: dict) -> dict
-senza.create_prepare_next_turn_hook(cb)   # cb(ctx: dict) -> Optional[dict]
+senza.hooks.before_turn(cb)         # cb(ctx: dict) -> None
+senza.hooks.after_turn(cb)          # cb(ctx: dict) -> None
+senza.hooks.before_run(cb)          # cb(ctx: dict) -> None
+senza.hooks.after_provider_response(cb)  # cb(ctx: dict) -> None
+senza.hooks.before_provider_request(cb)  # cb(ctx: dict) -> None
+senza.hooks.before_tool_call(cb)    # cb(ctx: dict) -> str | None
+senza.hooks.after_tool_call(cb)     # cb(ctx: dict) -> str | dict
+senza.hooks.should_stop(cb)         # cb(ctx: dict) -> bool
+senza.hooks.before_compact(cb)      # cb(ctx: dict) -> Any
+senza.hooks.transform_context(cb)   # cb(ctx: dict) -> dict
+senza.hooks.prepare_next_turn(cb)   # cb(ctx: dict) -> Optional[dict]
 ```
 
 ## Pricing
@@ -287,13 +287,13 @@ senza.create_budget_exceeded_hook(cb)  # cb(cost: dict, limit: float) -> bool
 ## Rules 审批
 
 ```python
-senza.create_contains_predicate(allowed)              # tool_name ∈ allowed
-senza.create_regex_field_predicate(arg_path, pattern) # args[arg_path] 匹配正则
-senza.create_number_range_predicate(arg_path, min, max) # 数值区间
-senza.create_rate_limit_predicate(max, window_seconds)  # 限流
+senza.rules.contains(allowed)              # tool_name ∈ allowed
+senza.rules.regex_field(arg_path, pattern) # args[arg_path] 匹配正则
+senza.rules.number_range(arg_path, min, max) # 数值区间
+senza.rules.rate_limit(max, window_seconds)  # 限流
 
-chain = senza.create_rule_chain().rule("search", pred, "allow").fallback("deny").build()
-hook = senza.create_rule_approval_hook(chain)  # → BeforeToolCallHook
+chain = senza.rules.chain().rule("search", pred, "allow").fallback("deny").build()
+hook = senza.rules.approval_hook(chain)  # → BeforeToolCallHook
 ```
 
 ## Skills
@@ -314,10 +314,10 @@ handle.submit("approved", {"feedback": "Looks good!"})
 ## Strategy Plugins（12）
 
 ```python
-senza.create_safety_defaults_plugin() -> Plugin
-senza.create_loop_safety_plugin(config: Optional[dict] = None) -> Plugin
-senza.create_status_panel_plugin() -> Plugin
-senza.create_memory_defense_plugin() -> Plugin
+senza.strategy.safety_defaults() -> Plugin
+senza.strategy.loop_safety(config: Optional[dict] = None) -> Plugin
+senza.strategy.status_panel() -> Plugin
+senza.strategy.memory_defense() -> Plugin
 
 # MemoryDefense builder（自定义保护文件）:
 senza.MemoryDefensePluginBuilder()
@@ -325,45 +325,45 @@ senza.MemoryDefensePluginBuilder()
     .extra_files(names: list[str]) -> MemoryDefensePluginBuilder
     .build() -> Plugin
 
-senza.create_injection_filter_plugin(patterns: Optional[list[str]] = None) -> Plugin
-senza.create_source_tag_plugin(entries: list[dict]) -> Plugin
-senza.create_project_instruction_plugin(
+senza.strategy.injection_filter(patterns: Optional[list[str]] = None) -> Plugin
+senza.strategy.source_tag(entries: list[dict]) -> Plugin
+senza.strategy.project_instruction(
     env: ExecutionEnv, config: Optional[dict] = None,
 ) -> Plugin
-senza.create_audit_plugin(
+senza.strategy.audit(
     sink_path: str, trace_id: Optional[str] = None, task_id: Optional[str] = None,
 ) -> Plugin
-senza.create_notify_plugin() -> Plugin
-senza.create_tool_output_guard_plugin(
+senza.strategy.notify() -> Plugin
+senza.strategy.tool_output_guard(
     env: ExecutionEnv, config: Optional[dict] = None,
 ) -> Plugin
 
 # Webhook 事件流（外部触发）
-senza.create_webhook_stream(buffer: int) -> tuple[WebhookChannel, EventStream]
-senza.create_context_aware_compaction_prompt() -> tuple[str, str]
+senza.strategy.webhook_stream(buffer: int) -> tuple[WebhookChannel, EventStream]
+senza.strategy.context_aware_compaction_prompt() -> tuple[str, str]
 ```
 
 | 函数 | 说明 |
 |------|------|
-| `create_safety_defaults_plugin()` | Bash 黑名单 + 路径穿越防护 |
-| `create_loop_safety_plugin(config=None)` | 死循环/重复/连续失败断路器 |
-| `create_status_panel_plugin()` | 状态栏 + `todo_write` 工具 |
-| `create_memory_defense_plugin()` | 持久记忆注入防御（默认文件集） |
+| `senza.strategy.safety_defaults()` | Bash 黑名单 + 路径穿越防护 |
+| `senza.strategy.loop_safety(config=None)` | 死循环/重复/连续失败断路器 |
+| `senza.strategy.status_panel()` | 状态栏 + `todo_write` 工具 |
+| `senza.strategy.memory_defense()` | 持久记忆注入防御（默认文件集） |
 | `MemoryDefensePluginBuilder` | 自定义文件集的记忆防御构建器 |
-| `create_injection_filter_plugin(patterns=None)` | 提示注入检测 |
-| `create_source_tag_plugin(entries)` | 外部内容 `<source>` 标签包裹 |
-| `create_project_instruction_plugin(env, config=None)` | 自动注入 CLAUDE.md 等项目指令 |
-| `create_audit_plugin(sink_path, trace_id=None, task_id=None)` | 工具调用审计日志（JSONL） |
-| `create_notify_plugin()` | LLM 主动通知用户 |
-| `create_tool_output_guard_plugin(env, config=None)` | 工具输出截断安全网 |
-| `create_webhook_stream(buffer)` | 外部事件触发流 |
-| `create_context_aware_compaction_prompt()` | 上下文感知 compaction 提示对 |
+| `senza.strategy.injection_filter(patterns=None)` | 提示注入检测 |
+| `senza.strategy.source_tag(entries)` | 外部内容 `<source>` 标签包裹 |
+| `senza.strategy.project_instruction(env, config=None)` | 自动注入 CLAUDE.md 等项目指令 |
+| `senza.strategy.audit(sink_path, trace_id=None, task_id=None)` | 工具调用审计日志（JSONL） |
+| `senza.strategy.notify()` | LLM 主动通知用户 |
+| `senza.strategy.tool_output_guard(env, config=None)` | 工具输出截断安全网 |
+| `senza.strategy.webhook_stream(buffer)` | 外部事件触发流 |
+| `senza.strategy.context_aware_compaction_prompt()` | 上下文感知 compaction 提示对 |
 
 ## Knowledge & Memory
 
 ```python
 # 本地知识源（RAG）
-senza.create_local_knowledge_source(
+senza.knowledge.local_source(
     path: str,
     source_id: str,
     name: Optional[str] = None,
@@ -372,16 +372,16 @@ senza.create_local_knowledge_source(
     max_document_bytes: int = 1048576,
 ) -> KnowledgeSource
 
-senza.create_knowledge_plugin(
+senza.knowledge.plugin(
     sources: list[KnowledgeSource],
     config: Optional[dict] = None,
 ) -> Plugin  # 注册 knowledge_search + knowledge_read 工具
 
 # 长期记忆
-senza.create_in_memory_store(read_source_id: str) -> MemoryStore
-senza.create_secure_write_policy(config: Optional[dict] = None) -> MemoryWritePolicy
-senza.create_allow_all_gate() -> MemoryMutationGate
-senza.create_memory_plugin(
+senza.knowledge.memory_store(read_source_id: str) -> MemoryStore
+senza.knowledge.secure_write_policy(config: Optional[dict] = None) -> MemoryWritePolicy
+senza.knowledge.allow_all_gate() -> MemoryMutationGate
+senza.knowledge.memory_plugin(
     source: KnowledgeSource,
     store: MemoryStore,
     policy: MemoryWritePolicy,
@@ -389,33 +389,33 @@ senza.create_memory_plugin(
 ) -> Plugin  # 注册 memory_write + memory_forget 工具
 
 # 会话历史召回
-senza.create_in_memory_session_recall_index() -> SessionRecallIndex
-senza.create_sqlite_session_recall_index(path: str) -> SessionRecallIndex
-senza.create_in_memory_session_repo() -> SessionRepo
-senza.create_session_recall_knowledge_source(
+senza.knowledge.in_memory_session_recall_index() -> SessionRecallIndex
+senza.knowledge.sqlite_session_recall_index(path: str) -> SessionRecallIndex
+senza.knowledge.in_memory_session_repo() -> SessionRepo
+senza.knowledge.session_recall_knowledge_source(
     repo: SessionRepo, index: SessionRecallIndex,
 ) -> SessionRecallKnowledgeSource
-senza.create_history_recall_plugin(
+senza.knowledge.history_recall_plugin(
     source: SessionRecallKnowledgeSource,
     config: Optional[dict] = None,
 ) -> Plugin
 ```
 
-> **重要**：`create_local_knowledge_source` 的 `source_id` 必须与 `create_in_memory_store` 的 `read_source_id` 一致，否则写入的记忆无法被读回。
+> **重要**：`senza.knowledge.local_source` 的 `source_id` 必须与 `senza.knowledge.memory_store` 的 `read_source_id` 一致，否则写入的记忆无法被读回。
 
 | 函数 | 说明 |
 |------|------|
-| `create_local_knowledge_source(path, source_id, ...)` | 本地文档知识源 |
-| `create_knowledge_plugin(sources, config=None)` | `knowledge_search` + `knowledge_read` 工具 |
-| `create_in_memory_store(read_source_id)` | 可写内存存储 |
-| `create_secure_write_policy(config=None)` | 注入安全写策略 |
-| `create_allow_all_gate()` | 完全放行写门控 |
-| `create_memory_plugin(source, store, policy, gate=None)` | `memory_write` + `memory_forget` 工具 |
-| `create_in_memory_session_recall_index()` | 内存会话索引 |
-| `create_sqlite_session_recall_index(path)` | SQLite 持久化会话索引 |
-| `create_in_memory_session_repo()` | 内存会话仓库 |
-| `create_session_recall_knowledge_source(repo, index)` | 会话召回知识源 |
-| `create_history_recall_plugin(source, config=None)` | 自动注入历史会话上下文 |
+| `senza.knowledge.local_source(path, source_id, ...)` | 本地文档知识源 |
+| `senza.knowledge.plugin(sources, config=None)` | `knowledge_search` + `knowledge_read` 工具 |
+| `senza.knowledge.memory_store(read_source_id)` | 可写内存存储 |
+| `senza.knowledge.secure_write_policy(config=None)` | 注入安全写策略 |
+| `senza.knowledge.allow_all_gate()` | 完全放行写门控 |
+| `senza.knowledge.memory_plugin(source, store, policy, gate=None)` | `memory_write` + `memory_forget` 工具 |
+| `senza.knowledge.in_memory_session_recall_index()` | 内存会话索引 |
+| `senza.knowledge.sqlite_session_recall_index(path)` | SQLite 持久化会话索引 |
+| `senza.knowledge.in_memory_session_repo()` | 内存会话仓库 |
+| `senza.knowledge.session_recall_knowledge_source(repo, index)` | 会话召回知识源 |
+| `senza.knowledge.history_recall_plugin(source, config=None)` | 自动注入历史会话上下文 |
 
 ## Infra（审计 / Trace / 沙箱）
 
@@ -427,16 +427,16 @@ senza.JsonlAuditSink  # 类: append(record), validate(path) -> int
 senza.InMemoryTraceExporter  # 类: exported_span_count() -> int
 
 # 沙箱
-senza.create_seatbelt_sandbox(config: Optional[dict] = None) -> Sandbox  # macOS
-senza.create_bwrap_sandbox(config: Optional[dict] = None) -> Sandbox     # Linux
+senza.infra.seatbelt_sandbox(config: Optional[dict] = None) -> Sandbox  # macOS
+senza.infra.bwrap_sandbox(config: Optional[dict] = None) -> Sandbox     # Linux
 ```
 
 | 类/函数 | 说明 |
 |----------|------|
 | `JsonlAuditSink` | JSONL 文件审计 sink，SHA-256 哈希链完整性 |
 | `InMemoryTraceExporter` | 内存 trace 导出器，测试用 |
-| `create_seatbelt_sandbox(config=None)` | macOS Seatbelt 沙箱 |
-| `create_bwrap_sandbox(config=None)` | Linux Bubblewrap 沙箱 |
+| `senza.infra.seatbelt_sandbox(config=None)` | macOS Seatbelt 沙箱 |
+| `senza.infra.bwrap_sandbox(config=None)` | Linux Bubblewrap 沙箱 |
 
 ## Session Viewer
 
