@@ -19,6 +19,40 @@ class RateLimitError(ProviderError):
 class ProviderTimeoutError(ProviderError):
     """Provider request timed out."""
 
+class InvalidRequestError(ProviderError):
+    """Invalid request sent to the provider."""
+
+class UnauthorizedError(ProviderError):
+    """Provider rejected the request due to missing/invalid credentials."""
+
+class ForbiddenError(ProviderError):
+    """Provider rejected the request due to insufficient permissions."""
+
+class OverloadedError(ProviderError):
+    """Provider overloaded. Carries retry_after."""
+    retry_after: Optional[float]
+
+class ServerError(ProviderError):
+    """Provider returned a server error."""
+
+class StreamError(ProviderError):
+    """Streaming error from the provider."""
+
+class StreamIncompleteError(ProviderError):
+    """Stream ended before completion. Carries received_chunks and finish_reason."""
+    received_chunks: int
+    finish_reason: Optional[str]
+
+class NetworkError(ProviderError):
+    """Network error talking to the provider."""
+
+class DecodeError(ProviderError):
+    """Failed to decode the provider response."""
+
+class ProviderCodeError(ProviderError):
+    """Provider-returned error code. Carries code."""
+    code: str
+
 class ToolError(SenzaError):
     """Tool execution error."""
 

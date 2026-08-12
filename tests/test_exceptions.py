@@ -10,6 +10,22 @@ def test_exception_hierarchy():
     assert issubclass(senza.ProviderError, senza.SenzaError)
     assert issubclass(senza.RateLimitError, senza.ProviderError)
     assert issubclass(senza.ProviderTimeoutError, senza.ProviderError)
+    # ProviderErrorKind → 1:1 typed exceptions (runtime typed provider errors)
+    for name in [
+        "InvalidRequestError",
+        "UnauthorizedError",
+        "ForbiddenError",
+        "OverloadedError",
+        "ServerError",
+        "StreamError",
+        "StreamIncompleteError",
+        "NetworkError",
+        "DecodeError",
+        "ProviderCodeError",
+    ]:
+        cls = getattr(senza, name)
+        assert issubclass(cls, senza.ProviderError), f"{name} should subclass ProviderError"
+        assert issubclass(cls, senza.SenzaError), f"{name} should subclass SenzaError"
     assert issubclass(senza.ToolError, senza.SenzaError)
     assert issubclass(senza.ToolArgumentError, senza.ToolError)
     assert issubclass(senza.ToolAbortedError, senza.ToolError)
@@ -60,3 +76,38 @@ def test_workflow_validation_error_is_value_error():
     with pytest.raises(ValueError):
         engine = senza.WorkflowEngine(bad_workflow, provider, "gpt-4o", senza.create_judge(judge))
         engine.run()
+
+
+def test_provider_subclass_attributes():
+    """Typed provider exceptions carry structured fields as attributes."""
+    e = senza.OverloadedError("overloaded")
+    e.retry_after = 12.5
+    assert e.retry_after == 12.5
+
+    s = senza.StreamIncompleteError("cut")
+    s.received_chunks = 3
+    s.finish_reason = "length"
+    assert s.received_chunks == 3
+    assert s.finish_reason == "length"
+
+    c = senza.ProviderCodeError("x")
+    c.code = "E429"
+    assert c.code == "E429"
+
+
+def test_provider_subclass_catch_order():
+    """Specific provider subclass is caught before ProviderError base."""
+    try:
+        raise senza.RateLimitError("rate limited")
+    except senza.RateLimitError:
+        pass
+    except senza.ProviderError:
+        pytest.fail("Should have caught as RateLimitError, not ProviderError")
+
+    # base still catches subclasses
+    try:
+        raise senza.NetworkError("net down")
+    except senza.ProviderError:
+        pass
+    else:
+        pytest.fail("ProviderError should catch NetworkError")

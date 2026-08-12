@@ -243,7 +243,7 @@ pub fn agent_event_to_dict(py: Python<'_>, event: &AgentEvent) -> PyResult<Py<Py
             dict.set_item(
                 "error_type",
                 match err {
-                    AgentError::Provider(_) | AgentError::ProviderTyped { .. } => "provider",
+                    AgentError::ProviderTyped { .. } => "provider",
                     AgentError::Tool { .. } => "tool",
                     AgentError::Aborted => "aborted",
                     AgentError::NotIdle => "not_idle",

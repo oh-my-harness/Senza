@@ -21,6 +21,18 @@ pyo3::create_exception!(senza, SenzaError, PyRuntimeError);
 pyo3::create_exception!(senza, ProviderError, SenzaError);
 pyo3::create_exception!(senza, RateLimitError, ProviderError);
 pyo3::create_exception!(senza, ProviderTimeoutError, ProviderError);
+// ProviderErrorKind → 1:1 typed exceptions (runtime typed provider errors).
+// Timeout 复用既有的 ProviderTimeoutError（历史命名，保留兼容）。
+pyo3::create_exception!(senza, InvalidRequestError, ProviderError);
+pyo3::create_exception!(senza, UnauthorizedError, ProviderError);
+pyo3::create_exception!(senza, ForbiddenError, ProviderError);
+pyo3::create_exception!(senza, OverloadedError, ProviderError);
+pyo3::create_exception!(senza, ServerError, ProviderError);
+pyo3::create_exception!(senza, StreamError, ProviderError);
+pyo3::create_exception!(senza, StreamIncompleteError, ProviderError);
+pyo3::create_exception!(senza, NetworkError, ProviderError);
+pyo3::create_exception!(senza, DecodeError, ProviderError);
+pyo3::create_exception!(senza, ProviderCodeError, ProviderError);
 pyo3::create_exception!(senza, ToolError, SenzaError);
 pyo3::create_exception!(senza, ToolArgumentError, ToolError);
 pyo3::create_exception!(senza, ToolAbortedError, ToolError);
@@ -165,6 +177,9 @@ fn set_attr_f64_val(py: Python<'_>, exc: &PyErr, name: &str, value: f64) {
 pub fn agent_error_to_pyerr(e: AgentError) -> PyErr {
     match e {
         AgentError::ProviderTyped { message, kind } => match kind {
+            ProviderErrorKind::InvalidRequest(_) => InvalidRequestError::new_err(message),
+            ProviderErrorKind::Unauthorized => UnauthorizedError::new_err(message),
+            ProviderErrorKind::Forbidden => ForbiddenError::new_err(message),
             ProviderErrorKind::RateLimit { retry_after } => {
                 let exc = RateLimitError::new_err(message);
                 Python::attach(|py| {
@@ -178,7 +193,7 @@ pub fn agent_error_to_pyerr(e: AgentError) -> PyErr {
                 exc
             }
             ProviderErrorKind::Overloaded { retry_after } => {
-                let exc = ProviderError::new_err(message);
+                let exc = OverloadedError::new_err(message);
                 Python::attach(|py| {
                     set_attr_f64(
                         py,
@@ -189,10 +204,34 @@ pub fn agent_error_to_pyerr(e: AgentError) -> PyErr {
                 });
                 exc
             }
+            ProviderErrorKind::ServerError(_) => ServerError::new_err(message),
             ProviderErrorKind::Timeout => ProviderTimeoutError::new_err(message),
+            ProviderErrorKind::Stream(_) => StreamError::new_err(message),
+            ProviderErrorKind::StreamIncomplete {
+                received_chunks,
+                finish_reason,
+            } => {
+                let exc = StreamIncompleteError::new_err(message);
+                Python::attach(|py| {
+                    set_attr_u64(py, &exc, "received_chunks", received_chunks as u64);
+                    if let Ok(instance) = exc.value(py).extract::<Py<PyAny>>() {
+                        let _ = instance.bind(py).setattr("finish_reason", finish_reason);
+                    }
+                });
+                exc
+            }
+            ProviderErrorKind::Network => NetworkError::new_err(message),
+            ProviderErrorKind::Decode(_) => DecodeError::new_err(message),
+            ProviderErrorKind::Other { code } => {
+                let exc = ProviderCodeError::new_err(message);
+                Python::attach(|py| {
+                    set_attr_str(py, &exc, "code", code);
+                });
+                exc
+            }
+            // #[non_exhaustive] 兜底——runtime 未来新增 kind 不会破坏编译。
             _ => ProviderError::new_err(message),
         },
-        AgentError::Provider(msg) => ProviderError::new_err(msg),
         AgentError::Tool { tool_name, message } => {
             let exc = ToolExecutionError::new_err(format!("{tool_name}: {message}"));
             Python::attach(|py| {
@@ -305,5 +344,160 @@ pub fn tool_error_to_pyerr(e: RustToolError) -> PyErr {
         RustToolError::Aborted => ToolAbortedError::new_err("tool aborted"),
         RustToolError::Execution(msg) => ToolExecutionError::new_err(msg),
         RustToolError::Other(e) => ToolExecutionError::new_err(e.to_string()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pyo3::Python;
+    use std::time::Duration;
+
+    fn provider_typed(message: &str, kind: ProviderErrorKind) -> AgentError {
+        AgentError::ProviderTyped {
+            message: message.to_string(),
+            kind,
+        }
+    }
+
+    /// 断言 `agent_error_to_pyerr` 把 ProviderTyped 的 kind 映射为对应的 Python 异常类。
+    #[test]
+    fn maps_provider_typed_to_typed_python_exceptions() {
+        Python::attach(|py| {
+            let cases: Vec<(AgentError, &str)> = vec![
+                (
+                    provider_typed("bad", ProviderErrorKind::InvalidRequest("x".into())),
+                    "InvalidRequestError",
+                ),
+                (
+                    provider_typed("no auth", ProviderErrorKind::Unauthorized),
+                    "UnauthorizedError",
+                ),
+                (
+                    provider_typed("denied", ProviderErrorKind::Forbidden),
+                    "ForbiddenError",
+                ),
+                (
+                    provider_typed(
+                        "limited",
+                        ProviderErrorKind::RateLimit {
+                            retry_after: Some(Duration::from_secs(30)),
+                        },
+                    ),
+                    "RateLimitError",
+                ),
+                (
+                    provider_typed("busy", ProviderErrorKind::Overloaded { retry_after: None }),
+                    "OverloadedError",
+                ),
+                (
+                    provider_typed("500", ProviderErrorKind::ServerError("boom".into())),
+                    "ServerError",
+                ),
+                (
+                    provider_typed("timeout", ProviderErrorKind::Timeout),
+                    "ProviderTimeoutError",
+                ),
+                (
+                    provider_typed("stream", ProviderErrorKind::Stream("reset".into())),
+                    "StreamError",
+                ),
+                (
+                    provider_typed(
+                        "cut",
+                        ProviderErrorKind::StreamIncomplete {
+                            received_chunks: 3,
+                            finish_reason: Some("length".into()),
+                        },
+                    ),
+                    "StreamIncompleteError",
+                ),
+                (
+                    provider_typed("net", ProviderErrorKind::Network),
+                    "NetworkError",
+                ),
+                (
+                    provider_typed("decode", ProviderErrorKind::Decode("json".into())),
+                    "DecodeError",
+                ),
+                (
+                    provider_typed(
+                        "E429",
+                        ProviderErrorKind::Other {
+                            code: "E429".into(),
+                        },
+                    ),
+                    "ProviderCodeError",
+                ),
+            ];
+
+            for (e, expected) in cases {
+                let err = agent_error_to_pyerr(e);
+                let value = err.value(py);
+                let actual = value
+                    .getattr("__class__")
+                    .unwrap()
+                    .getattr("__name__")
+                    .unwrap()
+                    .extract::<String>()
+                    .unwrap();
+                assert_eq!(actual, expected, "kind 应映射为 {expected}");
+                assert!(
+                    value.is_instance_of::<ProviderError>(),
+                    "{expected} 应为 ProviderError 子类"
+                );
+            }
+        });
+    }
+
+    /// 结构化字段透传：retry_after / received_chunks / finish_reason / code。
+    #[test]
+    fn provider_typed_carries_structured_fields() {
+        Python::attach(|py| {
+            // RateLimit -> retry_after (秒, float)
+            let rate = agent_error_to_pyerr(provider_typed(
+                "limited",
+                ProviderErrorKind::RateLimit {
+                    retry_after: Some(Duration::from_secs(45)),
+                },
+            ));
+            let v = rate.value(py);
+            let ra: Option<f64> = v.getattr("retry_after").unwrap().extract().unwrap();
+            assert_eq!(ra, Some(45.0));
+
+            // Overloaded -> retry_after 可为 None
+            let ov_err = agent_error_to_pyerr(provider_typed(
+                "busy",
+                ProviderErrorKind::Overloaded { retry_after: None },
+            ));
+            let ov = ov_err.value(py);
+            let ov_ra: Option<f64> = ov.getattr("retry_after").unwrap().extract().unwrap();
+            assert!(ov_ra.is_none());
+
+            // StreamIncomplete -> received_chunks + finish_reason
+            let si_err = agent_error_to_pyerr(provider_typed(
+                "cut",
+                ProviderErrorKind::StreamIncomplete {
+                    received_chunks: 7,
+                    finish_reason: None,
+                },
+            ));
+            let si = si_err.value(py);
+            let chunks: u64 = si.getattr("received_chunks").unwrap().extract().unwrap();
+            assert_eq!(chunks, 7);
+            let fr: Option<String> = si.getattr("finish_reason").unwrap().extract().unwrap();
+            assert!(fr.is_none());
+
+            // Other { code } -> code
+            let pc_err = agent_error_to_pyerr(provider_typed(
+                "E429",
+                ProviderErrorKind::Other {
+                    code: "E429".into(),
+                },
+            ));
+            let pc = pc_err.value(py);
+            let code: String = pc.getattr("code").unwrap().extract().unwrap();
+            assert_eq!(code, "E429");
+        });
     }
 }

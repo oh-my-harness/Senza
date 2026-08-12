@@ -40,6 +40,46 @@ fn senza(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
         py.get_type::<crate::shared::pyerror::ProviderTimeoutError>(),
     )?;
     m.add(
+        "InvalidRequestError",
+        py.get_type::<crate::shared::pyerror::InvalidRequestError>(),
+    )?;
+    m.add(
+        "UnauthorizedError",
+        py.get_type::<crate::shared::pyerror::UnauthorizedError>(),
+    )?;
+    m.add(
+        "ForbiddenError",
+        py.get_type::<crate::shared::pyerror::ForbiddenError>(),
+    )?;
+    m.add(
+        "OverloadedError",
+        py.get_type::<crate::shared::pyerror::OverloadedError>(),
+    )?;
+    m.add(
+        "ServerError",
+        py.get_type::<crate::shared::pyerror::ServerError>(),
+    )?;
+    m.add(
+        "StreamError",
+        py.get_type::<crate::shared::pyerror::StreamError>(),
+    )?;
+    m.add(
+        "StreamIncompleteError",
+        py.get_type::<crate::shared::pyerror::StreamIncompleteError>(),
+    )?;
+    m.add(
+        "NetworkError",
+        py.get_type::<crate::shared::pyerror::NetworkError>(),
+    )?;
+    m.add(
+        "DecodeError",
+        py.get_type::<crate::shared::pyerror::DecodeError>(),
+    )?;
+    m.add(
+        "ProviderCodeError",
+        py.get_type::<crate::shared::pyerror::ProviderCodeError>(),
+    )?;
+    m.add(
         "ToolError",
         py.get_type::<crate::shared::pyerror::ToolError>(),
     )?;
@@ -396,8 +436,8 @@ fn create_tool<'py>(
     let schema: serde_json::Value = if parameters_schema.is_instance_of::<PyDict>() {
         crate::shared::value_conv::pyobject_to_value(parameters_schema)?
     } else {
-        let s: &str = parameters_schema.extract()?;
-        serde_json::from_str(s)
+        let s: String = parameters_schema.extract()?;
+        serde_json::from_str(&s)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?
     };
     let tool = crate::core::pytool::PyTool::new(
