@@ -329,6 +329,26 @@ async def _harness_prompt_async(self, text: str, timeout_ms: int = 30000):
 WorkflowEngine.run_async = _workflow_run_async
 AgentHarness.prompt_async = _harness_prompt_async
 
+def _harness_chat(self, text: str, timeout_ms: int = 30000) -> str:
+    """Send a prompt and return the concatenated text response.
+
+    Convenience wrapper around ``extract_text(prompt_and_collect(text))``.
+    For streaming or event-level access, use ``prompt_and_collect()`` or
+    ``stream_prompt()`` instead.
+    """
+    events = self.prompt_and_collect(text, timeout_ms)
+    return extract_text(events)
+
+
+async def _harness_chat_async(self, text: str, timeout_ms: int = 30000) -> str:
+    """Async version of chat(). Does not block the event loop."""
+    events = await _asyncio.to_thread(self.prompt_and_collect, text, timeout_ms)
+    return extract_text(events)
+
+
+AgentHarness.chat = _harness_chat
+AgentHarness.chat_async = _harness_chat_async
+
 
 # ── Debug helpers ────────────────────────────────────────────────────
 
