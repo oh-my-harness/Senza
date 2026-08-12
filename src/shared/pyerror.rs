@@ -133,11 +133,9 @@ pub fn detach_catch_panic_pyresult<R: Ungil + Send>(
 
 // ── 错误映射函数 ─────────────────────────────────────────────────────────────
 
-use llm_harness_types::{
-    AgentError, HarnessError, ProviderErrorKind, ToolError as RustToolError,
-};
 use llm_harness_runtime::lifecycle::task::TaskError;
 use llm_harness_runtime::workflow::error::WorkflowError as RustWorkflowError;
+use llm_harness_types::{AgentError, HarnessError, ProviderErrorKind, ToolError as RustToolError};
 
 /// 在 PyErr 异常实例上设置属性。
 fn set_attr_str(py: Python<'_>, exc: &PyErr, name: &str, value: String) {
@@ -170,14 +168,24 @@ pub fn agent_error_to_pyerr(e: AgentError) -> PyErr {
             ProviderErrorKind::RateLimit { retry_after } => {
                 let exc = RateLimitError::new_err(message);
                 Python::attach(|py| {
-                    set_attr_f64(py, &exc, "retry_after", retry_after.map(|d| d.as_secs_f64()));
+                    set_attr_f64(
+                        py,
+                        &exc,
+                        "retry_after",
+                        retry_after.map(|d| d.as_secs_f64()),
+                    );
                 });
                 exc
             }
             ProviderErrorKind::Overloaded { retry_after } => {
                 let exc = ProviderError::new_err(message);
                 Python::attach(|py| {
-                    set_attr_f64(py, &exc, "retry_after", retry_after.map(|d| d.as_secs_f64()));
+                    set_attr_f64(
+                        py,
+                        &exc,
+                        "retry_after",
+                        retry_after.map(|d| d.as_secs_f64()),
+                    );
                 });
                 exc
             }
@@ -230,23 +238,21 @@ pub fn workflow_error_to_pyerr(e: RustWorkflowError) -> PyErr {
         RustWorkflowError::WorkflowNotFound { task_id } => {
             pyo3::exceptions::PyKeyError::new_err(task_id)
         }
-        RustWorkflowError::ExecutorNotFound { name } => {
-            pyo3::exceptions::PyKeyError::new_err(name)
-        }
+        RustWorkflowError::ExecutorNotFound { name } => pyo3::exceptions::PyKeyError::new_err(name),
         RustWorkflowError::StepTimeout { id, timeout_ms } => {
-            let exc = StepTimeoutError::new_err(format!(
-                "step '{id}' timed out after {timeout_ms} ms"
-            ));
+            let exc =
+                StepTimeoutError::new_err(format!("step '{id}' timed out after {timeout_ms} ms"));
             Python::attach(|py| {
                 set_attr_str(py, &exc, "step_id", id);
                 set_attr_u64(py, &exc, "timeout_ms", timeout_ms);
             });
             exc
         }
-        RustWorkflowError::StepExhausted { id, max_attempts, .. } => {
-            let exc = StepFailedError::new_err(format!(
-                "step '{id}' exhausted {max_attempts} attempts"
-            ));
+        RustWorkflowError::StepExhausted {
+            id, max_attempts, ..
+        } => {
+            let exc =
+                StepFailedError::new_err(format!("step '{id}' exhausted {max_attempts} attempts"));
             Python::attach(|py| {
                 set_attr_str(py, &exc, "step_id", id);
             });

@@ -399,3 +399,137 @@ def _workflow_inspect(self):
 
 AgentHarness.inspect = _harness_inspect
 WorkflowEngine.inspect = _workflow_inspect
+from types import SimpleNamespace as _SimpleNamespace
+
+# ── Grouped submodules ───────────────────────────────────────────────
+# Low-frequency create_* factories are grouped into SimpleNamespace
+# objects with simplified names (drop create_ prefix, drop _plugin /
+# _hook / _provider / _predicate suffixes where the group name already
+# conveys the meaning).
+
+_providers = _SimpleNamespace(
+    openai=create_openai_provider,
+    anthropic=create_anthropic_provider,
+)
+
+_hooks = _SimpleNamespace(
+    before_turn=create_before_turn_hook,
+    after_turn=create_after_turn_hook,
+    before_run=create_before_run_hook,
+    after_provider_response=create_after_provider_response_hook,
+    before_provider_request=create_before_provider_request_hook,
+    before_tool_call=create_before_tool_call_hook,
+    after_tool_call=create_after_tool_call_hook,
+    should_stop=create_should_stop_hook,
+    before_compact=create_before_compact_hook,
+    transform_context=create_transform_context_hook,
+    prepare_next_turn=create_prepare_next_turn_hook,
+)
+
+_strategy = _SimpleNamespace(
+    safety_defaults=create_safety_defaults_plugin,
+    loop_safety=create_loop_safety_plugin,
+    status_panel=create_status_panel_plugin,
+    memory_defense=create_memory_defense_plugin,
+    injection_filter=create_injection_filter_plugin,
+    source_tag=create_source_tag_plugin,
+    project_instruction=create_project_instruction_plugin,
+    audit=create_audit_plugin,
+    notify=create_notify_plugin,
+    tool_output_guard=create_tool_output_guard_plugin,
+    webhook_stream=create_webhook_stream,
+    context_aware_compaction_prompt=create_context_aware_compaction_prompt,
+)
+
+_knowledge = _SimpleNamespace(
+    local_source=create_local_knowledge_source,
+    plugin=create_knowledge_plugin,
+    memory_store=create_in_memory_store,
+    memory_plugin=create_memory_plugin,
+    secure_write_policy=create_secure_write_policy,
+    allow_all_gate=create_allow_all_gate,
+    in_memory_session_recall_index=create_in_memory_session_recall_index,
+    sqlite_session_recall_index=create_sqlite_session_recall_index,
+    in_memory_session_repo=create_in_memory_session_repo,
+    session_recall_knowledge_source=create_session_recall_knowledge_source,
+    history_recall_plugin=create_history_recall_plugin,
+)
+
+_infra = _SimpleNamespace(
+    jsonl_audit_sink=JsonlAuditSink,
+    in_memory_trace_exporter=InMemoryTraceExporter,
+)
+
+# Platform-specific sandbox factories — only one exists at runtime.
+if "create_seatbelt_sandbox" in dir():
+    _infra.seatbelt_sandbox = create_seatbelt_sandbox
+if "create_bwrap_sandbox" in dir():
+    _infra.bwrap_sandbox = create_bwrap_sandbox
+
+_rules = _SimpleNamespace(
+    chain=create_rule_chain,
+    contains=create_contains_predicate,
+    regex_field=create_regex_field_predicate,
+    number_range=create_number_range_predicate,
+    rate_limit=create_rate_limit_predicate,
+    approval_hook=create_rule_approval_hook,
+)
+
+# ── Remove low-frequency create_* from top-level namespace ──────────
+# These are now only accessible via the submodule groups above.
+del create_openai_provider
+del create_anthropic_provider
+del create_before_turn_hook
+del create_after_turn_hook
+del create_before_run_hook
+del create_after_provider_response_hook
+del create_before_provider_request_hook
+del create_before_tool_call_hook
+del create_after_tool_call_hook
+del create_should_stop_hook
+del create_before_compact_hook
+del create_transform_context_hook
+del create_prepare_next_turn_hook
+del create_safety_defaults_plugin
+del create_loop_safety_plugin
+del create_status_panel_plugin
+del create_memory_defense_plugin
+del create_injection_filter_plugin
+del create_source_tag_plugin
+del create_project_instruction_plugin
+del create_audit_plugin
+del create_notify_plugin
+del create_tool_output_guard_plugin
+del create_webhook_stream
+del create_context_aware_compaction_prompt
+del create_local_knowledge_source
+del create_knowledge_plugin
+del create_in_memory_store
+del create_memory_plugin
+del create_secure_write_policy
+del create_allow_all_gate
+del create_in_memory_session_recall_index
+del create_sqlite_session_recall_index
+del create_in_memory_session_repo
+del create_session_recall_knowledge_source
+del create_history_recall_plugin
+del create_rule_chain
+del create_contains_predicate
+del create_regex_field_predicate
+del create_number_range_predicate
+del create_rate_limit_predicate
+del create_rule_approval_hook
+if "create_seatbelt_sandbox" in dir():
+    del create_seatbelt_sandbox
+if "create_bwrap_sandbox" in dir():
+    del create_bwrap_sandbox
+
+# ── Public submodule aliases ────────────────────────────────────────
+# Expose the grouped namespaces without the leading underscore so
+# users can call senza.providers.openai(...), senza.hooks.before_turn(...), etc.
+providers = _providers
+hooks = _hooks
+strategy = _strategy
+knowledge = _knowledge
+infra = _infra
+rules = _rules

@@ -55,7 +55,10 @@ impl MemoryStore for InMemoryStore {
             };
             let mut entries = self.entries.lock().unwrap();
             // Upsert: replace existing entry with same item_id, or append
-            if let Some(pos) = entries.iter().position(|(r, _)| r.item_id == reference.item_id) {
+            if let Some(pos) = entries
+                .iter()
+                .position(|(r, _)| r.item_id == reference.item_id)
+            {
                 entries[pos] = (reference.clone(), write.content.into_bytes());
             } else {
                 entries.push((reference.clone(), write.content.into_bytes()));

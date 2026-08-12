@@ -60,9 +60,24 @@ SKIP_RUNTIME_ONLY = {
     # Platform-specific sandbox factories: only one of seatbelt/bwrap is
     # registered at runtime (seatbelt on macOS, bwrap on Linux), but both
     # are listed in .pyi for type-checker completeness.
-    "create_bwrap_sandbox",
-    "create_seatbelt_sandbox",
+    "infra.seatbelt_sandbox",
+    "infra.bwrap_sandbox",
 }
+
+# Submodule groups (SimpleNamespace instances) exposed as public names.
+# The .pyi declares them as classes with @staticmethod members for
+# type-checker consumption, but at runtime they are SimpleNamespace
+# instances — not types — so check_stubs skips their methods entirely.
+# We list the class names here so the parser skips them before the
+# "in .pyi but not in runtime" check fires.
+SUBMODULE_GROUPS = frozenset({
+    "providers",
+    "hooks",
+    "strategy",
+    "knowledge",
+    "infra",
+    "rules",
+})
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PYI_PATH = REPO_ROOT / "senza-pkg" / "senza" / "__init__.pyi"
@@ -84,7 +99,7 @@ def _parse_pyi_from_string(pyi_source: str) -> dict[str, FuncSig]:
         if isinstance(node, ast.FunctionDef):
             if not _is_property(node):
                 sigs[node.name] = _ast_func_to_sig(node)
-        elif isinstance(node, ast.ClassDef):
+        elif isinstance(node, ast.ClassDef) and node.name not in SUBMODULE_GROUPS:
             for item in node.body:
                 if isinstance(item, ast.FunctionDef) and not _is_property(item):
                     key = f"{node.name}.{item.name}"
