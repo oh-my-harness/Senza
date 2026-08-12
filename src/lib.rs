@@ -23,6 +23,23 @@ fn senza(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
         "RustPanicError",
         py.get_type::<crate::shared::pyerror::RustPanicError>(),
     )?;
+    m.add("SenzaError", py.get_type::<crate::shared::pyerror::SenzaError>())?;
+    m.add("ProviderError", py.get_type::<crate::shared::pyerror::ProviderError>())?;
+    m.add("RateLimitError", py.get_type::<crate::shared::pyerror::RateLimitError>())?;
+    m.add("ProviderTimeoutError", py.get_type::<crate::shared::pyerror::ProviderTimeoutError>())?;
+    m.add("ToolError", py.get_type::<crate::shared::pyerror::ToolError>())?;
+    m.add("ToolArgumentError", py.get_type::<crate::shared::pyerror::ToolArgumentError>())?;
+    m.add("ToolAbortedError", py.get_type::<crate::shared::pyerror::ToolAbortedError>())?;
+    m.add("ToolExecutionError", py.get_type::<crate::shared::pyerror::ToolExecutionError>())?;
+    m.add("BudgetExceededError", py.get_type::<crate::shared::pyerror::BudgetExceededError>())?;
+    m.add("WorkflowError", py.get_type::<crate::shared::pyerror::WorkflowError>())?;
+    m.add("StepTimeoutError", py.get_type::<crate::shared::pyerror::StepTimeoutError>())?;
+    m.add("StepFailedError", py.get_type::<crate::shared::pyerror::StepFailedError>())?;
+    m.add("WorkflowPausedError", py.get_type::<crate::shared::pyerror::WorkflowPausedError>())?;
+    m.add("ValidationError", py.get_type::<crate::shared::pyerror::ValidationError>())?;
+    m.add("HarnessStateError", py.get_type::<crate::shared::pyerror::HarnessStateError>())?;
+    m.add("CompactionError", py.get_type::<crate::shared::pyerror::CompactionError>())?;
+    m.add("StreamIdleTimeoutError", py.get_type::<crate::shared::pyerror::StreamIdleTimeoutError>())?;
     m.add_function(wrap_pyfunction!(version, m)?)?;
     m.add_function(wrap_pyfunction!(set_event_loop, m)?)?;
     m.add_function(wrap_pyfunction!(to_json, m)?)?;

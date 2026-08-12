@@ -6,6 +6,64 @@ from typing import Any, AsyncGenerator, Callable, Iterator, Optional, Union
 
 # ── Exceptions ───────────────────────────────────────────────────────────────
 
+class SenzaError(RuntimeError):
+    """Base class for all Senza exceptions."""
+
+class ProviderError(SenzaError):
+    """LLM provider error."""
+
+class RateLimitError(ProviderError):
+    """Rate limit exceeded. Carries retry_after."""
+    retry_after: Optional[float]
+
+class ProviderTimeoutError(ProviderError):
+    """Provider request timed out."""
+
+class ToolError(SenzaError):
+    """Tool execution error."""
+
+class ToolArgumentError(ToolError):
+    """Invalid tool arguments."""
+    tool_name: Optional[str]
+
+class ToolAbortedError(ToolError):
+    """Tool was aborted."""
+
+class ToolExecutionError(ToolError):
+    """Tool execution failed."""
+
+class BudgetExceededError(SenzaError):
+    """Budget limit exceeded. Carries limit and spent."""
+    limit: float
+    spent: float
+
+class WorkflowError(SenzaError):
+    """Workflow execution error."""
+
+class StepTimeoutError(WorkflowError):
+    """Step timed out. Carries step_id and timeout_ms."""
+    step_id: str
+    timeout_ms: int
+
+class StepFailedError(WorkflowError):
+    """Step failed. Carries step_id."""
+    step_id: str
+
+class WorkflowPausedError(WorkflowError):
+    """Workflow was paused."""
+
+class ValidationError(ValueError):
+    """Workflow validation error."""
+
+class HarnessStateError(SenzaError):
+    """Harness is in wrong state for the operation."""
+
+class CompactionError(SenzaError):
+    """Compaction error."""
+
+class StreamIdleTimeoutError(SenzaError):
+    """Stream idle timeout."""
+
 class RustPanicError(RuntimeError):
     """Raised when the Rust runtime panics, instead of crashing the process."""
     def add_note(self, note: str) -> None: ...
