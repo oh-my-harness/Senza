@@ -24,20 +24,12 @@ def main():
     audit_path = os.path.join(tempfile.gettempdir(), "senza_infra_audit.jsonl")
 
     # 1. Create the sink directly (infra-level)
-    sink = senza.JsonlAuditSink(path=audit_path)
+    senza.JsonlAuditSink(path=audit_path)  # create directly (keeps file handle/logging open)
     print(f"JsonlAuditSink created at: {audit_path}")
 
     # 2. Also wire it via AuditPlugin on a harness
-    plugin = senza.strategy.audit(
-        sink_path=audit_path, trace_id="infra-demo", task_id="task-001"
-    )
-    harness = (
-        senza.HarnessBuilder("gpt-4o")
-        .provider("*", provider)
-        .plugin(plugin)
-        .env(env)
-        .build()
-    )
+    plugin = senza.strategy.audit(sink_path=audit_path, trace_id="infra-demo", task_id="task-001")
+    harness = senza.HarnessBuilder("gpt-4o").provider("*", provider).plugin(plugin).env(env).build()
 
     # 3. Validate integrity (0 entries since no turns ran)
     count = senza.JsonlAuditSink.validate(audit_path)

@@ -1,4 +1,5 @@
 """Tests for JsonlAuditSink binding."""
+
 from __future__ import annotations
 
 import os

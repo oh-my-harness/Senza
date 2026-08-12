@@ -2,8 +2,8 @@
 
 import senza
 
-
 # ── Submodule existence ──────────────────────────────────────────────────────
+
 
 def test_providers_submodule_exists():
     assert hasattr(senza, "providers")
@@ -14,11 +14,17 @@ def test_providers_submodule_exists():
 def test_hooks_submodule_exists():
     assert hasattr(senza, "hooks")
     expected = {
-        "before_turn", "after_turn", "before_run",
-        "after_provider_response", "before_provider_request",
-        "before_tool_call", "after_tool_call",
-        "should_stop", "before_compact",
-        "transform_context", "prepare_next_turn",
+        "before_turn",
+        "after_turn",
+        "before_run",
+        "after_provider_response",
+        "before_provider_request",
+        "before_tool_call",
+        "after_tool_call",
+        "should_stop",
+        "before_compact",
+        "transform_context",
+        "prepare_next_turn",
     }
     for name in expected:
         assert hasattr(senza.hooks, name), f"hooks.{name} missing"
@@ -27,10 +33,17 @@ def test_hooks_submodule_exists():
 def test_strategy_submodule_exists():
     assert hasattr(senza, "strategy")
     expected = {
-        "safety_defaults", "loop_safety", "status_panel",
-        "memory_defense", "injection_filter", "source_tag",
-        "project_instruction", "audit", "notify",
-        "tool_output_guard", "webhook_stream",
+        "safety_defaults",
+        "loop_safety",
+        "status_panel",
+        "memory_defense",
+        "injection_filter",
+        "source_tag",
+        "project_instruction",
+        "audit",
+        "notify",
+        "tool_output_guard",
+        "webhook_stream",
         "context_aware_compaction_prompt",
     }
     for name in expected:
@@ -40,10 +53,16 @@ def test_strategy_submodule_exists():
 def test_knowledge_submodule_exists():
     assert hasattr(senza, "knowledge")
     expected = {
-        "local_source", "plugin", "memory_store", "memory_plugin",
-        "secure_write_policy", "allow_all_gate",
-        "in_memory_session_recall_index", "sqlite_session_recall_index",
-        "in_memory_session_repo", "session_recall_knowledge_source",
+        "local_source",
+        "plugin",
+        "memory_store",
+        "memory_plugin",
+        "secure_write_policy",
+        "allow_all_gate",
+        "in_memory_session_recall_index",
+        "sqlite_session_recall_index",
+        "in_memory_session_repo",
+        "session_recall_knowledge_source",
         "history_recall_plugin",
     }
     for name in expected:
@@ -55,21 +74,25 @@ def test_infra_submodule_exists():
     assert hasattr(senza.infra, "jsonl_audit_sink")
     assert hasattr(senza.infra, "in_memory_trace_exporter")
     # Platform-specific: at least one sandbox factory should exist
-    assert (hasattr(senza.infra, "seatbelt_sandbox")
-            or hasattr(senza.infra, "bwrap_sandbox"))
+    assert hasattr(senza.infra, "seatbelt_sandbox") or hasattr(senza.infra, "bwrap_sandbox")
 
 
 def test_rules_submodule_exists():
     assert hasattr(senza, "rules")
     expected = {
-        "chain", "contains", "regex_field",
-        "number_range", "rate_limit", "approval_hook",
+        "chain",
+        "contains",
+        "regex_field",
+        "number_range",
+        "rate_limit",
+        "approval_hook",
     }
     for name in expected:
         assert hasattr(senza.rules, name), f"rules.{name} missing"
 
 
 # ── Identity checks: submodule delegates to same function ───────────────────
+
 
 def test_providers_openai_identity():
     # The submodule attribute should be the same callable the Rust layer
@@ -179,18 +202,30 @@ def test_infra_in_memory_trace_exporter_identity():
 
 # ── High-frequency APIs still at top level ──────────────────────────────────
 
+
 def test_high_freq_apis_still_top_level():
     for name in [
-        "HarnessBuilder", "AgentHarness", "WorkflowEngine",
-        "tool", "create_tool", "create_plugin", "create_judge",
-        "stream_prompt", "stream_events", "stream_run",
-        "extract_text", "enable_debug", "disable_debug",
-        "SenzaError", "ProviderError",
+        "HarnessBuilder",
+        "AgentHarness",
+        "WorkflowEngine",
+        "tool",
+        "create_tool",
+        "create_plugin",
+        "create_judge",
+        "stream_prompt",
+        "stream_events",
+        "stream_run",
+        "extract_text",
+        "enable_debug",
+        "disable_debug",
+        "SenzaError",
+        "ProviderError",
     ]:
         assert hasattr(senza, name), f"{name} should remain at top level"
 
 
 # ── Removed names NOT accessible at top level ───────────────────────────────
+
 
 def test_removed_provider_names_not_top_level():
     for name in ["create_openai_provider", "create_anthropic_provider"]:
@@ -199,11 +234,16 @@ def test_removed_provider_names_not_top_level():
 
 def test_removed_hook_names_not_top_level():
     for name in [
-        "create_before_turn_hook", "create_after_turn_hook",
-        "create_before_run_hook", "create_after_provider_response_hook",
-        "create_before_provider_request_hook", "create_before_tool_call_hook",
-        "create_after_tool_call_hook", "create_should_stop_hook",
-        "create_before_compact_hook", "create_transform_context_hook",
+        "create_before_turn_hook",
+        "create_after_turn_hook",
+        "create_before_run_hook",
+        "create_after_provider_response_hook",
+        "create_before_provider_request_hook",
+        "create_before_tool_call_hook",
+        "create_after_tool_call_hook",
+        "create_should_stop_hook",
+        "create_before_compact_hook",
+        "create_transform_context_hook",
         "create_prepare_next_turn_hook",
     ]:
         assert not hasattr(senza, name), f"{name} should be removed from top level"
@@ -211,21 +251,30 @@ def test_removed_hook_names_not_top_level():
 
 def test_removed_strategy_names_not_top_level():
     for name in [
-        "create_safety_defaults_plugin", "create_loop_safety_plugin",
-        "create_status_panel_plugin", "create_memory_defense_plugin",
-        "create_injection_filter_plugin", "create_source_tag_plugin",
-        "create_project_instruction_plugin", "create_audit_plugin",
-        "create_notify_plugin", "create_tool_output_guard_plugin",
-        "create_webhook_stream", "create_context_aware_compaction_prompt",
+        "create_safety_defaults_plugin",
+        "create_loop_safety_plugin",
+        "create_status_panel_plugin",
+        "create_memory_defense_plugin",
+        "create_injection_filter_plugin",
+        "create_source_tag_plugin",
+        "create_project_instruction_plugin",
+        "create_audit_plugin",
+        "create_notify_plugin",
+        "create_tool_output_guard_plugin",
+        "create_webhook_stream",
+        "create_context_aware_compaction_prompt",
     ]:
         assert not hasattr(senza, name), f"{name} should be removed from top level"
 
 
 def test_removed_knowledge_names_not_top_level():
     for name in [
-        "create_local_knowledge_source", "create_knowledge_plugin",
-        "create_in_memory_store", "create_memory_plugin",
-        "create_secure_write_policy", "create_allow_all_gate",
+        "create_local_knowledge_source",
+        "create_knowledge_plugin",
+        "create_in_memory_store",
+        "create_memory_plugin",
+        "create_secure_write_policy",
+        "create_allow_all_gate",
         "create_in_memory_session_recall_index",
         "create_sqlite_session_recall_index",
         "create_in_memory_session_repo",
@@ -237,8 +286,11 @@ def test_removed_knowledge_names_not_top_level():
 
 def test_removed_rules_names_not_top_level():
     for name in [
-        "create_rule_chain", "create_contains_predicate",
-        "create_regex_field_predicate", "create_number_range_predicate",
-        "create_rate_limit_predicate", "create_rule_approval_hook",
+        "create_rule_chain",
+        "create_contains_predicate",
+        "create_regex_field_predicate",
+        "create_number_range_predicate",
+        "create_rate_limit_predicate",
+        "create_rule_approval_hook",
     ]:
         assert not hasattr(senza, name), f"{name} should be removed from top level"

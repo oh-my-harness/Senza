@@ -59,9 +59,7 @@ def test_workflow_engine_accepts_rich_workflow_dict():
     def judge(ctx):
         return "done"
 
-    engine = senza.WorkflowEngine(
-        workflow, provider, "gpt-4o", senza.create_judge(judge)
-    )
+    engine = senza.WorkflowEngine(workflow, provider, "gpt-4o", senza.create_judge(judge))
 
     assert engine is not None
     assert engine.state() == "idle"
@@ -83,6 +81,4 @@ def test_workflow_engine_invalid_dict_raises():
     import pytest
 
     with pytest.raises((ValueError, KeyError, RuntimeError)):
-        senza.WorkflowEngine(
-            workflow, provider, "gpt-4o", senza.create_judge(judge)
-        )
+        senza.WorkflowEngine(workflow, provider, "gpt-4o", senza.create_judge(judge))

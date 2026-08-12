@@ -1,6 +1,7 @@
-import senza
-import tempfile
 import os
+import tempfile
+
+import senza
 
 
 def test_local_knowledge_source_creates():

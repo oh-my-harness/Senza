@@ -22,9 +22,7 @@ def main():
     env = senza.create_os_env(".")
 
     doc_dir = tempfile.mkdtemp(prefix="senza_mem_")
-    source = senza.knowledge.local_source(
-        path=doc_dir, source_id="memory-store"
-    )
+    source = senza.knowledge.local_source(path=doc_dir, source_id="memory-store")
     store = senza.knowledge.memory_store(read_source_id="memory-store")
 
     policy_config = {
@@ -34,17 +32,9 @@ def main():
     policy = senza.knowledge.secure_write_policy(config=policy_config)
     gate = senza.knowledge.allow_all_gate()
 
-    plugin = senza.knowledge.memory_plugin(
-        source=source, store=store, policy=policy, gate=gate
-    )
+    plugin = senza.knowledge.memory_plugin(source=source, store=store, policy=policy, gate=gate)
 
-    harness = (
-        senza.HarnessBuilder("gpt-4o")
-        .provider("*", provider)
-        .plugin(plugin)
-        .env(env)
-        .build()
-    )
+    harness = senza.HarnessBuilder("gpt-4o").provider("*", provider).plugin(plugin).env(env).build()
 
     print("MemoryPlugin installed (InMemoryStore + SecureWritePolicy).")
     print(f"  allowed keys: {policy_config['allowed_keys']}")

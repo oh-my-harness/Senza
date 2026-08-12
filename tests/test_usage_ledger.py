@@ -1,6 +1,5 @@
 """Tests for UsageLedger Python binding."""
 
-import pytest
 import senza
 
 
@@ -57,16 +56,8 @@ def test_usage_ledger_shared_between_agents():
     provider = _make_provider()
     ledger = senza.UsageLedger()
 
-    builder1 = (
-        senza.HarnessBuilder("gpt-4o")
-        .provider("*", provider)
-        .usage_ledger(ledger)
-    )
-    builder2 = (
-        senza.HarnessBuilder("gpt-4o")
-        .provider("*", provider)
-        .usage_ledger(ledger)
-    )
+    builder1 = senza.HarnessBuilder("gpt-4o").provider("*", provider).usage_ledger(ledger)
+    builder2 = senza.HarnessBuilder("gpt-4o").provider("*", provider).usage_ledger(ledger)
     assert builder1 is not None
     assert builder2 is not None
 

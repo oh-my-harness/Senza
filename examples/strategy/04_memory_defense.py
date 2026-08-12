@@ -29,13 +29,7 @@ def main():
         .build()
     )
 
-    harness = (
-        senza.HarnessBuilder("gpt-4o")
-        .provider("*", provider)
-        .plugin(plugin)
-        .env(env)
-        .build()
-    )
+    harness = senza.HarnessBuilder("gpt-4o").provider("*", provider).plugin(plugin).env(env).build()
 
     print(f"MemoryDefensePlugin (builder) installed. Phase: {harness.phase()}")
     print("Retained files: CLAUDE.md, AGENTS.md, README.md, docs/architecture.md")

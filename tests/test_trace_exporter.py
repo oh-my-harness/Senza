@@ -1,4 +1,5 @@
 """Tests for InMemoryTraceExporter binding."""
+
 from __future__ import annotations
 
 import senza

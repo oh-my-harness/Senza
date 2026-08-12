@@ -2,8 +2,6 @@
 
 import asyncio
 
-import pytest
-
 import senza
 
 

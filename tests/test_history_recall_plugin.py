@@ -28,10 +28,5 @@ def test_history_recall_plugin_in_builder():
     recall_source = senza.knowledge.session_recall_knowledge_source(repo=repo, index=index)
     plugin = senza.knowledge.history_recall_plugin(source=recall_source)
     provider = senza.providers.openai(api_key="sk-test")
-    harness = (
-        senza.HarnessBuilder("gpt-4o")
-        .provider("*", provider)
-        .plugin(plugin)
-        .build()
-    )
+    harness = senza.HarnessBuilder("gpt-4o").provider("*", provider).plugin(plugin).build()
     assert harness is not None

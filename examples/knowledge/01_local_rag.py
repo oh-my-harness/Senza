@@ -36,16 +36,10 @@ def main():
 
     plugin = senza.knowledge.plugin(sources=[source])
 
-    harness = (
-        senza.HarnessBuilder("gpt-4o")
-        .provider("*", provider)
-        .plugin(plugin)
-        .env(env)
-        .build()
-    )
+    harness = senza.HarnessBuilder("gpt-4o").provider("*", provider).plugin(plugin).env(env).build()
 
     print(f"KnowledgePlugin indexing: {doc_dir}")
-    print(f"  source_id: local-docs")
+    print("  source_id: local-docs")
     print(f"Harness phase: {harness.phase()}")
 
 

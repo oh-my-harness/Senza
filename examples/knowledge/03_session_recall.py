@@ -26,22 +26,14 @@ def main():
     index = senza.knowledge.sqlite_session_recall_index(path=index_path)
     repo = senza.knowledge.in_memory_session_repo()
 
-    recall_source = senza.knowledge.session_recall_knowledge_source(
-        repo=repo, index=index
-    )
+    recall_source = senza.knowledge.session_recall_knowledge_source(repo=repo, index=index)
     plugin = senza.knowledge.history_recall_plugin(source=recall_source)
 
-    harness = (
-        senza.HarnessBuilder("gpt-4o")
-        .provider("*", provider)
-        .plugin(plugin)
-        .env(env)
-        .build()
-    )
+    harness = senza.HarnessBuilder("gpt-4o").provider("*", provider).plugin(plugin).env(env).build()
 
     print("HistoryRecallPlugin installed.")
     print(f"  index: SQLite ({index_path})")
-    print(f"  repo:  in-memory")
+    print("  repo:  in-memory")
     print(f"Harness phase: {harness.phase()}")
 
 

@@ -1,5 +1,6 @@
-import senza
 import tempfile
+
+import senza
 
 
 def test_tool_output_guard_creates():
@@ -24,10 +25,6 @@ def test_tool_output_guard_in_builder():
         env = senza.create_os_env(tmpdir)
         plugin = senza.strategy.tool_output_guard(env)
         harness = (
-            senza.HarnessBuilder("gpt-4o")
-            .provider("*", provider)
-            .plugin(plugin)
-            .env(env)
-            .build()
+            senza.HarnessBuilder("gpt-4o").provider("*", provider).plugin(plugin).env(env).build()
         )
         assert harness is not None

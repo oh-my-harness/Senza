@@ -1,7 +1,6 @@
 """Tests for typed exception hierarchy."""
 
 import pytest
-
 import senza
 
 
@@ -59,7 +58,5 @@ def test_workflow_validation_error_is_value_error():
         return "done"
 
     with pytest.raises(ValueError):
-        engine = senza.WorkflowEngine(
-            bad_workflow, provider, "gpt-4o", senza.create_judge(judge)
-        )
+        engine = senza.WorkflowEngine(bad_workflow, provider, "gpt-4o", senza.create_judge(judge))
         engine.run()

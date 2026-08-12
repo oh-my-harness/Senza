@@ -28,13 +28,7 @@ def main():
         task_id="task-042",
     )
 
-    harness = (
-        senza.HarnessBuilder("gpt-4o")
-        .provider("*", provider)
-        .plugin(plugin)
-        .env(env)
-        .build()
-    )
+    harness = senza.HarnessBuilder("gpt-4o").provider("*", provider).plugin(plugin).env(env).build()
 
     print(f"AuditPlugin writing to: {audit_path}")
     print(f"Harness phase: {harness.phase()}")

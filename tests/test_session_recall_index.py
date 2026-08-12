@@ -12,9 +12,7 @@ def test_in_memory_session_recall_index_creates():
 
 def test_sqlite_session_recall_index_creates():
     with tempfile.TemporaryDirectory() as tmpdir:
-        index = senza.knowledge.sqlite_session_recall_index(
-            path=tmpdir + "/recall.db"
-        )
+        index = senza.knowledge.sqlite_session_recall_index(path=tmpdir + "/recall.db")
         assert index is not None
 
 
@@ -33,8 +31,6 @@ def test_session_recall_knowledge_source_creates():
 def test_session_recall_knowledge_source_as_knowledge_source():
     index = senza.knowledge.in_memory_session_recall_index()
     repo = senza.knowledge.in_memory_session_repo()
-    recall_source = senza.knowledge.session_recall_knowledge_source(
-        repo=repo, index=index
-    )
+    recall_source = senza.knowledge.session_recall_knowledge_source(repo=repo, index=index)
     ks = recall_source.as_knowledge_source()
     assert ks is not None

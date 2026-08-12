@@ -17,10 +17,5 @@ def test_loop_safety_in_builder():
     """LoopSafetyPlugin can be installed on a harness builder."""
     provider = senza.providers.openai(api_key="sk-test")
     plugin = senza.strategy.loop_safety()
-    harness = (
-        senza.HarnessBuilder("gpt-4o")
-        .provider("*", provider)
-        .plugin(plugin)
-        .build()
-    )
+    harness = senza.HarnessBuilder("gpt-4o").provider("*", provider).plugin(plugin).build()
     assert harness is not None

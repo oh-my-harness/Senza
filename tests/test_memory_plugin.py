@@ -1,6 +1,7 @@
-import senza
-import tempfile
 import os
+import tempfile
+
+import senza
 
 
 def test_memory_plugin_creates():
@@ -33,12 +34,7 @@ def test_memory_plugin_in_builder():
         policy = senza.knowledge.secure_write_policy()
         plugin = senza.knowledge.memory_plugin(source=source, store=store, policy=policy)
         provider = senza.providers.openai(api_key="sk-test")
-        harness = (
-            senza.HarnessBuilder("gpt-4o")
-            .provider("*", provider)
-            .plugin(plugin)
-            .build()
-        )
+        harness = senza.HarnessBuilder("gpt-4o").provider("*", provider).plugin(plugin).build()
         assert harness is not None
 
 

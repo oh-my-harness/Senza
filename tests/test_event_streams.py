@@ -8,7 +8,6 @@ def test_webhook_stream_creates():
 
 
 def test_webhook_channel_push():
-    import asyncio
 
     channel, stream = senza.strategy.webhook_stream(buffer=4)
     channel.push({"event": "test", "data": "hello"})

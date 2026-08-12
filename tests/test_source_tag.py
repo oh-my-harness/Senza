@@ -18,10 +18,5 @@ def test_source_tag_plugin_empty():
 def test_source_tag_in_builder():
     provider = senza.providers.openai(api_key="sk-test")
     plugin = senza.strategy.source_tag([{"tool": "search", "label": "web"}])
-    harness = (
-        senza.HarnessBuilder("gpt-4o")
-        .provider("*", provider)
-        .plugin(plugin)
-        .build()
-    )
+    harness = senza.HarnessBuilder("gpt-4o").provider("*", provider).plugin(plugin).build()
     assert harness is not None

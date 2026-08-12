@@ -12,12 +12,6 @@ def test_safety_defaults_plugin_usable_in_builder():
     provider = senza.providers.openai(api_key="sk-test")
     env = senza.create_os_env(".")
     plugin = senza.strategy.safety_defaults()
-    harness = (
-        senza.HarnessBuilder("gpt-4o")
-        .provider("*", provider)
-        .plugin(plugin)
-        .env(env)
-        .build()
-    )
+    harness = senza.HarnessBuilder("gpt-4o").provider("*", provider).plugin(plugin).env(env).build()
     assert harness is not None
     assert harness.phase() == "idle"

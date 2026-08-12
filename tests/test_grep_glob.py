@@ -28,11 +28,7 @@ def _build_harness(td):
     plugin = senza.create_fs_tools_plugin()
     provider = _make_provider()
     return (
-        senza.HarnessBuilder("gpt-4o")
-        .provider("gpt-*", provider)
-        .plugin(plugin)
-        .env(env)
-        .build()
+        senza.HarnessBuilder("gpt-4o").provider("gpt-*", provider).plugin(plugin).env(env).build()
     )
 
 
@@ -113,6 +109,5 @@ def test_fs_tools_plugin_registers_all_six_tools():
 
         expected = {"read", "write", "edit", "bash", "grep", "glob"}
         assert set(removed) == expected, (
-            f"registered tools mismatch; removed={sorted(removed)}, "
-            f"expected={sorted(expected)}"
+            f"registered tools mismatch; removed={sorted(removed)}, expected={sorted(expected)}"
         )

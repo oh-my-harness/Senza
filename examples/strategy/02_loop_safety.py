@@ -20,18 +20,12 @@ def main():
     env = senza.create_os_env(".")
 
     config = {
-        "max_repeats": 3,          # stop after 3 identical calls
-        "window_turns": 10,        # look back across last 10 turns
+        "max_repeats": 3,  # stop after 3 identical calls
+        "window_turns": 10,  # look back across last 10 turns
     }
     plugin = senza.strategy.loop_safety(config=config)
 
-    harness = (
-        senza.HarnessBuilder("gpt-4o")
-        .provider("*", provider)
-        .plugin(plugin)
-        .env(env)
-        .build()
-    )
+    harness = senza.HarnessBuilder("gpt-4o").provider("*", provider).plugin(plugin).env(env).build()
 
     print(f"LoopSafetyPlugin installed (max_repeats={config['max_repeats']}).")
     print(f"Harness phase: {harness.phase()}")

@@ -30,13 +30,7 @@ def main():
     }
     plugin = senza.strategy.tool_output_guard(env=env, config=config)
 
-    harness = (
-        senza.HarnessBuilder("gpt-4o")
-        .provider("*", provider)
-        .plugin(plugin)
-        .env(env)
-        .build()
-    )
+    harness = senza.HarnessBuilder("gpt-4o").provider("*", provider).plugin(plugin).env(env).build()
 
     print("ToolOutputGuardPlugin installed.")
     print(f"  max_output_bytes={config['max_output_bytes']}")

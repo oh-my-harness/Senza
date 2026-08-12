@@ -21,13 +21,7 @@ def main():
 
     plugin = senza.strategy.status_panel()
 
-    harness = (
-        senza.HarnessBuilder("gpt-4o")
-        .provider("*", provider)
-        .plugin(plugin)
-        .env(env)
-        .build()
-    )
+    harness = senza.HarnessBuilder("gpt-4o").provider("*", provider).plugin(plugin).env(env).build()
 
     print(f"StatusPanelPlugin installed. Harness phase: {harness.phase()}")
     print("Live metrics: turns, tokens, active tools, elapsed time.")

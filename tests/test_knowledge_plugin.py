@@ -1,6 +1,7 @@
-import senza
-import tempfile
 import os
+import tempfile
+
+import senza
 
 
 def test_knowledge_plugin_creates():
@@ -40,10 +41,5 @@ def test_knowledge_plugin_in_builder():
         )
         plugin = senza.knowledge.plugin(sources=[source])
         provider = senza.providers.openai(api_key="sk-test")
-        harness = (
-            senza.HarnessBuilder("gpt-4o")
-            .provider("*", provider)
-            .plugin(plugin)
-            .build()
-        )
+        harness = senza.HarnessBuilder("gpt-4o").provider("*", provider).plugin(plugin).build()
         assert harness is not None

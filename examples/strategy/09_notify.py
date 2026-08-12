@@ -21,13 +21,7 @@ def main():
 
     plugin = senza.strategy.notify()
 
-    harness = (
-        senza.HarnessBuilder("gpt-4o")
-        .provider("*", provider)
-        .plugin(plugin)
-        .env(env)
-        .build()
-    )
+    harness = senza.HarnessBuilder("gpt-4o").provider("*", provider).plugin(plugin).env(env).build()
 
     print("NotifyPlugin installed — alerts on turn-complete, error, and stop.")
     print(f"Harness phase: {harness.phase()}")

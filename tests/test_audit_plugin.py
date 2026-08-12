@@ -1,6 +1,7 @@
-import senza
-import tempfile
 import os
+import tempfile
+
+import senza
 
 
 def test_audit_plugin_creates():
@@ -22,10 +23,5 @@ def test_audit_plugin_in_builder():
         sink_path = os.path.join(tmpdir, "audit.jsonl")
         provider = senza.providers.openai(api_key="sk-test")
         plugin = senza.strategy.audit(sink_path)
-        harness = (
-            senza.HarnessBuilder("gpt-4o")
-            .provider("*", provider)
-            .plugin(plugin)
-            .build()
-        )
+        harness = senza.HarnessBuilder("gpt-4o").provider("*", provider).plugin(plugin).build()
         assert harness is not None

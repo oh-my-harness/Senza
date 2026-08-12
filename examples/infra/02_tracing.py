@@ -30,12 +30,7 @@ def main():
     print(f"Span list type: {type(spans).__name__}")
 
     # Build a harness (the exporter would be wired via tracing config)
-    harness = (
-        senza.HarnessBuilder("gpt-4o")
-        .provider("*", provider)
-        .env(env)
-        .build()
-    )
+    harness = senza.HarnessBuilder("gpt-4o").provider("*", provider).env(env).build()
 
     print(f"Harness phase: {harness.phase()}")
     print(f"Post-build span count: {exporter.exported_span_count()}")

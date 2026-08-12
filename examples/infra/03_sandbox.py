@@ -30,7 +30,7 @@ def main():
             "no_network": True,
         }
         sandbox = senza.infra.seatbelt_sandbox(config=config)
-        print(f"SeatbeltSandbox created (macOS).")
+        print("SeatbeltSandbox created (macOS).")
     else:
         config = {
             "readonly": ["/usr", "/bin"],
@@ -38,16 +38,11 @@ def main():
             "unshare_net": True,
         }
         sandbox = senza.infra.bwrap_sandbox(config=config)
-        print(f"BwrapSandbox created (Linux).")
+        print("BwrapSandbox created (Linux).")
 
     print(f"  is_running (pre-start): {sandbox.is_running()}")
 
-    harness = (
-        senza.HarnessBuilder("gpt-4o")
-        .provider("*", provider)
-        .env(env)
-        .build()
-    )
+    harness = senza.HarnessBuilder("gpt-4o").provider("*", provider).env(env).build()
 
     print(f"Harness phase: {harness.phase()}")
     print(f"  is_running (post-build): {sandbox.is_running()}")

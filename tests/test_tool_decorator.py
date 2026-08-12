@@ -1,9 +1,5 @@
 """Tests for @senza.tool decorator."""
 
-import inspect
-
-import pytest
-
 import senza
 
 
@@ -19,7 +15,6 @@ def test_tool_decorator_basic():
     assert hasattr(search, "name")
     assert search.name == "search"
     assert search.description == "Search the web."
-
 
     @senza.tool
     def search(query: str, limit: int = 10) -> str:

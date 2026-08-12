@@ -28,13 +28,7 @@ def main():
     ]
     plugin = senza.strategy.injection_filter(patterns=patterns)
 
-    harness = (
-        senza.HarnessBuilder("gpt-4o")
-        .provider("*", provider)
-        .plugin(plugin)
-        .env(env)
-        .build()
-    )
+    harness = senza.HarnessBuilder("gpt-4o").provider("*", provider).plugin(plugin).env(env).build()
 
     print(f"InjectionFilterPlugin installed with {len(patterns)} patterns.")
     print(f"Harness phase: {harness.phase()}")

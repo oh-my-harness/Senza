@@ -26,13 +26,7 @@ def main():
     ]
     plugin = senza.strategy.source_tag(entries=entries)
 
-    harness = (
-        senza.HarnessBuilder("gpt-4o")
-        .provider("*", provider)
-        .plugin(plugin)
-        .env(env)
-        .build()
-    )
+    harness = senza.HarnessBuilder("gpt-4o").provider("*", provider).plugin(plugin).env(env).build()
 
     print(f"SourceTagPlugin installed with {len(entries)} source mappings.")
     print(f"Harness phase: {harness.phase()}")

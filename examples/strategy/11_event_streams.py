@@ -25,14 +25,9 @@ def main():
     # Simulate an external webhook firing
     channel.push({"event": "ci_complete", "status": "passed", "build_id": 42})
 
-    harness = (
-        senza.HarnessBuilder("gpt-4o")
-        .provider("*", provider)
-        .env(env)
-        .build()
-    )
+    harness = senza.HarnessBuilder("gpt-4o").provider("*", provider).env(env).build()
 
-    print(f"Webhook stream created (buffer=64).")
+    print("Webhook stream created (buffer=64).")
     print(f"  channel type: {type(channel).__name__}")
     print(f"  stream type:  {type(stream).__name__}")
     print(f"Harness phase: {harness.phase()}")
