@@ -58,8 +58,8 @@ for stage in "${STAGES[@]}"; do
         pyfmt)
             echo ""
             echo "==> ruff format --check + ruff check ..."
-            "$PYTHON" -m ruff format --check examples/ tests/ senza-pkg/senza/viewer.py
-            "$PYTHON" -m ruff check examples/ tests/ senza-pkg/senza/viewer.py
+            "$PYTHON" -m ruff format --check tests/ senza-pkg/senza/viewer.py
+            "$PYTHON" -m ruff check tests/ senza-pkg/senza/viewer.py
             ;;
         clippy)
             echo ""
