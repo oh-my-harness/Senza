@@ -46,6 +46,20 @@ def test_parse_class_method():
     assert sigs["HarnessBuilder.build"].params == ["self"]
 
 
+def test_parse_async_method():
+    """async def (ast.AsyncFunctionDef) must be parsed, not skipped."""
+    pyi = textwrap.dedent("""
+        class AgentHarness:
+            async def prompt_async(self, text: str, timeout_ms: int = 30000) -> list[dict]: ...
+        async def stream_prompt(obj, text: str, timeout_ms: int = 5000) -> AsyncGenerator[dict, None]: ...
+    """)
+    sigs = parse_pyi_signatures.from_string(pyi)
+    assert "AgentHarness.prompt_async" in sigs
+    assert sigs["AgentHarness.prompt_async"].params == ["self", "text", "timeout_ms"]
+    assert sigs["AgentHarness.prompt_async"].defaults == {"timeout_ms"}
+    assert "stream_prompt" in sigs
+
+
 def test_compare_missing_in_pyi():
     """Function in runtime but not in .pyi → diff."""
     pyi_sigs = {"version": FuncSig(params=[], defaults=set())}

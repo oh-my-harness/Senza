@@ -96,16 +96,22 @@ def _parse_pyi_from_string(pyi_source: str) -> dict[str, FuncSig]:
     sigs: dict[str, FuncSig] = {}
 
     for node in ast.iter_child_nodes(tree):
-        if isinstance(node, ast.FunctionDef):
+        if _is_func_def(node):
             if not _is_property(node):
                 sigs[node.name] = _ast_func_to_sig(node)
         elif isinstance(node, ast.ClassDef) and node.name not in SUBMODULE_GROUPS:
             for item in node.body:
-                if isinstance(item, ast.FunctionDef) and not _is_property(item):
+                if _is_func_def(item) and not _is_property(item):
                     key = f"{node.name}.{item.name}"
                     sigs[key] = _ast_func_to_sig(item)
 
     return sigs
+
+
+def _is_func_def(node: ast.AST) -> bool:
+    """True for both sync (FunctionDef) and async (AsyncFunctionDef) defs."""
+    return isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+
 
 
 def _ast_func_to_sig(func: ast.FunctionDef) -> FuncSig:
