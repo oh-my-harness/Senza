@@ -1121,13 +1121,7 @@ fn step_record_to_dict(py: Python<'_>, record: &StepRecord) -> PyResult<Py<PyAny
 /// - `Paused` → `RuntimeError`（暂停是控制流，非错误，但仍需向上传播）
 /// - 其余 → `RuntimeError`
 fn workflow_error_to_pyerr(e: WorkflowError) -> PyErr {
-    match e {
-        WorkflowError::Validation(_) => pyo3::exceptions::PyValueError::new_err(e.to_string()),
-        WorkflowError::WorkflowNotFound { .. } | WorkflowError::ExecutorNotFound { .. } => {
-            pyo3::exceptions::PyKeyError::new_err(e.to_string())
-        }
-        _ => pyo3::exceptions::PyRuntimeError::new_err(e.to_string()),
-    }
+    crate::shared::pyerror::workflow_error_to_pyerr(e)
 }
 // ── PyWorkflowEngine ────────────────────────────────────────────────────────
 

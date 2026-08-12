@@ -25,6 +25,7 @@ use tokio::sync::broadcast;
 use crate::core::pyagent::runtime;
 use crate::runtime::pyworkflow::cost_aggregate_to_dict;
 use crate::shared::event_stream::agent_event_to_dict;
+use crate::shared::pyerror::harness_error_to_pyerr;
 use crate::shared::value_conv::value_to_pyobject;
 
 /// 将 `HarnessPhase` 转为字符串标识。
@@ -411,7 +412,7 @@ impl PyAgentHarness {
                 harness
                     .prompt(&text)
                     .await
-                    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+                    .map_err(|e| harness_error_to_pyerr(e))
             },
             200,
         )?;
@@ -649,7 +650,7 @@ impl PyAgentHarness {
                             Ok(events)
                         }
                     }
-                    Ok(Err(e)) => Err(pyo3::exceptions::PyRuntimeError::new_err(e.to_string())),
+                    Ok(Err(e)) => Err(harness_error_to_pyerr(e)),
                     Err(join_err) if join_err.is_cancelled() => Ok(events),
                     Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e.to_string())),
                 }
@@ -753,7 +754,7 @@ impl PyAgentHarness {
                 harness
                     .continue_run()
                     .await
-                    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+                    .map_err(|e| harness_error_to_pyerr(e))
             },
             200,
         )
@@ -826,21 +827,21 @@ impl PyAgentHarness {
     fn clear_steering_queue(&self) -> PyResult<()> {
         self.harness
             .clear_steering_queue()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+            .map_err(|e| harness_error_to_pyerr(e))
     }
 
     /// Drain the follow-up queue. Only callable when Idle.
     fn clear_follow_up_queue(&self) -> PyResult<()> {
         self.harness
             .clear_follow_up_queue()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+            .map_err(|e| harness_error_to_pyerr(e))
     }
 
     /// Drain all queues (steer, follow-up, next_turn). Only callable when Idle.
     fn clear_all_queues(&self) -> PyResult<()> {
         self.harness
             .clear_all_queues()
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+            .map_err(|e| harness_error_to_pyerr(e))
     }
 
     /// Returns True if any queue is non-empty.

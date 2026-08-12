@@ -92,7 +92,7 @@ def test_workflow_engine_restore_classmethod():
     assert hasattr(senza.WorkflowEngine, "restore")
     # Calling restore on a non-existent task should raise KeyError
     with tempfile.TemporaryDirectory() as d:
-        with pytest.raises(KeyError, match="workflow not found"):
+        with pytest.raises(KeyError, match="task-nonexistent"):
             senza.WorkflowEngine.restore(
                 d, "task-nonexistent", _make_provider(), "gpt-4o", _make_judge()
             )

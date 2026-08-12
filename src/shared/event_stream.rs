@@ -8,7 +8,9 @@
 
 use std::sync::Arc;
 
-use llm_harness_types::{AgentEvent, AgentMessage, ContentBlock, DataBlock, ToolResult};
+use llm_harness_types::{
+    AgentError, AgentEvent, AgentMessage, ContentBlock, DataBlock, ToolResult,
+};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
@@ -238,6 +240,20 @@ pub fn agent_event_to_dict(py: Python<'_>, event: &AgentEvent) -> PyResult<Py<Py
         AgentEvent::Error(err) => {
             dict.set_item("type", "error")?;
             dict.set_item("message", err.to_string())?;
+            dict.set_item(
+                "error_type",
+                match err {
+                    AgentError::Provider(_) | AgentError::ProviderTyped { .. } => "provider",
+                    AgentError::Tool { .. } => "tool",
+                    AgentError::Aborted => "aborted",
+                    AgentError::NotIdle => "not_idle",
+                    AgentError::InvalidInput(_) => "invalid_input",
+                    AgentError::Internal(_) => "internal",
+                    AgentError::ResourceLimitExceeded(_) => "resource_limit",
+                    AgentError::StreamIdle { .. } => "stream_idle",
+                    AgentError::FinalAnswerRejected { .. } => "final_answer_rejected",
+                },
+            )?;
         }
         AgentEvent::RetryAttempt {
             attempt,

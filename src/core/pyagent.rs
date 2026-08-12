@@ -94,7 +94,7 @@ impl PyAgent {
                 agent
                     .prompt(text)
                     .await
-                    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+                    .map_err(|e| crate::shared::pyerror::agent_error_to_pyerr(e))
             },
             200,
         )?;
