@@ -20,6 +20,7 @@ Overridable via env:
 If `OPENAI_API_KEY` is unset, `providers_from_env` sources `~/.omp_llm_env`
 (the current OMP session's LLM env) so the DeepSeek setup "just works".
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -47,7 +48,7 @@ def _load_omp_env() -> None:
         for line in _OMP_LLM_ENV.read_text().splitlines():
             line = line.strip()
             if line.startswith("export "):
-                line = line[len("export "):]
+                line = line[len("export ") :]
             if "=" not in line or line.startswith("#"):
                 continue
             k, _, v = line.partition("=")
@@ -113,12 +114,15 @@ def run_prompt(harness, text, timeout_ms=SINGLE_TURN_TIMEOUT_MS):
 
 def with_timeout(seconds, fn, *args, **kwargs):
     """Run a sync callable on a worker thread with a hard wall-clock timeout."""
+
     async def _run():
         return await asyncio.wait_for(asyncio.to_thread(fn, *args, **kwargs), timeout=seconds)
+
     return asyncio.run(_run())
 
 
 # ── Event assertions (event dicts from prompt_and_collect / stream) ────────
+
 
 def event_types(events) -> list[str]:
     return [e.get("type") for e in events]
