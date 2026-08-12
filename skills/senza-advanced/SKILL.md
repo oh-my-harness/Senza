@@ -194,3 +194,38 @@ for event in event_iter:
         print(f"✗ {event['error']}")
 ```
 
+
+## Strategy Plugins
+
+Senza ships 12 strategy plugins (plus helpers) via `create_*` functions. Each is a `Plugin` you install on a `HarnessBuilder` or `WorkflowEngine`.
+
+| Plugin | Function | Description |
+|--------|----------|-------------|
+| SafetyDefaults | `create_safety_defaults_plugin()` | Bash blacklist + path traversal guard |
+| LoopSafety | `create_loop_safety_plugin(config=None)` | Death-spiral / repetition / failure circuit breaker |
+| StatusPanel | `create_status_panel_plugin()` | Status bar + `todo_write` tool |
+| MemoryDefense | `create_memory_defense_plugin()` | Persistent memory injection defense |
+| MemoryDefense (builder) | `MemoryDefensePluginBuilder().extra_file(name).build()` | Custom-file memory defense |
+| InjectionFilter | `create_injection_filter_plugin(patterns=None)` | Prompt injection detection |
+| SourceTag | `create_source_tag_plugin(entries)` | External content `<source>` wrapping |
+| ProjectInstruction | `create_project_instruction_plugin(env, config=None)` | Auto-inject CLAUDE.md etc |
+| Audit | `create_audit_plugin(sink_path, trace_id=None, task_id=None)` | Tool call audit log (JSONL) |
+| Notify | `create_notify_plugin()` | LLM proactively notifies user |
+| ToolOutputGuard | `create_tool_output_guard_plugin(env, config=None)` | Output truncation safety net |
+| WebhookStream | `create_webhook_stream(buffer)` | External event trigger |
+| ContextAwareCompaction | `create_context_aware_compaction_prompt()` | Context-aware compaction prompt pair |
+
+**Production safety pattern** — combine SafetyDefaults + LoopSafety + Audit:
+
+```python
+harness = (
+    senza.HarnessBuilder("gpt-4o")
+    .provider("*", provider)
+    .plugin(senza.create_safety_defaults_plugin())
+    .plugin(senza.create_loop_safety_plugin())
+    .plugin(senza.create_audit_plugin("/tmp/audit.jsonl"))
+    .build()
+)
+```
+
+See `senza-strategy` skill for detailed usage and config examples.

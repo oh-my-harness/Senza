@@ -65,7 +65,8 @@ All methods return `self` for chaining. Call `.build()` last.
 | `.temperature(t)` | `float? → self` | `None` = provider default |
 | `.tool(tool)` | `Tool → self` | From `create_tool()` |
 | `.plugin(plugin)` | `Plugin → self` | From `create_plugin()` |
-
+| `.compaction_prompt(system_prompt, user_template)` | `Optional[str], Optional[str] → self` | Custom compaction prompts |
+| `.compaction_query(query)` | `Optional[str] → self` | Query-focused compaction |
 `.build()` returns `AgentHarness`. Raises `RuntimeError` if no provider registered.
 
 ## Tool Creation
@@ -106,6 +107,44 @@ tool = senza.create_tool(
 | `.message_count()` | `int` | Current message count |
 | `.phase()` | `str` | `"idle"` / `"turning"` / `"compacting"` / `"branching"` |
 | `.abort()` | `None` | Cancel current prompt (non-blocking) |
+
+### UsageLedger
+
+`harness.usage_ledger()` returns the shared `UsageLedger` for multi-agent cost tracking. Multiple harnesses sharing one ledger get aggregated usage/cost snapshots via `ledger.snapshot()`.
+
+```python
+ledger = senza.UsageLedger()  # or shared from elsewhere
+harness = senza.HarnessBuilder("gpt-4o").provider("*", provider).build()
+# harness.usage_ledger() returns the ledger dict snapshot
+```
+
+### Internal fs tools
+
+`senza.create_fs_tools_plugin()` now includes **grep** and **glob** tools in addition to bash/read/write/edit — all auto-registered when you install the plugin:
+
+```python
+harness = (
+    senza.HarnessBuilder("gpt-4o")
+    .provider("*", provider)
+    .plugin(senza.create_fs_tools_plugin())  # bash + read + write + edit + grep + glob
+    .env(senza.create_os_env("."))
+    .build()
+)
+```
+
+### Compaction
+
+`senza.create_context_aware_compaction_prompt()` returns a `(system_prompt, user_template)` tuple for context-aware compaction that preserves task-critical context. Pair with `.compaction_prompt()`:
+
+```python
+sys_p, user_t = senza.create_context_aware_compaction_prompt()
+harness = (
+    senza.HarnessBuilder("gpt-4o")
+    .provider("*", provider)
+    .compaction_prompt(sys_p, user_t)
+    .build()
+)
+```
 
 ## Event Types
 

@@ -12,6 +12,7 @@ Senza 是 oh-my-harness Rust runtime 的 Python SDK，基于 PyO3 构建。面�
 | 🛡️ **原生崩溃恢复** | 工作流持久化 + 断点恢复，长流程不丢失进度 |
 | 💰 **内置预算管控** | 定价感知 + 预算上限 + 超限回调，每一分钱都看得见 |
 | 🔧 **两层 API** | Agent 层（单轮对话/工具调用/流式）+ Runtime 层（多步工作流/条件路由/暂停取消） |
+| 🧠 **知识与记忆** | 本地知识源 RAG、长期记忆、跨会话历史召回 |
 
 ### Showcase
 
@@ -186,9 +187,41 @@ harness = (
 
 ---
 
-## 示例
+### 策略插件
 
-见 [`examples/`](examples/) 目录（26 个示例，均可直接运行）：
+Senza 内置 12 个策略插件，覆盖安全防护、循环断路、审计日志、注入检测等生产场景：
+
+```python
+harness = (
+    senza.HarnessBuilder("gpt-4o")
+    .provider("*", provider)
+    .plugin(senza.create_safety_defaults_plugin())   # bash 黑名单 + 路径穿越防护
+    .plugin(senza.create_loop_safety_plugin())        # 死循环/重复/连续失败断路器
+    .build()
+)
+```
+
+### 知识与记忆
+
+给 Agent 挂载本地知识源（RAG）和长期记忆：
+
+```python
+# 本地知识源 RAG
+docs = senza.create_local_knowledge_source(
+    path="/data/wiki", source_id="wiki",
+)
+knowledge = senza.create_knowledge_plugin(sources=[docs])
+
+harness = (
+    senza.HarnessBuilder("gpt-4o")
+    .provider("*", provider)
+    .plugin(knowledge)  # LLM 可调用 knowledge_search / knowledge_read
+    .build()
+)
+```
+
+## 示例
+见 [`examples/`](examples/) 目录（47 个示例，均可直接运行）：
 
 ```bash
 export OPENAI_API_KEY=sk-...
@@ -198,6 +231,9 @@ python examples/runtime/01_linear_workflow.py
 
 - `examples/agent/` — 15 个示例（基础对话、工具调用、流式输出、动态配置、多 provider、hooks、rules、skills、plugins、budget/pricing、steering、session 分支、Anthropic、代码审查模板、RAG 问答模板）
 - `examples/runtime/` — 11 个示例（线性工作流、条件路由、执行器、崩溃恢复、暂停/取消、人工介入、Shell、HTTP、CompositeJudge、hooks+重试、数据分析流水线模板）
+- `examples/strategy/` — 策略插件示例（安全防护、循环断路器、审计日志、注入过滤、内存防御等）
+- `examples/knowledge/` — 知识与记忆示例（本地知识源 RAG、长期记忆、会话历史召回）
+- `examples/infra/` — 基础设施示例（审计 sink、trace 导出、沙箱）
 
 ---
 
@@ -212,6 +248,8 @@ python examples/runtime/01_linear_workflow.py
 - `senza-agent` — Agent 层使用模式
 - `senza-workflow` — Runtime 层使用模式
 - `senza-advanced` — Hooks、插件、人工介入、执行器
+- `senza-strategy` — 策略插件（安全防护、循环断路、审计、注入检测）
+- `senza-knowledge` — 知识与记忆（RAG、长期记忆、会话召回）
 
 ## 设计文档
 

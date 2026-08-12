@@ -311,6 +311,133 @@ handle, wait_tool = senza.create_event_channel("review-task")
 handle.submit("approved", {"feedback": "Looks good!"})
 ```
 
+## Strategy Plugins（12）
+
+```python
+senza.create_safety_defaults_plugin() -> Plugin
+senza.create_loop_safety_plugin(config: Optional[dict] = None) -> Plugin
+senza.create_status_panel_plugin() -> Plugin
+senza.create_memory_defense_plugin() -> Plugin
+
+# MemoryDefense builder（自定义保护文件）:
+senza.MemoryDefensePluginBuilder()
+    .extra_file(name: str) -> MemoryDefensePluginBuilder
+    .extra_files(names: list[str]) -> MemoryDefensePluginBuilder
+    .build() -> Plugin
+
+senza.create_injection_filter_plugin(patterns: Optional[list[str]] = None) -> Plugin
+senza.create_source_tag_plugin(entries: list[dict]) -> Plugin
+senza.create_project_instruction_plugin(
+    env: ExecutionEnv, config: Optional[dict] = None,
+) -> Plugin
+senza.create_audit_plugin(
+    sink_path: str, trace_id: Optional[str] = None, task_id: Optional[str] = None,
+) -> Plugin
+senza.create_notify_plugin() -> Plugin
+senza.create_tool_output_guard_plugin(
+    env: ExecutionEnv, config: Optional[dict] = None,
+) -> Plugin
+
+# Webhook 事件流（外部触发）
+senza.create_webhook_stream(buffer: int) -> tuple[WebhookChannel, EventStream]
+senza.create_context_aware_compaction_prompt() -> tuple[str, str]
+```
+
+| 函数 | 说明 |
+|------|------|
+| `create_safety_defaults_plugin()` | Bash 黑名单 + 路径穿越防护 |
+| `create_loop_safety_plugin(config=None)` | 死循环/重复/连续失败断路器 |
+| `create_status_panel_plugin()` | 状态栏 + `todo_write` 工具 |
+| `create_memory_defense_plugin()` | 持久记忆注入防御（默认文件集） |
+| `MemoryDefensePluginBuilder` | 自定义文件集的记忆防御构建器 |
+| `create_injection_filter_plugin(patterns=None)` | 提示注入检测 |
+| `create_source_tag_plugin(entries)` | 外部内容 `<source>` 标签包裹 |
+| `create_project_instruction_plugin(env, config=None)` | 自动注入 CLAUDE.md 等项目指令 |
+| `create_audit_plugin(sink_path, trace_id=None, task_id=None)` | 工具调用审计日志（JSONL） |
+| `create_notify_plugin()` | LLM 主动通知用户 |
+| `create_tool_output_guard_plugin(env, config=None)` | 工具输出截断安全网 |
+| `create_webhook_stream(buffer)` | 外部事件触发流 |
+| `create_context_aware_compaction_prompt()` | 上下文感知 compaction 提示对 |
+
+## Knowledge & Memory
+
+```python
+# 本地知识源（RAG）
+senza.create_local_knowledge_source(
+    path: str,
+    source_id: str,
+    name: Optional[str] = None,
+    description: Optional[str] = None,
+    domains: Optional[list[str]] = None,
+    max_document_bytes: int = 1048576,
+) -> KnowledgeSource
+
+senza.create_knowledge_plugin(
+    sources: list[KnowledgeSource],
+    config: Optional[dict] = None,
+) -> Plugin  # 注册 knowledge_search + knowledge_read 工具
+
+# 长期记忆
+senza.create_in_memory_store(read_source_id: str) -> MemoryStore
+senza.create_secure_write_policy(config: Optional[dict] = None) -> MemoryWritePolicy
+senza.create_allow_all_gate() -> MemoryMutationGate
+senza.create_memory_plugin(
+    source: KnowledgeSource,
+    store: MemoryStore,
+    policy: MemoryWritePolicy,
+    gate: Optional[MemoryMutationGate] = None,
+) -> Plugin  # 注册 memory_write + memory_forget 工具
+
+# 会话历史召回
+senza.create_in_memory_session_recall_index() -> SessionRecallIndex
+senza.create_sqlite_session_recall_index(path: str) -> SessionRecallIndex
+senza.create_in_memory_session_repo() -> SessionRepo
+senza.create_session_recall_knowledge_source(
+    repo: SessionRepo, index: SessionRecallIndex,
+) -> SessionRecallKnowledgeSource
+senza.create_history_recall_plugin(
+    source: SessionRecallKnowledgeSource,
+    config: Optional[dict] = None,
+) -> Plugin
+```
+
+> **重要**：`create_local_knowledge_source` 的 `source_id` 必须与 `create_in_memory_store` 的 `read_source_id` 一致，否则写入的记忆无法被读回。
+
+| 函数 | 说明 |
+|------|------|
+| `create_local_knowledge_source(path, source_id, ...)` | 本地文档知识源 |
+| `create_knowledge_plugin(sources, config=None)` | `knowledge_search` + `knowledge_read` 工具 |
+| `create_in_memory_store(read_source_id)` | 可写内存存储 |
+| `create_secure_write_policy(config=None)` | 注入安全写策略 |
+| `create_allow_all_gate()` | 完全放行写门控 |
+| `create_memory_plugin(source, store, policy, gate=None)` | `memory_write` + `memory_forget` 工具 |
+| `create_in_memory_session_recall_index()` | 内存会话索引 |
+| `create_sqlite_session_recall_index(path)` | SQLite 持久化会话索引 |
+| `create_in_memory_session_repo()` | 内存会话仓库 |
+| `create_session_recall_knowledge_source(repo, index)` | 会话召回知识源 |
+| `create_history_recall_plugin(source, config=None)` | 自动注入历史会话上下文 |
+
+## Infra（审计 / Trace / 沙箱）
+
+```python
+# JSONL 审计 sink（SHA-256 哈希链完整性）
+senza.JsonlAuditSink  # 类: append(record), validate(path) -> int
+
+# 内存 trace 导出器（测试用）
+senza.InMemoryTraceExporter  # 类: exported_span_count() -> int
+
+# 沙箱
+senza.create_seatbelt_sandbox(config: Optional[dict] = None) -> Sandbox  # macOS
+senza.create_bwrap_sandbox(config: Optional[dict] = None) -> Sandbox     # Linux
+```
+
+| 类/函数 | 说明 |
+|----------|------|
+| `JsonlAuditSink` | JSONL 文件审计 sink，SHA-256 哈希链完整性 |
+| `InMemoryTraceExporter` | 内存 trace 导出器，测试用 |
+| `create_seatbelt_sandbox(config=None)` | macOS Seatbelt 沙箱 |
+| `create_bwrap_sandbox(config=None)` | Linux Bubblewrap 沙箱 |
+
 ## Session Viewer
 
 ```bash
