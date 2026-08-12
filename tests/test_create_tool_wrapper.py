@@ -8,6 +8,7 @@ import senza
 
 def test_create_tool_with_parameters_kwarg():
     """create_tool should accept parameters= as the canonical kwarg."""
+
     def cb(args, ctx):
         return {"content": [], "terminate": False}
 
@@ -22,6 +23,7 @@ def test_create_tool_with_parameters_kwarg():
 
 def test_create_tool_with_parameters_schema_backward_compat():
     """create_tool should still accept parameters_schema= for backward compat."""
+
     def cb(args, ctx):
         return {"content": [], "terminate": False}
 
@@ -36,6 +38,7 @@ def test_create_tool_with_parameters_schema_backward_compat():
 
 def test_create_tool_single_arg_callback():
     """create_tool should accept a single-argument callback (args only)."""
+
     def single_arg_cb(args):
         return {"content": [{"type": "text", "text": args["x"]}], "terminate": False}
 
@@ -50,6 +53,7 @@ def test_create_tool_single_arg_callback():
 
 def test_create_tool_missing_parameters_raises():
     """create_tool should raise if neither parameters nor parameters_schema is given."""
+
     def cb(args, ctx):
         return {"content": [], "terminate": False}
 

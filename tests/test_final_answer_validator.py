@@ -10,6 +10,7 @@ def test_final_answer_validator_factory_exists():
 
 def test_final_answer_validator_creates_hook():
     """final_answer_validator should return a Hook object."""
+
     def my_validator(ctx):
         return None
 
