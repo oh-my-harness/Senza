@@ -16,8 +16,9 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use llm_harness_agent::{AgentHarness, AgentHarnessEvent};
+use llm_harness_runtime_knowledge::{KnowledgeAccessContext, KnowledgeScope, PrincipalRef};
 use llm_harness_runtime_mcp::builder::McpAgentHarness;
-use llm_harness_types::{HarnessPhase, ThinkingLevel, Tool};
+use llm_harness_types::{HarnessPhase, RunRequest, ThinkingLevel, Tool};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use tokio::sync::broadcast;
@@ -367,10 +368,41 @@ impl std::ops::Deref for HarnessRef {
     }
 }
 
+/// Trusted single-user access context used as the Senza SDK default.
+///
+/// The knowledge/memory/recall tools fail closed unless the run carries a
+/// [`KnowledgeAccessContext`] extension. The Senza SDK is a single-user trusted
+/// layer (its plugins use `AllowAllAuthorizer`), so it defaults every run to
+/// this context; applications may override it via
+/// `HarnessBuilder.knowledge_access(scope, principal)`.
+fn default_knowledge_access() -> KnowledgeAccessContext {
+    KnowledgeAccessContext::new(
+        KnowledgeScope::new("senza"),
+        PrincipalRef::new("python-sdk", "user"),
+    )
+}
+
+impl HarnessRef {
+    /// Run a request, injecting the given knowledge access context.
+    async fn run_with_extension(
+        &self,
+        request: RunRequest,
+        access: KnowledgeAccessContext,
+    ) -> Result<(), llm_harness_types::HarnessError> {
+        let request = request.with_extension(access);
+        match self {
+            HarnessRef::Base(h) => h.run(request).await,
+            HarnessRef::Mcp(h) => h.run(request).await,
+        }
+    }
+}
+
 /// Python 侧的 `AgentHarness` 包装类。
 #[pyclass(name = "AgentHarness")]
 pub struct PyAgentHarness {
     pub(crate) harness: HarnessRef,
+    /// Per-harness knowledge access context; `None` → `default_knowledge_access()`.
+    knowledge_access: Option<KnowledgeAccessContext>,
 }
 
 impl PyAgentHarness {
@@ -378,6 +410,18 @@ impl PyAgentHarness {
     pub fn new_base(harness: Arc<AgentHarness>) -> Self {
         Self {
             harness: HarnessRef::Base(harness),
+            knowledge_access: None,
+        }
+    }
+
+    /// 创建普通 harness 包装，携带显式的知识访问上下文。
+    pub fn new_base_with_access(
+        harness: Arc<AgentHarness>,
+        knowledge_access: KnowledgeAccessContext,
+    ) -> Self {
+        Self {
+            harness: HarnessRef::Base(harness),
+            knowledge_access: Some(knowledge_access),
         }
     }
 
@@ -385,7 +429,26 @@ impl PyAgentHarness {
     pub fn new_mcp(mcp_harness: Arc<McpAgentHarness>) -> Self {
         Self {
             harness: HarnessRef::Mcp(mcp_harness),
+            knowledge_access: None,
         }
+    }
+
+    /// 创建 MCP harness 包装，携带显式的知识访问上下文。
+    pub fn new_mcp_with_access(
+        mcp_harness: Arc<McpAgentHarness>,
+        knowledge_access: KnowledgeAccessContext,
+    ) -> Self {
+        Self {
+            harness: HarnessRef::Mcp(mcp_harness),
+            knowledge_access: Some(knowledge_access),
+        }
+    }
+
+    /// The effective knowledge access context for this harness.
+    fn effective_access(&self) -> KnowledgeAccessContext {
+        self.knowledge_access
+            .clone()
+            .unwrap_or_else(default_knowledge_access)
     }
 }
 
@@ -404,11 +467,17 @@ impl PyAgentHarness {
     fn prompt(&self, py: Python<'_>, text: &str) -> PyResult<()> {
         let harness = self.harness.clone();
         let text = text.to_string();
+        let access = self.effective_access();
         let rt = runtime(py);
         crate::shared::pyerror::block_on_with_signal_check(
             py,
             rt,
-            async move { harness.prompt(&text).await.map_err(harness_error_to_pyerr) },
+            async move {
+                harness
+                    .run_with_extension(RunRequest::from_text(text), access)
+                    .await
+                    .map_err(harness_error_to_pyerr)
+            },
             200,
         )?;
         Ok(())
@@ -581,6 +650,7 @@ impl PyAgentHarness {
         let harness = self.harness.clone();
         let text = text.to_string();
         let rx = self.harness.subscribe();
+        let access = self.effective_access();
         let handle = runtime(py).handle().clone();
         let timeout = std::time::Duration::from_millis(timeout_ms);
 
@@ -589,8 +659,11 @@ impl PyAgentHarness {
                 // Spawn prompt as a background task so we can collect events concurrently.
                 let prompt_harness = harness.clone();
                 let prompt_text = text.clone();
-                let prompt_task =
-                    handle.spawn(async move { prompt_harness.prompt(&prompt_text).await });
+                let prompt_task = handle.spawn(async move {
+                    prompt_harness
+                        .run_with_extension(RunRequest::from_text(prompt_text), access)
+                        .await
+                });
 
                 let mut events = Vec::new();
                 let mut rx = rx;
