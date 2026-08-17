@@ -15,6 +15,7 @@ use llm_harness_agent::{Plugin, Skill};
 use llm_harness_loop::config::RetryConfig;
 use llm_harness_loop::final_answer::FinalAnswerMode;
 use llm_harness_runtime::builder::HarnessBuilder;
+use llm_harness_runtime_knowledge::{KnowledgeAccessContext, KnowledgeScope, PrincipalRef};
 use llm_harness_runtime_mcp::builder::HarnessBuilderMcpExt;
 use llm_harness_types::{ExecutionEnv, StreamOptions, Tool, UnsupportedEnv};
 use pyo3::prelude::*;
@@ -55,6 +56,8 @@ pub struct PyHarnessBuilder {
     session_repo: Option<Arc<dyn llm_harness_agent::SessionRepo>>,
     /// Optional session ID to restore an existing session.
     session_id: Option<String>,
+    /// Optional per-harness knowledge access context; `None` uses the SDK default.
+    knowledge_access: Option<KnowledgeAccessContext>,
 }
 
 /// Spawn 配置：`enable_spawn()` 存储的参数，`build()` 时消费。
@@ -77,6 +80,7 @@ impl PyHarnessBuilder {
             spawn_config: None,
             session_repo: None,
             session_id: None,
+            knowledge_access: None,
         }
     }
 
@@ -164,6 +168,34 @@ impl PyHarnessBuilder {
     #[pyo3(text_signature = "($self, env)")]
     fn env<'a>(mut slf: PyRefMut<'a, Self>, env: &Bound<'_, PyEnvWrapper>) -> PyRefMut<'a, Self> {
         slf.env = Some(env.borrow().env.clone());
+        slf
+    }
+
+    /// 设置知识访问上下文（KnowledgeSource/Memory/Recall 工具的 run 授权）。
+    ///
+    /// 知识工具是 fail-closed：每个 run 必须携带 `KnowledgeAccessContext` 扩展，否则
+    /// `knowledge_search` 等返回 "unauthorized"。Senza 默认注入单用户可信上下文
+    /// （scope="senza", principal="python-sdk"），与本 SDK 的 `AllowAllAuthorizer`
+    /// 姿态一致。调用本方法可覆盖为真实身份/租户（例如多租户场景按应用提供 principal）。
+    ///
+    /// Args:
+    ///     scope: knowledge scope 命名空间（默认 "senza"）。
+    ///     principal: 主体标识（默认 "python-sdk"）。
+    ///     kind: 主体类型，如 "user"/"service"（默认 "user"）。
+    #[pyo3(
+        signature = (scope="senza", principal="python-sdk", kind="user"),
+        text_signature = "($self, scope='senza', principal='python-sdk', kind='user')"
+    )]
+    fn knowledge_access<'a>(
+        mut slf: PyRefMut<'a, Self>,
+        scope: &str,
+        principal: &str,
+        kind: &str,
+    ) -> PyRefMut<'a, Self> {
+        slf.knowledge_access = Some(KnowledgeAccessContext::new(
+            KnowledgeScope::new(scope),
+            PrincipalRef::new(principal, kind),
+        ));
         slf
     }
 
@@ -658,6 +690,7 @@ impl PyHarnessBuilder {
         let spawn_config = self.spawn_config.take();
         let session_repo = self.session_repo.take();
         let session_id = self.session_id.take();
+        let knowledge_access = self.knowledge_access.take();
 
         // If a session repo is set, load/create a session and use
         // build_with_session() instead of the default in-memory build.
@@ -690,7 +723,10 @@ impl PyHarnessBuilder {
                 wiring.post_build(&harness);
             }
 
-            return Py::new(py, PyAgentHarness::new_base(harness));
+            return Py::new(py, match knowledge_access.clone() {
+                Some(acc) => PyAgentHarness::new_base_with_access(harness, acc),
+                None => PyAgentHarness::new_base(harness),
+            });
         }
 
         if has_mcp {
@@ -709,7 +745,10 @@ impl PyHarnessBuilder {
             let mcp_harness = crate::shared::pyerror::detach_catch_panic_result(py, move || {
                 rt.block_on(async move { mcp_builder.build(env).await })
             })?;
-            Py::new(py, PyAgentHarness::new_mcp(Arc::new(mcp_harness)))
+            Py::new(py, match knowledge_access.clone() {
+                Some(acc) => PyAgentHarness::new_mcp_with_access(Arc::new(mcp_harness), acc),
+                None => PyAgentHarness::new_mcp(Arc::new(mcp_harness)),
+            })
         } else {
             // If spawn is enabled, wire spawn infrastructure into the builder
             // before build, and set post-build hooks after.
@@ -727,7 +766,10 @@ impl PyHarnessBuilder {
                 wiring.post_build(&harness);
             }
 
-            Py::new(py, PyAgentHarness::new_base(harness))
+            Py::new(py, match knowledge_access.clone() {
+                Some(acc) => PyAgentHarness::new_base_with_access(harness, acc),
+                None => PyAgentHarness::new_base(harness),
+            })
         }
     }
 }
@@ -751,6 +793,7 @@ impl PyHarnessBuilder {
             spawn_config: None,
             session_repo: None,
             session_id: None,
+            knowledge_access: None,
         }
     }
 }
