@@ -6,16 +6,10 @@ Mirrors runtime `21_context_aware_compact.rs`. Demonstrates:
     `## Key Decisions`, `## Next Steps`, `## Critical Context` sections.
   - Wired in via `HarnessBuilder.compaction_prompt(system_prompt=...,
     user_template=...)` plus a query-focused `.compaction_query(...)`.
-  - Auto-compact driven by a small context window; the generated summary
-    follows the structured template, and the sections are checked.
-  - A second harness shows the prompt + query wired against a different
-    task and confirms the compaction lifecycle on the stream.
-
-Note: the runtime example's "Part 2" calls a manual `compact()` method on the
-harness. Senza's Python surface has no manual `compact()` (that is
-runtime-only, as in `05_compaction.py`); automation runs through
-auto-compact, and `compaction_start` / `compaction_end` events are observed on
-the event stream instead.
+  - Auto-compact driven by a small context window after checking that the
+    configured template contains the expected structured sections.
+  - A second harness uses `Harness.compact()` to trigger the same configured
+    prompt manually and prints the returned compaction statistics.
 
 Run:
   source ~/.omp_llm_env && python live-tests/examples/21_context_aware_compact.py
@@ -91,35 +85,40 @@ def main() -> None:
     print(f"Post-compaction recall: {text_of(events).strip()[:150]}")
     print()
 
-    # ── Part 2: same context-aware prompt wired on a fresh task ──────────
-    # A large window here, so this part only proves the query/prompt wiring
-    # holds on a different task and the loop settles — the auto-compact proof
-    # lives in Part 1 (a tiny window + NoValidBoundary is flaky, as in 05).
-    print("--- Part 2: Context-aware prompt on a different task ---\n")
+    # ── Part 2: manual compact with the same prompt contract ─────────────
+    print("--- Part 2: Manual context-aware compact() ---\n")
     harness2 = make_example_harness(
         lambda b: (
             b.model_info(context_window=16_000, max_tokens=256)
             .compaction_model(live_model(), context_window=200_000, max_tokens=4096)
-            .auto_compact(True)
+            .compaction_reserve_tokens(0)
+            .compaction_keep_recent_tokens(0)
+            .auto_compact(False)
             .compaction_prompt(system_prompt=system_prompt, user_template=user_template)
             .compaction_query("User is discussing database migration strategies")
         )
     )
 
-    for i in range(1, 4):
+    for i in range(1, 3):
         events = run_prompt(
             harness2,
             f"Summarize database migration approach #{i} in one short sentence.",
             timeout_ms=60_000,
         )
         print(f"Turn {i}: {text_of(events).strip()[:70]}...")
-    print("\nPart 2 loop settled; context-aware compaction prompt + query wired OK")
+    stats = harness2.compact()
+    print(
+        "Manual compact stats: "
+        f"{stats['tokens_before']} -> {stats['tokens_after']} tokens, "
+        f"{stats['compressed_entries']} entries compressed"
+    )
 
     print("\n--- Summary ---")
     print(
         "Context-aware template sections: Goal/Progress/Key Decisions/Next Steps/Critical Context"
     )
     print(f"Auto-compact fired (Part 1): {fired}")
+    print("Manual compact API exercised (Part 2): true")
 
 
 if __name__ == "__main__":

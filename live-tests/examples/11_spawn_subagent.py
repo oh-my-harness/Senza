@@ -3,10 +3,15 @@
 Mirrors runtime `11_spawn_subagent.rs`. Demonstrates Senza's spawn
 infrastructure (added alongside the live-tests spawn suite):
   - enable_spawn() wires MessageBus, HarnessSubAgentSpawner, AsyncSpawnHook,
-    IdleWatcher, and the 3 spawn tools on the builder
+    IdleWatcher, and 5 main-agent spawn tools on the builder
   - spawn_agent: main agent spawns a sub-agent (async, fire-and-forget)
+  - message_subagent: main agent sends a follow-up message
   - await_subagent_reply: main agent blocks waiting for a sub-agent reply
   - query_subagent: main agent queries a sub-agent's status
+  - abort_subagent: main agent requests cancellation
+
+This focused example exercises spawn/await/query; message/abort are wired by
+the same enable_spawn() call but are not invoked here.
 
 Run:
   source ~/.omp_llm_env && python live-tests/examples/11_spawn_subagent.py
