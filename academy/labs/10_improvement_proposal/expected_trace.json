@@ -1,0 +1,91 @@
+{
+  "lab": "10",
+  "title": "Improvement Proposal：从 SQL bad case 到人工审批门",
+  "maturity": "teaching",
+  "theory": "《动手学 AI Agent》第九章：在线执行与离线进化分离；局部更新先形成可审计提案，同时通过 boundary、retention 与安全门，最后由独立人员审批。",
+  "runtime_mapping": "Academy 应用层读取轨迹 fixture，把结构化 Plugin rule_config 与 Skill 内容绑定进带摘要的 candidate bundle，并用同一 rule_config 离线回放；Runtime/Senza 仅提供 Plugin、Hook、Audit 等积木，没有自动进化发布闭环。",
+  "claims": [
+    "recorded runner 从三条 SQL bad case 一致归因到 before_tool_call 放过 DELETE without WHERE。",
+    "runner 生成结构化 Plugin 硬边界候选与 Skill 操作指导候选，并用 candidate_digest 绑定来源、artifact 和规范化 diff。",
+    "preflight 校验摘要、artifact/diff 一致性、精确 target allowlist 与显式 protected paths；随后 boundary/retention replay 读取 proposal 中的同一 rule_config。",
+    "全部教学门通过后状态停在 awaiting_human_approval；helper 不提供 apply/install/train 操作。"
+  ],
+  "boundaries": [
+    "这是 Academy 的 provider-free 教学应用层，不是 Runtime 内建的自动进化 API 或产品闭环。",
+    "fixture 是合成的历史 bad case，不代表当前 32_plugins.py 或 Runtime 仍存在该漏洞。",
+    "测试通过只允许进入人工审批，不代表提案已安装、发布或证明线上收益。",
+    "本课只检查内存 bundle 与声明 target，不能证明任意目录外副作用、外部安装、网络动作或训练任务不存在。",
+    "真实审批门、验证器、boundary/retention 集、审计日志和稳定版本属于不可由候选自我修改的外部信任根。",
+    "SFT、RL、蒸馏和奖励训练属于外部系统，本课不执行也不声称具备这些能力。"
+  ],
+  "live_examples": [
+    "32_plugins.py",
+    "12_tracing_audit.py"
+  ],
+  "events": [
+    {
+      "seq": 1,
+      "kind": "eval",
+      "actor": "BadCaseReader",
+      "summary": "读取三条已评价 SQL 失败记录，保留 case_id、动作与首错步骤",
+      "status": "info",
+      "lifecycle": "offline_evidence"
+    },
+    {
+      "seq": 2,
+      "kind": "eval",
+      "actor": "RootCauseAnalyzer",
+      "summary": "一致归因：before_tool_call 允许了缺少 WHERE 的 DELETE",
+      "status": "accepted",
+      "lifecycle": "diagnosis"
+    },
+    {
+      "seq": 3,
+      "kind": "proposal",
+      "actor": "PluginCandidate",
+      "summary": "把确定性 deny/modify 规则写入 proposal.rule_config，作为硬边界候选",
+      "status": "preview",
+      "lifecycle": "proposal_generation"
+    },
+    {
+      "seq": 4,
+      "kind": "proposal",
+      "actor": "SkillCandidate",
+      "summary": "把 SELECT 预览与显式 WHERE 指导写入结构化 artifact，明确 Skill 不能替代硬边界",
+      "status": "preview",
+      "lifecycle": "proposal_generation"
+    },
+    {
+      "seq": 5,
+      "kind": "eval",
+      "actor": "BoundaryRunner",
+      "summary": "从已通过摘要与 target preflight 的 proposal 读取 rule_config，三条 DELETE without WHERE 均被拒绝",
+      "status": "passed",
+      "lifecycle": "boundary_set"
+    },
+    {
+      "seq": 6,
+      "kind": "eval",
+      "actor": "RetentionRunner",
+      "summary": "有界 SELECT、LIMIT 改写、带 WHERE DELETE 与状态查询均无回退",
+      "status": "passed",
+      "lifecycle": "retention_set"
+    },
+    {
+      "seq": 7,
+      "kind": "eval",
+      "actor": "TrustRootVerifier",
+      "summary": "candidate_digest、artifact/diff 一致性、精确 allowlist 与显式 protected path 检查均通过",
+      "status": "passed",
+      "lifecycle": "protected_boundaries"
+    },
+    {
+      "seq": 8,
+      "kind": "proposal",
+      "actor": "ApprovalGate",
+      "summary": "全部离线门通过，但不自动安装；等待独立人工审批",
+      "status": "paused",
+      "lifecycle": "awaiting_human_approval"
+    }
+  ]
+}

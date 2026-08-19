@@ -1,0 +1,69 @@
+{
+  "lab": "01",
+  "title": "ReAct 与 Tool Calling：从模型决策到可观察闭环",
+  "maturity": "stable",
+  "theory": "《动手学 AI Agent》第1章：现代 Agent = LLM + 上下文 + 工具；工具调用；ReAct 循环（https://github.com/bojieli/ai-agent-book/blob/1d2e04ee733dde245af2eb718cfc92d2d0542b7e/book/chapter1.md）",
+  "runtime_mapping": "Senza HarnessBuilder → Runtime Agent Core → Tool callback → observation → settled event",
+  "claims": [
+    "Agent Core 把模型提出的结构化 tool call 转换为一次受 Harness 管理的工具执行。",
+    "工具结果先成为轨迹中的 observation，模型才能基于真实结果生成下一步输出。",
+    "run 的最终收敛由 Core 的答案提交与停止边界管理，而不是由工具 callback 自行宣告。"
+  ],
+  "boundaries": [
+    "这是无 Provider 的审阅轨迹；真实模型选择、Senza callback 和事件流必须由 live example 证明。",
+    "一次工具往返不证明工具安全、长任务规划、自动恢复或重复运行可靠性。"
+  ],
+  "live_examples": [
+    "02_tool_calling.py"
+  ],
+  "events": [
+    {
+      "seq": 1,
+      "kind": "user",
+      "actor": "developer",
+      "summary": "请求读取仓库配置并说明当前默认模型",
+      "status": "info",
+      "lifecycle": "before_run"
+    },
+    {
+      "seq": 2,
+      "kind": "model",
+      "actor": "model",
+      "summary": "基于可见的工具定义选择 inspect_file，并生成结构化参数 {path: 'agent.toml'}",
+      "status": "accepted",
+      "lifecycle": "provider response → assistant tool call"
+    },
+    {
+      "seq": 3,
+      "kind": "tool",
+      "actor": "agent-core",
+      "summary": "校验工具名与参数后，将 inspect_file 调用分派给已注册 callback",
+      "status": "accepted",
+      "lifecycle": "before_tool_call → tool dispatch"
+    },
+    {
+      "seq": 4,
+      "kind": "tool",
+      "actor": "repository-tool",
+      "summary": "返回观察：agent.toml 中 default_model = 'gpt-5.6'",
+      "status": "ok",
+      "lifecycle": "tool result → after_tool_call"
+    },
+    {
+      "seq": 5,
+      "kind": "model",
+      "actor": "model",
+      "summary": "看到工具结果后回答默认模型为 gpt-5.6，并引用读取到的配置",
+      "status": "ok",
+      "lifecycle": "observation in context → next provider response"
+    },
+    {
+      "seq": 6,
+      "kind": "agent",
+      "actor": "agent-core",
+      "summary": "提交候选答案并把本次 run 标记为 settled",
+      "status": "passed",
+      "lifecycle": "final answer validation → stop/settled"
+    }
+  ]
+}

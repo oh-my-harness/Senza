@@ -1,0 +1,3 @@
+{"case_id":"bad-delete-sessions","tool_name":"run_query","args":{"sql":"DELETE FROM sessions"},"observed_action":"allow","expected_action":"deny","expected_effective_sql":null,"first_error":"before_tool_call admitted an unscoped DELETE"}
+{"case_id":"bad-delete-api-tokens","tool_name":"run_query","args":{"sql":"DELETE FROM api_tokens;"},"observed_action":"allow","expected_action":"deny","expected_effective_sql":null,"first_error":"before_tool_call admitted an unscoped DELETE"}
+{"case_id":"bad-delete-audit-events","tool_name":"run_query","args":{"sql":"  delete FROM audit_events  "},"observed_action":"allow","expected_action":"deny","expected_effective_sql":null,"first_error":"before_tool_call admitted an unscoped DELETE"}
