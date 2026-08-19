@@ -7,7 +7,7 @@
 
 > **spawn 机制更新**（2026-07-14）
 >
-> runtime commit `2baeda7` 重构了 spawn 模块。旧 `SyncSpawnAgentTool`（同步阻塞）+ peer.rs + async_spawn.rs 多模块设计已删除，替换为 MessageBus 统一架构 + 7 个异步通信 tool。本文档 §5/§7/§9 已同步更新。
+> runtime commit `2baeda7` 重构了 spawn 模块。旧 `SyncSpawnAgentTool`（同步阻塞）+ peer.rs + async_spawn.rs 多模块设计已删除，替换为 MessageBus 统一架构。Runtime 协议共定义 7 个异步 tool（主侧 5 个 + 可由 child plugin 贡献的子侧 2 个）；当前 Senza 默认只挂载主侧 5 个，child factory 使用 `NoopPlugin`。本文档 §5/§7/§9 已同步更新。
 >
 > **架构变更说明**（2026-07-13）
 >
@@ -71,7 +71,7 @@ PyO3 module 名：`senza`（已从 `llm_harness_py` 改名）。
 | `create_executor()` | `PyExecutor` → `StepExecutor` trait | 从 Python callable 创建 executor |
 | `Judge` / `Executor` | wrapper class | 持有已创建的 judge/executor 供注册 |
 
-#### Hooks（11 种）
+#### Hooks（12 种）
 
 | 函数 | Hook 类型 | callback 签名 |
 |------|-----------|--------------|
@@ -80,12 +80,13 @@ PyO3 module 名：`senza`（已从 `llm_harness_py` 改名）。
 | `senza.hooks.before_run()` | `BeforeRunHook` | `callback(ctx: dict) -> None` |
 | `senza.hooks.after_provider_response()` | `AfterProviderResponseHook` | `callback(ctx: dict) -> None` |
 | `senza.hooks.before_provider_request()` | `BeforeProviderRequestHook` | `callback(ctx: dict) -> None` |
-| `senza.hooks.before_tool_call()` | `BeforeToolCallHook` | `callback(ctx: dict) -> str \| None` |
+| `senza.hooks.before_tool_call()` | `BeforeToolCallHook` | `callback(ctx: dict) -> str \| dict` |
 | `senza.hooks.after_tool_call()` | `AfterToolCallHook` | `callback(ctx: dict) -> str \| dict` |
 | `senza.hooks.should_stop()` | `ShouldStopHook` | `callback(ctx: dict) -> bool` |
 | `senza.hooks.before_compact()` | `BeforeCompactHook` | `callback(ctx: dict) -> str \| dict` |
 | `senza.hooks.transform_context()` | `TransformContextHook` | `callback(ctx: dict) -> dict` |
 | `senza.hooks.prepare_next_turn()` | `PrepareNextTurnHook` | `callback(ctx: dict) -> dict \| None` |
+| `senza.hooks.final_answer_validator()` | `FinalAnswerValidator` | `callback(ctx: dict) -> None \| str \| dict` |
 
 所有 hook 均支持 `async def` 回调。
 
@@ -102,7 +103,7 @@ PyO3 module 名：`senza`（已从 `llm_harness_py` 改名）。
   - `pybuilder.rs` — `HarnessBuilder` Python 类
   - `pytool.rs` — `create_tool()` / Tool trait 实现
   - `pyprovider.rs` — `senza.providers.openai()` / `senza.providers.anthropic()`
-  - `pyhooks.rs` — 11 种 hook 创建函数
+  - `pyhooks.rs` — 12 种 hook 创建函数
   - `pyplugin.rs` — `create_plugin()`
   - `pyeventstream.rs` — `create_event_channel()` + human-in-the-loop
   - `pyagent.rs` — `Agent` 类（仅 test-utils feature）
@@ -144,7 +145,7 @@ PyO3 module 名：`senza`（已从 `llm_harness_py` 改名）。
 | — | WorkflowRunRequest 路径未验证 | P2 | ✅ 已验证 |
 | — | src/ 目录结构 flat，22 文件 | P2 | ✅ 已重组为 shared/core/runtime/strategy/knowledge/infra 子目录 |
 | — | stub 数从 138 增至 173 | — | ✅ 已验证 |
-| — | Strategy crate 12 个 plugin 绑定未暴露 | P1 | ✅ 阶段 2 完成（SafetyDefaults/LoopSafety/StatusPanel/MemoryDefense/InjectionFilter/SourceTag/ProjectInstruction/Audit/Notify/ToolOutputGuard/WebhookStream/context_aware_compaction） |
+| — | Strategy 层 10 个 Plugin 工厂 + 2 个 helper 绑定未暴露 | P1 | ✅ 阶段 2 完成（SafetyDefaults/LoopSafety/StatusPanel/MemoryDefense/InjectionFilter/SourceTag/ProjectInstruction/Audit/Notify/ToolOutputGuard + WebhookStream/context-aware compaction prompt） |
 | — | Knowledge + Memory + SessionRecall 绑定未暴露 | P1 | ✅ 阶段 3 完成（LocalDocumentSource/KnowledgePlugin/InMemoryStore/SecureMemoryWritePolicy/MemoryPlugin/SessionRecallIndex/HistoryRecallPlugin） |
 | — | Infra 层绑定未暴露 | P2 | ✅ 阶段 4 完成（JsonlAuditSink/InMemoryTraceExporter/SeatbeltSandbox/BwrapSandbox） |
 | — | examples 未覆盖 strategy/knowledge/infra 能力 | P2 | ✅ 阶段 4 完成（18 个新 example） |
@@ -323,6 +324,7 @@ harness.abort()
 | `collect_until_settled(timeout_ms=30000)` | `int → list[dict]` | 收集事件直到 settled/aborted |
 | `message_count()` | `→ int` | 当前消息数 |
 | `phase()` | `→ str` | "idle"/"turning"/"compacting"/"branching" |
+| `compact()` | `→ dict` | 手工触发 compaction，返回压缩前后 token 与条目统计 |
 | `abort()` | `→ None` | 取消当前 prompt |
 
 ### 4.3 Tool 创建
@@ -553,9 +555,9 @@ handle.submit("审核通过", {"approved": True, "reviewer": "alice"})
 
 声明式条件自动启用：如果 edges 中有 `Expr` 条件且 judge 是 NoopJudge，引擎自动替换为 `EdgeConditionJudge`。
 
-### spawn_agent + sub-agent 通信（7 个 tool）
+### spawn_agent + sub-agent 通信（Senza 默认挂主侧 5 个）
 
-LLM step 的 `allowed_tools` 含 `"spawn_agent"` 时，引擎自动注册 **7 个 LLM tool**（`engine.rs:1075`）+ MessageBus + AsyncSpawnHook + IdleWatcher + AbortCascadeHook。
+LLM step 的 `allowed_tools` 含 `"spawn_agent"` 时，引擎为主 Agent 注册 **5 个管理 tool** + MessageBus + AsyncSpawnHook + IdleWatcher + AbortCascadeHook。Runtime 另定义 2 个子侧反向通信 tool，但当前 Senza/Workflow 的 child factory 返回 `NoopPlugin`，默认不会把它们挂到子 Agent；该 factory 同时阻止递归 spawn。
 
 **架构**：MessageBus 统一事件通道，main↔sub 双向异步通信。spawn 是异步的（不阻塞），sub-agent 完成后结果自动注入 main agent 对话。
 
@@ -571,7 +573,7 @@ LLM step 的 `allowed_tools` 含 `"spawn_agent"` 时，引擎自动注册 **7 �
 
 **关键机制**：
 - `MessageBus` — `register`/`send`/`wait`/`query_status`/`abort_agent`/`take_event_rx`
-- `AsyncSpawnHook`（ShouldStop hook）— sub-agent 完成事件注入 main agent 对话
+- `AsyncSpawnHook`（AfterTurn hook）— drain sub-agent 消息并注入 main agent 对话
 - `IdleWatcher` — bus 无在途事件时触发 `harness.continue_run()`
 - `AbortCascadeHook` — 级联取消所有 sub-agent（step abort 时）
 - `SubAgentMessageConverter` — 把 sub-agent 消息转为 LLM CustomMessage
@@ -657,7 +659,7 @@ LLM step 的 `allowed_tools` 含 `"spawn_agent"` 时，引擎自动注册 **7 �
 | Step plugin | `with_step_plugin()` | ✅ `engine.with_step_plugin()` | 每步可注入 plugin |
 | Hooks (12 种) | `with_hooks()` | ✅ `engine.with_hooks()` + 12 个 `senza.hooks.*()` | 全部暴露 |
 | Extra tools | `with_tool()` | ✅ `engine.with_tool()` | 引擎级注入 |
-| spawn_agent + 6 communication tools | `SpawnAgentTool` + 6 tools + MessageBus | ✅ `enable_spawn()` 或 LLM step `allowed_tools` 含 `"spawn_agent"` 时自动注册（7 个 tool 一组） | `allowed_tools` 含 `"spawn_agent"` 或 builder 调 `enable_spawn()` |
+| spawn 通信协议 | Runtime 定义主侧 5 + 可选子侧 2 + MessageBus | ✅ `enable_spawn()` 或 LLM step `allowed_tools` 含 `"spawn_agent"` 时挂载主侧 5；当前 child 为 `NoopPlugin` | `allowed_tools` 含 `"spawn_agent"` 或 builder 调 `enable_spawn()` |
 | Human-in-the-loop | `WaitForExternalEventTool` | ✅ `create_event_channel()` | 外部事件注入 |
 | 内置 executor (json_transform) | `builtin_executors()` | ✅ 自动注册 | 不再被 Python callback 覆盖 |
 | max_tokens | `with_max_tokens()` | ✅ `engine.with_max_tokens()` | 每步最大输出 |
@@ -781,7 +783,7 @@ eda-agent-py 的 `import llm_harness_py` 已改为 `import senza`（commit 22555
 |-------|---------|---------|
 | `senza-agent` | 单轮 LLM 调用、tool 注册、streaming、provider 创建 | HarnessBuilder 链式 API、create_tool、AgentHarness 方法、event 类型 |
 | `senza-workflow` | 多步 workflow、条件路由、judge/executor、共享 context | workflow dict schema、edge condition、Transition 编码、WorkflowEngine 方法 |
-| `senza-advanced` | sub-agent、hooks、human-in-the-loop、event streaming | 7 个 spawn tool + MessageBus、12 种 hook、create_event_channel、plugin |
+| `senza-advanced` | sub-agent、hooks、human-in-the-loop、event streaming | Senza 默认 spawn 主侧 5 tools；Runtime 另定义可选子侧 2 tools、12 种 hook、create_event_channel、plugin |
 
 ### 目录结构
 

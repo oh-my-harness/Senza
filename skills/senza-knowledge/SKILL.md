@@ -3,14 +3,14 @@ name: senza-knowledge
 description: >-
   Knowledge, memory, and session-recall for Senza agents. Use when the user
   wants to: (1) give an agent a local document knowledge base (RAG),
-  (2) let an agent write/forget long-term memories,
+  (2) let an agent write/forget entries through the memory tools,
   (3) recall relevant context from past sessions,
   (4) build a knowledge_search + knowledge_read tool pair,
   (5) build a memory_write + memory_forget tool pair,
   (6) build a history_recall plugin for cross-session context.
   Trigger phrases: "knowledge source", "RAG", "memory plugin", "memory store",
   "session recall", "history recall", "knowledge_search", "knowledge_read",
-  "memory_write", "memory_forget", "local knowledge", "long-term memory".
+  "memory_write", "memory_forget", "local knowledge", "memory".
 ---
 
 # Senza Knowledge — RAG, Memory, and Session Recall
@@ -112,7 +112,7 @@ knowledge = senza.knowledge.plugin(sources=[wiki, runbooks])
 
 ---
 
-## 2. Long-Term Memory
+## 2. Memory Write/Delete (In-Process Demo Store)
 
 ### InMemoryStore
 
@@ -120,12 +120,14 @@ knowledge = senza.knowledge.plugin(sources=[wiki, runbooks])
 senza.knowledge.memory_store(read_source_id: str) -> MemoryStore
 ```
 
-An in-memory key-value store the agent can write to and read from.
-`read_source_id` **must match** the `source_id` of the paired `KnowledgeSource` —
-this is how the memory plugin reads back what it wrote.
+The built-in store is a Senza-side demo implementation backed by an in-process
+`Mutex<Vec>`. It supports writes and deletes for the lifetime of that Python
+process; it is not persistent storage.
 
-> **CRITICAL**: If `source_id` and `read_source_id` don't match, writes will
-> succeed but reads will return nothing.
+`read_source_id` **must match** the `source_id` of the paired `KnowledgeSource`
+because `MemoryService` validates that descriptor contract. Matching the IDs
+does not synchronize store entries into `local_source`, so a successful
+`memory_write` does not make the content searchable through `knowledge_search`.
 
 ### SecureMemoryWritePolicy
 
@@ -143,9 +145,9 @@ Config dict supports tuning these limits.
 senza.knowledge.allow_all_gate() -> MemoryMutationGate
 ```
 
-A permissive gate — all writes pass. Use for development / trusted environments.
-Pass as the `gate` argument to `senza.knowledge.memory_plugin` to override the default
-secure gate.
+A permissive gate — all writes pass. This is also the current default when
+`memory_plugin(..., gate=None)` is used. Production callers should provide a
+real approval gate rather than treating the default as secure.
 
 ### MemoryPlugin
 
@@ -159,11 +161,11 @@ senza.knowledge.memory_plugin(
 ```
 
 Registers two tools:
-- `memory_write(key, content)` — persist a memory entry (validated by policy + gate).
+- `memory_write(key, content)` — write an entry to the configured store (validated by policy + gate).
 - `memory_forget(key)` — delete a memory entry.
 
-The plugin also makes written memories searchable via `knowledge_search` because
-the store's `read_source_id` is linked to the source.
+The plugin does not add `knowledge_search`/`knowledge_read`, and the built-in
+store does not automatically update the paired local knowledge source.
 
 ### Memory Pattern
 
@@ -172,7 +174,7 @@ import senza
 
 provider = senza.providers.openai(api_key="sk-...")
 
-# 1. Create a local knowledge source for memory storage
+# 1. Create the paired read source (the demo store does not write files into it)
 mem_source = senza.knowledge.local_source(
     path="/data/memory",
     source_id="memory",  # ← this ID...
@@ -203,7 +205,7 @@ harness = senza.HarnessBuilder("gpt-4o").provider("*", provider).plugin(memory).
 Combining knowledge + memory:
 
 ```python
-# RAG for documents + writable memory — both in one harness
+# RAG for documents + process-local memory write/delete tools
 harness = (
     senza.HarnessBuilder("gpt-4o")
     .provider("*", provider)
@@ -324,9 +326,9 @@ harness = (
 |----------|---------|---------|
 | `senza.knowledge.local_source(path, source_id, ...)` | `KnowledgeSource` | Local document RAG source |
 | `senza.knowledge.plugin(sources, config=None)` | `Plugin` | `knowledge_search` + `knowledge_read` tools |
-| `senza.knowledge.memory_store(read_source_id)` | `MemoryStore` | Writable in-memory store |
+| `senza.knowledge.memory_store(read_source_id)` | `MemoryStore` | Process-local `Mutex<Vec>` demo store; not persistent |
 | `senza.knowledge.secure_write_policy(config=None)` | `MemoryWritePolicy` | Injection-safe write validation |
-| `senza.knowledge.allow_all_gate()` | `MemoryMutationGate` | Permissive write gate |
+| `senza.knowledge.allow_all_gate()` | `MemoryMutationGate` | Permissive write gate; also the current default |
 | `senza.knowledge.memory_plugin(source, store, policy, gate=None)` | `Plugin` | `memory_write` + `memory_forget` tools |
 | `senza.knowledge.in_memory_session_recall_index()` | `SessionRecallIndex` | In-memory session index |
 | `senza.knowledge.sqlite_session_recall_index(path)` | `SessionRecallIndex` | Persistent SQLite session index |

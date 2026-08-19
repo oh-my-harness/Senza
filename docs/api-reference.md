@@ -42,8 +42,8 @@ senza.providers.anthropic(api_key, base_url=None, messages_path=None)
 | `.tool(tool)` / `.plugin(plugin)` | 注册工具/插件 |
 | `.tools([tool, ...])` | 批量注册工具（等价多次 `.tool()`） |
 | `.env(env)` | 设置执行环境（`create_os_env(...)`），启用 bash/read/write/edit 工具 |
-| `.enable_spawn(model, provider, session_dir)` | 启用子 Agent 派发（自动注册 MessageBus + 7 个 spawn 通信 tool） |
-| `.final_answer_validator(hook)` | 注册最终回答校验 hook（提交前拦截/修改/拒绝） |
+| `.enable_spawn(model, provider, session_dir)` | 启用子 Agent 派发（主 Agent 注册 MessageBus + 5 个管理 tool；当前 `NoopPlugin` child 不自动挂载 Runtime 另定义的 2 个子侧通信 tool） |
+| `.final_answer_validator(hook)` | 注册最终回答校验 hook（提交前接受或拒绝） |
 | `.build()` | 返回 `AgentHarness` |
 
 ### AgentHarness
@@ -61,6 +61,7 @@ senza.providers.anthropic(api_key, base_url=None, messages_path=None)
 | `.set_thinking_level("high")` | "off"/"minimal"/"low"/"medium"/"high"/"xhigh"/"budget:N" |
 | `.steer(text)` / `.follow_up(text)` | 运行中注入消息 |
 | `.usage()` | 查询成本统计 |
+| `.compact()` | 手工触发 compaction，返回 `tokens_before` / `tokens_after` / `compressed_entries` |
 | `.get_messages()` | 获取完整对话历史 |
 | `.last_response()` | 获取最近一条 assistant 回复文本 |
 | `.abort()` | 取消当前提示 |
@@ -283,13 +284,13 @@ senza.hooks.after_turn(cb)  # cb(ctx: dict) -> None
 senza.hooks.before_run(cb)  # cb(ctx: dict) -> None
 senza.hooks.after_provider_response(cb)  # cb(ctx: dict) -> None
 senza.hooks.before_provider_request(cb)  # cb(ctx: dict) -> None
-senza.hooks.before_tool_call(cb)  # cb(ctx: dict) -> str | None
+senza.hooks.before_tool_call(cb)  # cb(ctx: dict) -> str | dict  # allow/modify/deny
 senza.hooks.after_tool_call(cb)  # cb(ctx: dict) -> str | dict
 senza.hooks.should_stop(cb)  # cb(ctx: dict) -> bool
 senza.hooks.before_compact(cb)  # cb(ctx: dict) -> Any
 senza.hooks.transform_context(cb)  # cb(ctx: dict) -> dict
 senza.hooks.prepare_next_turn(cb)  # cb(ctx: dict) -> Optional[dict]
-senza.hooks.final_answer_validator(cb)  # cb(ctx: dict) -> None | dict  # 提交最终回答前校验/拦截
+senza.hooks.final_answer_validator(cb)  # cb(ctx: dict) -> None | str | dict  # 提交前接受/拒绝
 ```
 
 ## Pricing
@@ -332,7 +333,7 @@ handle, wait_tool = senza.create_event_channel("review-task")
 handle.submit("approved", {"feedback": "Looks good!"})
 ```
 
-## Strategy Plugins（12）
+## Strategy（10 个 Plugin 工厂 + 2 个 helper）
 
 ```python
 senza.strategy.safety_defaults() -> Plugin
@@ -359,7 +360,7 @@ senza.strategy.tool_output_guard(
     env: ExecutionEnv, config: Optional[dict] = None,
 ) -> Plugin
 
-# Webhook 事件流（外部触发）
+# 辅助函数（不返回 Plugin）
 senza.strategy.webhook_stream(buffer: int) -> tuple[WebhookChannel, EventStream]
 senza.strategy.context_aware_compaction_prompt() -> tuple[str, str]
 ```
@@ -398,7 +399,7 @@ senza.knowledge.plugin(
     config: Optional[dict] = None,
 ) -> Plugin  # 注册 knowledge_search + knowledge_read 工具
 
-# 长期记忆
+# 记忆写入/删除（内置 store 是进程内演示实现）
 senza.knowledge.memory_store(read_source_id: str) -> MemoryStore
 senza.knowledge.secure_write_policy(config: Optional[dict] = None) -> MemoryWritePolicy
 senza.knowledge.allow_all_gate() -> MemoryMutationGate
@@ -423,22 +424,24 @@ senza.knowledge.history_recall_plugin(
 ) -> Plugin
 ```
 
-> **重要**：`senza.knowledge.local_source` 的 `source_id` 必须与 `senza.knowledge.memory_store` 的 `read_source_id` 一致，否则写入的记忆无法被读回。
+> **Memory 边界**：`memory_plugin(..., gate=None)` 中 gate 可选，缺省使用完全放行的 `AllowAllGate`；生产环境应显式提供审批门禁。`local_source.source_id` 必须与 `memory_store.read_source_id` 一致，但当前内置 store 只将字节保留在进程内，不持久化，也不会自动同步到 `local_source`。
+>
+> **Recall 边界**：Python 已暴露 repo/index/source/plugin 的装配工厂；当前未暴露 projector/索引写入入口，因此使用 `history_recall_plugin` 前需要确保索引已由其他途径填充。
 
 | 函数 | 说明 |
 |------|------|
 | `senza.knowledge.local_source(path, source_id, ...)` | 本地文档知识源 |
 | `senza.knowledge.plugin(sources, config=None)` | `knowledge_search` + `knowledge_read` 工具 |
-| `senza.knowledge.memory_store(read_source_id)` | 可写内存存储 |
+| `senza.knowledge.memory_store(read_source_id)` | 可写的进程内演示 store（`Mutex<Vec>`，不持久化） |
 | `senza.knowledge.secure_write_policy(config=None)` | 注入安全写策略 |
 | `senza.knowledge.allow_all_gate()` | 完全放行写门控 |
-| `senza.knowledge.memory_plugin(source, store, policy, gate=None)` | `memory_write` + `memory_forget` 工具 |
+| `senza.knowledge.memory_plugin(source, store, policy, gate=None)` | `memory_write` + `memory_forget` 工具；gate 缺省为 `AllowAllGate` |
 | `senza.knowledge.in_memory_session_recall_index()` | 内存会话索引 |
 | `senza.knowledge.sqlite_session_recall_index(path)` | SQLite 持久化会话索引 |
 | `senza.knowledge.in_memory_session_repo()` | 内存会话仓库 |
 | `senza.knowledge.jsonl_session_repo(path)` | JSONL 持久化会话仓库 |
 | `senza.knowledge.session_recall_knowledge_source(repo, index)` | 会话召回知识源 |
-| `senza.knowledge.history_recall_plugin(source, config=None)` | 自动注入历史会话上下文 |
+| `senza.knowledge.history_recall_plugin(source, config=None)` | 从已填充的召回索引检索并注入历史会话上下文 |
 
 ## Infra（审计 / Trace / 沙箱）
 
