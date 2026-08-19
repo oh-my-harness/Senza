@@ -12,7 +12,7 @@ Senza 是 oh-my-harness Rust runtime 的 Python SDK，基于 PyO3 构建。面�
 | 🛡️ **原生崩溃恢复** | 工作流持久化 + 断点恢复，长流程不丢失进度 |
 | 💰 **内置预算管控** | 定价感知 + 预算上限 + 超限回调，每一分钱都看得见 |
 | 🔧 **两层 API** | Agent 层（单轮对话/工具调用/流式）+ Runtime 层（多步工作流/条件路由/暂停取消） |
-| 🧠 **知识与记忆** | 本地知识源 RAG、长期记忆、跨会话历史召回 |
+| 🧠 **知识与记忆** | 本地知识源 RAG、记忆写入/删除接口、会话召回装配接口 |
 
 ### Showcase
 
@@ -24,6 +24,13 @@ Senza 是 oh-my-harness Rust runtime 的 Python SDK，基于 PyO3 构建。面�
 | [**eda-studio**](https://github.com/oh-my-harness/eda-studio) | LLM 驱动 RTL→GDS 芯片设计全流程 | 长流程编排 + 崩溃恢复 + 失败回环路由 + 多工具协调 |
 
 ![Blender demo](https://raw.githubusercontent.com/oh-my-harness/blender-scene-generator/main/docs/examples/rainy_neon_alley.png)
+
+### 系统学习
+
+如果希望先理解 Agent Core、12 个 Hook、Plugin 装配和能力边界，再开始拼 API，可以按顺序阅读
+[《从 Agent 理论到 Senza 实践》](docs/academy/textbook/README.md)，并配合
+[Senza Academy 十个实验](academy/README.md)运行。教材使用《动手学 AI Agent》的理论问题作为
+学习坐标，但工程组件、源码导读和演示均替换为当前 Runtime/Senza 实现。
 
 ### 与其他框架对比
 
@@ -187,7 +194,7 @@ harness = (
 
 ### 策略插件
 
-Senza 内置 12 个策略插件，覆盖安全防护、循环断路、审计日志、注入检测等生产场景：
+`senza.strategy` 提供 10 个策略 Plugin 工厂和 2 个辅助函数，覆盖安全防护、循环断路、审计日志、注入检测等场景：
 
 ```python
 harness = (
@@ -201,7 +208,7 @@ harness = (
 
 ### 知识与记忆
 
-给 Agent 挂载本地知识源（RAG）和长期记忆：
+给 Agent 挂载本地知识源（RAG）：
 
 ```python
 # 本地知识源 RAG
@@ -218,6 +225,8 @@ harness = (
     .build()
 )
 ```
+
+> Memory API 还提供 `memory_write` / `memory_forget`。当前内置 `memory_store()` 是进程内演示实现，不持久化；Session Recall 已暴露 repo/index/source/plugin 装配接口，召回前需确保索引已有数据。
 
 ### 子 Agent 派发
 
@@ -237,7 +246,7 @@ harness = (
 )
 ```
 
-> `enable_spawn` 自动注册 MessageBus + 7 个 spawn 通信 tool。spawn 是异步的——`spawn_agent` 立即返回 `agent_id`，子 Agent 完成后结果自动注入主对话。
+> `enable_spawn` 为主 Agent 注册 MessageBus 和 5 个管理 tool：`spawn_agent`、`message_subagent`、`await_subagent_reply`、`query_subagent`、`abort_subagent`。Runtime 还定义 2 个可由 child plugin 贡献的子 Agent 侧 tool（`message_main`、`await_main_message`），但当前 Senza child factory 使用 `NoopPlugin`，不会自动挂载它们，也不会递归 spawn。spawn 是异步的——`spawn_agent` 立即返回 `agent_id`，子 Agent 完成后结果自动注入主对话。
 
 ## 示例（Live Tests）
 
@@ -273,8 +282,8 @@ Senza 的公开 API 分两层：
 - **子模块分组**：较低频 API 按领域组织：
   - `senza.providers` — LLM 提供商工厂（`openai`、`anthropic`）
   - `senza.hooks` — 12 个生命周期 hook 工厂
-  - `senza.strategy` — 12 个策略插件工厂
-  - `senza.knowledge` — 知识源、记忆、会话召回工厂
+  - `senza.strategy` — 10 个策略 Plugin 工厂 + 2 个辅助函数
+  - `senza.knowledge` — 知识源、记忆和会话召回装配工厂
   - `senza.rules` — 规则链和谓词工厂
   - `senza.infra` — 审计 sink、trace exporter、sandbox 工厂
 
@@ -320,7 +329,7 @@ tool = senza.create_tool(
 - `senza-workflow` — Runtime 层使用模式
 - `senza-advanced` — Hooks、插件、人工介入、执行器
 - `senza-strategy` — 策略插件（安全防护、循环断路、审计、注入检测）
-- `senza-knowledge` — 知识与记忆（RAG、长期记忆、会话召回）
+- `senza-knowledge` — 知识与记忆（RAG、记忆写入/删除、会话召回装配）
 
 ## 设计文档
 

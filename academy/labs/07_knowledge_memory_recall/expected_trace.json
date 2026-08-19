@@ -1,0 +1,64 @@
+{
+  "lab": "07",
+  "title": "Knowledge、Memory、Recall：检索、写入与跨会话契约不是一回事",
+  "maturity": "preview",
+  "theory": "《动手学 AI Agent》第3章：Knowledge、长期记忆、会话轨迹与 RAG 的职责分层（https://github.com/bojieli/ai-agent-book/blob/1d2e04ee733dde245af2eb718cfc92d2d0542b7e/book/chapter3.md）",
+  "runtime_mapping": "LocalDocumentSource/BM25 → KnowledgePlugin；MemoryStore/Policy/Gate → MemoryPlugin；SessionRepo/RecallIndex/Source → HistoryRecallPlugin",
+  "claims": [
+    "本课用三篇受控文档和纯 Python BM25 产生可重复的离线检索排序证据。",
+    "Senza 的真实本地 Knowledge 路径是 BM25，并通过 knowledge_search 与 knowledge_read 暴露给模型。",
+    "Knowledge 检索事件与 Memory 写入契约事件属于不同能力边界，不能用一次 RAG 命中替代 Memory/Recall 验证。"
+  ],
+  "boundaries": [
+    "离线 BM25 是无 Senza 依赖的教学实现；真实 Senza API、Provider 选择和工具调用由 36_rag_qa.py 证明。",
+    "内置 MemoryStore 是进程内 Mutex<Vec> demo，不持久化；写入不会自动同步到 local_source，也不会自动变成 knowledge_search 可检索内容。",
+    "Session Recall 当前缺少公开 Python projector/index population 链路，因此这里只做契约预览，不声称 Memory 或 Recall 端到端成功。",
+    "23_infra_integration.py 只补充装配证据与 Knowledge/RAG 路径，不证明 Memory 写后读取或历史会话召回。"
+  ],
+  "live_examples": [
+    "36_rag_qa.py",
+    "23_infra_integration.py"
+  ],
+  "events": [
+    {
+      "seq": 1,
+      "kind": "knowledge",
+      "actor": "offline-bm25",
+      "summary": "读取三篇 Senza fixture，计算词频、文档频率、长度归一化和 BM25 分数",
+      "status": "ok",
+      "lifecycle": "fixture load → lexical index"
+    },
+    {
+      "seq": 2,
+      "kind": "knowledge",
+      "actor": "offline-bm25",
+      "summary": "Knowledge 查询将 knowledge_bm25.md 排在首位，并保留可检查的分数与文档 ID",
+      "status": "passed",
+      "lifecycle": "query → rank → evidence"
+    },
+    {
+      "seq": 3,
+      "kind": "memory",
+      "actor": "memory-contract",
+      "summary": "展示 policy、可选 mutation gate、memory_write/forget 与进程内 Mutex<Vec> store 的职责",
+      "status": "preview",
+      "lifecycle": "contract preview; no fabricated persistence"
+    },
+    {
+      "seq": 4,
+      "kind": "knowledge",
+      "actor": "session-recall-contract",
+      "summary": "展示 repo/index/source/plugin 关系，同时标记 Python projector/index population 缺口",
+      "status": "preview",
+      "lifecycle": "contract preview; no fabricated recall"
+    },
+    {
+      "seq": 5,
+      "kind": "agent",
+      "actor": "academy",
+      "summary": "把可运行 Knowledge 证据与 Memory/Recall 预览分开汇报，避免用装配成功冒充 E2E",
+      "status": "accepted",
+      "lifecycle": "evidence → capability boundary"
+    }
+  ]
+}

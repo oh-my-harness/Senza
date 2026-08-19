@@ -1,0 +1,78 @@
+{
+  "lab": "03",
+  "title": "Plugin DB Safety：把确定性约束装到工具边界",
+  "maturity": "stable",
+  "theory": "《动手学 AI Agent》第一章：可把确定性流程与约束写成程序和 Harness，使经验成为可审计、可修订的外部产物。",
+  "runtime_mapping": "Python create_plugin(tools + hooks)；before_tool_call 返回 allow/modify/deny；HarnessBuilder.plugin 为 Agent scope，WorkflowEngine.with_step_plugin 为 step scope。",
+  "claims": [
+    "recorded runner 真实调用纯 Python db_guard，并依次得到 allow、modify、deny。",
+    "modify 把无界 SELECT 改为 LIMIT 100 后才交给模拟 executor。",
+    "deny 的 DROP SQL 不进入模拟 executor。"
+  ],
+  "boundaries": [
+    "recorded 模式不导入 Senza，不证明 Plugin build、Hook dispatch 或模型工具选择；真实集成由 32_plugins.py 的 live 模式验证。",
+    "Python create_plugin 当前只贡献 tools 和 hooks；Rust Plugin 协议更宽，可贡献 skills 和 templates。",
+    "Plugin 在构建期安装；Agent scope 与 step scope 不等于运行时热插拔。",
+    "重名 Tool 在正式 Harness build 时被拒绝；本 trace 不伪造一次 build。",
+    "正则 SQL guard 仅用于教学，不能替代数据库权限与生产级 SQL 解析。"
+  ],
+  "live_examples": [
+    "32_plugins.py"
+  ],
+  "events": [
+    {
+      "seq": 1,
+      "kind": "agent",
+      "actor": "PluginBuilder",
+      "summary": "db-safety 声明 run_query tool 与 before_tool_call hook；贡献在构建期收集",
+      "status": "info",
+      "lifecycle": "build"
+    },
+    {
+      "seq": 2,
+      "kind": "hook",
+      "actor": "db_guard",
+      "summary": "有界 SELECT 已满足只读与行数约束，返回 allow",
+      "status": "accepted",
+      "lifecycle": "before_tool_call"
+    },
+    {
+      "seq": 3,
+      "kind": "tool",
+      "actor": "run_query",
+      "summary": "executor 接收原始有界 SELECT",
+      "status": "ok"
+    },
+    {
+      "seq": 4,
+      "kind": "hook",
+      "actor": "db_guard",
+      "summary": "无界 SELECT 被改写为 SELECT ... LIMIT 100",
+      "status": "modified",
+      "lifecycle": "before_tool_call"
+    },
+    {
+      "seq": 5,
+      "kind": "tool",
+      "actor": "run_query",
+      "summary": "executor 只看到改写后的 SQL 参数",
+      "status": "ok"
+    },
+    {
+      "seq": 6,
+      "kind": "hook",
+      "actor": "db_guard",
+      "summary": "DROP TABLE 被结构化 deny，executor 未运行",
+      "status": "denied",
+      "lifecycle": "before_tool_call"
+    },
+    {
+      "seq": 7,
+      "kind": "workflow",
+      "actor": "PluginScope",
+      "summary": "同一 Plugin 可在 Agent scope 或指定 Workflow step scope 构建",
+      "status": "info",
+      "lifecycle": "assembly"
+    }
+  ]
+}
