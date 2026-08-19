@@ -1,10 +1,13 @@
-"""09 — Workflow Recovery: TaskStore persistence, pause/resume, cancel, restore.
+"""09 — Workflow Persistence: TaskStore save and completed-task reload.
 
 Mirrors runtime `09_workflow_recovery.rs`. Demonstrates:
   - WorkflowEngine.with_task_store: persist task state to a disk directory
   - Running a 2-step linear workflow to Succeeded
-  - Restoring the engine from the TaskStore via WorkflowEngine.restore
+  - Reloading the completed task from the TaskStore via WorkflowEngine.restore
   - Inspecting state / step history after both run and restore
+
+This successful-run reload verifies persistence. It is not a mid-run crash or
+resume/recovery demonstration.
 
 Run:
   source ~/.omp_llm_env && python live-tests/examples/09_workflow_recovery.py
@@ -45,7 +48,7 @@ def _judge():
 
 
 def main() -> None:
-    print("=== 09: Workflow Recovery ===\n")
+    print("=== 09: Workflow Persistence & Reload ===\n")
     provider = require_provider()
     store = tempfile.mkdtemp(prefix="senza_recover_")
 
@@ -56,7 +59,8 @@ def main() -> None:
     print(f"Task ID: {tid}")
     print(f"State after run: {engine.state()}")
 
-    # Restore from the persisted TaskStore (simulates a crash & reload).
+    # Reload a successfully completed task from the persisted TaskStore. This
+    # does not simulate a crash in the middle of a running workflow.
     restored = senza.WorkflowEngine.restore(store, tid, provider, live_model(), _judge())
     print(f"State after restore: {restored.state()}")
     history = restored.step_history()

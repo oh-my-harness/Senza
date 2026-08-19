@@ -14,20 +14,22 @@ infrastructure differently:
     `senza.knowledge.plugin(sources=[...])` -> the model gets a `knowledge_search`
     tool.
   - Memory: `senza.knowledge.memory_store(read_source_id)` + `memory_plugin`
-    -> `memory_write` / `memory_forget` tools. Requires an explicit write policy
-    (`secure_write_policy`) and a mutation gate (`allow_all_gate`); there is no
-    permissive default, mirroring the Rust `MemoryMutationGate` boundary.
+    -> `memory_write` / `memory_forget` tools. A write policy is required; the
+    mutation gate is optional and defaults to AllowAll. This example passes an
+    explicit `allow_all_gate()` so the policy boundary remains visible.
   - Session recall: `in_memory_session_repo` + a recall index +
     `session_recall_knowledge_source` + `history_recall_plugin` -> auto-injects
     relevant past-session snippets via TransformContextHook (registers no tool).
 
 This example builds a single harness wired with all three (knowledge + memory +
 session recall), seeds a local .md knowledge doc, and runs a RAG-style prompt so
-the answer reflects the injected source.
+the answer reflects the injected source. The live assertion proves plugin
+assembly and the knowledge-search/RAG path only: it neither writes/recalls a
+memory nor seeds and retrieves a prior session, so it is not memory/recall E2E.
 Demonstrates:
   - Making local documents searchable via the knowledge plugin
-  - Attaching a long-term memory store (memory_write / memory_forget)
-  - Walking the session-recall wiring (repo + index -> auto-injecting plugin)
+  - Constructing and attaching a long-term memory store
+  - Constructing the session-recall wiring (repo + index -> auto-injecting plugin)
   - Answering a RAG prompt from the seeded knowledge doc
 
 Run:
@@ -60,8 +62,9 @@ def main() -> None:
         )
         knowledge_plugin = senza.knowledge.plugin(sources=[source])
 
-        # ── 2. Memory: write store keyed to the same read source + explicit
-        #    write policy and mutation gate (no permissive default).
+        # ── 2. Memory: write store keyed to the same read source + required
+        #    write policy. The gate is optional (AllowAll by default); passing
+        #    it explicitly makes that boundary visible in the example.
         store = senza.knowledge.memory_store(read_source_id="deploy-docs")
         policy = senza.knowledge.secure_write_policy()
         gate = senza.knowledge.allow_all_gate()
@@ -110,6 +113,7 @@ def main() -> None:
         print("\nObservation:")
         print(f"  knowledge_search called: {searched}")
         print(f"  answer reflects injected source: {reflects_source}")
+        print("  memory/recall E2E exercised: false (construction and wiring only)")
 
 
 if __name__ == "__main__":

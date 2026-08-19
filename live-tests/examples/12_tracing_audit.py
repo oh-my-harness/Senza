@@ -1,4 +1,4 @@
-"""12 — Tracing & Audit: JSONL hash-chain audit log + span capture via hooks.
+"""12 — Audit + lifecycle timeline: hash-chain log and hook observations.
 
 Mirrors runtime `12_tracing_audit.rs`. Demonstrates:
   - `senza.strategy.audit(sink_path, trace_id, task_id)` plugin writing
@@ -12,9 +12,10 @@ surface exposes `senza.infra.in_memory_trace_exporter` (an opaque introspection
 type with only `exported_spans()` / `exported_span_count()`) but **no way to
 attach it to a harness** — there is no Python binding for the adapter /
 `CaptureLevel` / `SpanKind` wiring. As the nearest analog, this example captures
-span-like events via the `before_provider_request` / `after_provider_response` /
+lifecycle events via the `before_provider_request` / `after_provider_response` /
 `after_tool_call` / `after_turn` hooks (the same hook slots the runtime adapter
-uses), and prints them as a lightweight in-memory trace.
+uses). These records are not exported tracing spans and do not prove that the
+runtime TraceExporter path is wired from Python.
 
 Run:
   source ~/.omp_llm_env && python live-tests/examples/12_tracing_audit.py
@@ -27,26 +28,32 @@ import tempfile
 import senza
 from _common import make_example_harness, run_prompt, text_of
 
-# Nearest-analog tracing: span events collected from the lifecycle hooks the
+# Nearest-analog timeline: events collected from the lifecycle hooks the
 # runtime's TracingHookAdapter would occupy.
-trace_events: list[dict] = []
+lifecycle_events: list[dict] = []
 
 
 def before_provider_request(ctx):
-    trace_events.append({"span": "provider_request", "event": "start", "turn": ctx.get("turn_id")})
+    lifecycle_events.append(
+        {"hook": "provider_request", "event": "start", "turn": ctx.get("turn_id")}
+    )
 
 
 def after_provider_response(ctx):
-    trace_events.append({"span": "provider_response", "event": "end", "turn": ctx.get("turn_id")})
+    lifecycle_events.append(
+        {"hook": "provider_response", "event": "end", "turn": ctx.get("turn_id")}
+    )
 
 
 def after_tool_call(ctx):
-    trace_events.append({"span": "tool_call", "event": "end", "tool": ctx.get("tool_name")})
+    lifecycle_events.append(
+        {"hook": "tool_call", "event": "end", "tool": ctx.get("tool_name")}
+    )
     return "passthrough"
 
 
 def after_turn(ctx):
-    trace_events.append({"span": "turn", "event": "end", "turn": ctx.get("turn_id")})
+    lifecycle_events.append({"hook": "turn", "event": "end", "turn": ctx.get("turn_id")})
 
 
 def get_weather(args, ctx):
@@ -109,11 +116,12 @@ def main() -> None:
             lines += 1
     print(f"  entries: {lines} | chain valid (validate()={status} >= 0): {status >= 0}")
 
-    # Tracing (nearest analog): span events collected from lifecycle hooks.
-    print(f"\nTrace spans (via hooks): {len(trace_events)}")
-    for ev in trace_events:
+    # Nearest analog only: hook observations, not TraceExporter spans.
+    print(f"\nLifecycle events (via hooks, not exported spans): {len(lifecycle_events)}")
+    for ev in lifecycle_events:
         print(
-            f"  {ev['span']:<18} {ev['event']:<5} turn={ev.get('turn')} tool={ev.get('tool', '-')}"
+            f"  {ev['hook']:<18} {ev['event']:<5} "
+            f"turn={ev.get('turn')} tool={ev.get('tool', '-')}"
         )
 
 
