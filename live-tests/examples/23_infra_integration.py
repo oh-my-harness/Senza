@@ -5,11 +5,11 @@ parts — EventStream (TimerStream / WebhookStream), Knowledge, and a Memory +
 SessionRecall construction demo. Senza's Python surface wires the same
 infrastructure differently:
 
-  - Event streams have Python analogs (`senza.strategy.webhook_stream(buffer)`
-    -> (WebhookChannel, EventStream) and `senza.create_event_channel(task_id)`
-    -> (EventStreamHandle, WaitForExternalEventTool)), but there is no one-shot
-    TimerStream in the Python SDK — the nearest analog is the webhook /
-    human-in-the-loop event channel.
+  - Event streams have Python analogs: `senza.create_timer_stream(...)` returns
+    a one-shot wait tool, `senza.strategy.webhook_stream(buffer)` returns a
+    (WebhookChannel, EventStream) pair, and `senza.create_event_channel(task_id)`
+    returns (EventStreamHandle, WaitForExternalEventTool). This scenario does
+    not exercise those streams; their live checks remain in the tools layer.
   - Knowledge: `senza.knowledge.local_source(path, source_id)` +
     `senza.knowledge.plugin(sources=[...])` -> the model gets a `knowledge_search`
     tool.

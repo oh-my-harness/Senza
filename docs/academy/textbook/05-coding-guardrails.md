@@ -153,7 +153,8 @@ Agent 只需要阅读实现和对应测试，不必把整个仓库装入上下�
 
 Lab 的 recorded 模式为了无 Provider、跨平台和零风险，使用 `evaluate_command()` 做一个确定性教学
 判断，并且函数无论 allow 还是 deny 都不会执行命令。这证明的是“决策先于执行”的因果顺序，不是
-真实 SafetyDefaults Hook 已被调度。真实装配由 14、15 号 live 示例承担。
+真实 SafetyDefaults Hook 已被调度。15 号 live 示例承担 SafetyDefaults 装配证据；14 号审批示例
+当前因跨 part 共享计数被隔离，只保留为待修复源码，不能作为通过证据。
 
 ### 5. 做一行修改
 
@@ -182,8 +183,9 @@ Lab 的 recorded 模式为了无 Provider、跨平台和零风险，使用 `eval
    直接调用真实文件系统和宿主 shell。
 3. [`pyrules.rs`](../../../src/runtime/pyrules.rs) 把 Python RuleChain 变成
    `BeforeToolCallHook`。结合
-   [`14_rules_approval.py`](../../../live-tests/examples/14_rules_approval.py)观察“尝试调用”和“callback
-   真正执行”的区别。
+   [`14_rules_approval.py`](../../../live-tests/examples/14_rules_approval.py)阅读“尝试调用”和“callback
+   真正执行”的区别。该脚本当前有跨 part 共享计数问题，已被统一 Catalog 隔离，修复前不能当作
+   rate-limit 的通过证据。
 4. [`pysafety.rs`](../../../src/strategy/pysafety.rs) 是 Python Plugin 工厂；具体分发位于
    [`safety/mod.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-strategy/src/safety/mod.rs)：只有工具名为
    `bash`、`read`、`write`、`edit` 时进入相应检查。
@@ -222,15 +224,20 @@ python -m pytest academy/labs/05_coding_guardrails/test_demo.py -q
 
 ```powershell
 python academy/labs/05_coding_guardrails/demo.py --mode live --live-example fs
-python academy/labs/05_coding_guardrails/demo.py --mode live --live-example approval
 python academy/labs/05_coding_guardrails/demo.py --mode live --live-example safety
+python -m examples describe safety.rules_approval
 ```
 
-三个入口分别委托
+前两个 live 入口分别委托
 [`22_fs_tools.py`](../../../live-tests/examples/22_fs_tools.py)、
-[`14_rules_approval.py`](../../../live-tests/examples/14_rules_approval.py)与
 [`15_safety_injection.py`](../../../live-tests/examples/15_safety_injection.py)。live 模式需要真实 Provider；
 缺少密钥时应按项目约定跳过，不能用 recorded 结果替代 Hook dispatch 证据。
+
+审批示例 [`14_rules_approval.py`](../../../live-tests/examples/14_rules_approval.py)仍保留为迁移期源码，
+但三个 part 共用模块级计数，最后一段的统计会受前两段污染，因此统一 Catalog 将
+`safety.rules_approval` 标为 `quarantined / needs-fix`。修复前只应阅读或显式使用
+`--allow-quarantined` 做诊断，不能将输出计入课程验收；recorded guard 场景仍提供确定性的
+allow/modify/deny 教学证据。
 
 ## 常见误解与能力边界
 
@@ -295,6 +302,6 @@ Safety Hook 在动作生效前治理，测试和 ToolResult 则把事实送回 A
 - 实验：[Lab 05 README](../../../academy/labs/05_coding_guardrails/README.md)与
   [`expected_trace.json`](../../../academy/labs/05_coding_guardrails/expected_trace.json)
 - 真实文件工具：[Senza FS tools 示例](../../../live-tests/examples/22_fs_tools.py)
-- 真实审批与安全：[Rules approval](../../../live-tests/examples/14_rules_approval.py)、
-  [Safety defaults](../../../live-tests/examples/15_safety_injection.py)
+- 待修复审批源码：[Rules approval](../../../live-tests/examples/14_rules_approval.py)
+- 真实安全示例：[Safety defaults](../../../live-tests/examples/15_safety_injection.py)
 - 下一章：[Workflow、按步恢复与 Human in the Loop](06-workflow-recovery-hitl.md)

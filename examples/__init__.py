@@ -7,4 +7,3 @@ implementations remain in ``live-tests/examples`` during the migration.
 from .catalog import Catalog, CatalogError, Scenario, load_catalog
 
 __all__ = ["Catalog", "CatalogError", "Scenario", "load_catalog"]
-

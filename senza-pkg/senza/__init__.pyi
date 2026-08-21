@@ -453,7 +453,7 @@ def create_shell_monitor_stream(
     task_id: str,
 ) -> tuple[ShellMonitorHandle, WaitForExternalEventTool]: ...
 
-# ── Hook (11 types) ──────────────────────────────────────────────────────────
+# ── Hook (12 types) ──────────────────────────────────────────────────────────
 
 class Hook:
     """Opaque hook wrapper."""

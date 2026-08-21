@@ -11,7 +11,8 @@
   ],
   "boundaries": [
     "recorded 场景证明教学闭环，不代替真实模型对代码的定位能力；live 示例用于验证 Senza 工具调用。",
-    "SafetyDefaults 是黑名单和路径防护；create_os_env 是工作目录约束，不是强 OS 沙箱。"
+    "SafetyDefaults 是黑名单和路径防护；create_os_env 是工作目录约束，不是强 OS 沙箱。",
+    "14_rules_approval.py 当前因跨 part 共享计数被 Catalog 标为 quarantined；修复前只作诊断源码，不计入课程验收。"
   ],
   "live_examples": [
     "22_fs_tools.py",
