@@ -22,7 +22,8 @@ OPENAI_API_BASE=http://... SENZA_LIVE_MODEL=gpt-4o OPENAI_API_KEY=sk-... \
 
 1. `OPENAI_API_KEY`（或 `ANTHROPIC_API_KEY`）env
 2. 无 key 时载入 `~/.omp_llm_env`（OMP 会话的 LLM env）
-3. 模型：`SENZA_LIVE_MODEL`（默认 `DeepSeek-V4-Flash`）
+3. 模型：`SENZA_LIVE_MODEL` 显式覆盖；OpenAI-compatible 默认 `DeepSeek-V4-Flash`，
+   Anthropic-only 默认 `ANTHROPIC_MODEL` 或 `claude-sonnet-4-20250514`
 4. base：`OPENAI_API_BASE`（默认 `http://api.hyper-op.com/v1`）
 
 无任何 key 时所有真实测试 `pytest.skip`，不失败。
@@ -31,8 +32,9 @@ OPENAI_API_BASE=http://... SENZA_LIVE_MODEL=gpt-4o OPENAI_API_KEY=sk-... \
 
 - `test_agent_layer.py` — basic / async streaming / tool / hooks / config / skills / branch / compaction
 - `test_loop_layer.py` — tool dispatch / multi-turn / provider error
-- `test_tools_layer.py` — fs tools / grep-glob / knowledge RAG / session recall
-- `test_runtime_layer.py` — builder workflow / recovery / executors / composite judge / audit-trace / sandbox
+- `test_tools_layer.py` — fs tools / grep-glob / knowledge RAG / memory 与 recall 装配契约
+- `test_runtime_layer.py` — builder workflow / persistence-replay / executors / composite judge /
+  audit hooks / OS env
 - `test_strategy_layer.py` — safety / injection / loop-safety / status-panel / memory-defense / source-tag / notify / context-compact
 
 每个层文件含一个不依赖 key 的 `test_*_constructs_offline`，用于无 key 时验证 API 签名。
@@ -41,7 +43,32 @@ OPENAI_API_BASE=http://... SENZA_LIVE_MODEL=gpt-4o OPENAI_API_KEY=sk-... \
 
 ## 可运行示例
 
-全部可运行示例统一在 [`examples/`](examples/)（23 个运行时同名镜像 `01`–`23` + 17 个
-仓库根迁入示例 `30`–`46`）。仓库根 `examples/` 目录已废弃删除。每个示例驱动真实 LLM，
-无 key 时打印 SKIP 并 exit 0。可逐个跑，也能与 `llm-harness-runtime` 同名示例在同一
-DeepSeek 端点 1:1 对照（写规范见 `examples/_AUTHORING.md`，目录说明见 `examples/README.md`）。
+[`examples/`](examples/) 当前保存 40 个 live/API 示例脚本（23 个运行时同名镜像
+`01`–`23` + 17 个原仓库根示例 `30`–`46`）。非隔离 Provider 场景无 key 时由统一入口
+结构化跳过；可逐个跑，也能与 `llm-harness-runtime` 同名示例在同一 Provider 端点对照。
+
+在 Academy/live-tests 合并方案中，这个目录将逐步成为 **legacy adapter 与 source pool**，
+不再承担“所有示例唯一归宿”的语义。P1 已实现 Catalog、Runner 和 Academy manifest bridge，
+但 native scenario adapters、统一 result envelope 和 strict verifier 尚未实现；当前
+`run` 仍启动 catalog 指向的 legacy script，直接脚本路径继续兼容：
+
+```bash
+# 已实现的 P1 统一入口
+python -m examples list
+python -m examples describe agent.tool_calling
+python -m examples doctor agent.tool_calling
+python -m examples run agent.tool_calling
+python -m examples course 01 --mode recorded
+python -m examples course 01 --mode live
+
+# 当前入口，继续有效
+python live-tests/examples/02_tool_calling.py
+python -m pytest live-tests/test_agent_layer.py -v
+```
+
+`live-tests/` 会继续承担严格行为验证；统一 runner 不会把 layer tests 降级成弱断言 demo。
+P1 已为 Academy 提供 `course --mode recorded|live`；它仍没有 `show`、`verify` 或通用的
+`run --mode` 子命令。
+写规范见 [`examples/_AUTHORING.md`](examples/_AUTHORING.md)，目录说明见
+[`examples/README.md`](examples/README.md)，统一设计见
+[场景统一计划](../docs/academy/2026-08-21-live-tests-academy-scenario-unification-plan.md)。

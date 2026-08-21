@@ -31,6 +31,8 @@ Senza 是 oh-my-harness Rust runtime 的 Python SDK，基于 PyO3 构建。面�
 [《从 Agent 理论到 Senza 实践》](docs/academy/textbook/README.md)，并配合
 [Senza Academy 十个实验](academy/README.md)运行。教材使用《动手学 AI Agent》的理论问题作为
 学习坐标，但工程组件、源码导读和演示均替换为当前 Runtime/Senza 实现。
+Academy recorded Lab、live example 和严格 layer test 的统一方向见
+[场景统一计划](docs/academy/2026-08-21-live-tests-academy-scenario-unification-plan.md)。
 
 ### 与其他框架对比
 
@@ -250,26 +252,39 @@ harness = (
 
 ## 示例（Live Tests）
 
-全部可运行的示例已统一收拢到 [`live-tests/examples/`](live-tests/examples/)（仓库根 `examples/`
-目录已废弃删除）：23 个运行时同名镜像（`01_prompt_streaming` … `23_infra_integration`）
-+ 17 个仓库根迁入示例（`30` … `46`），每个都是驱动真实 LLM 的独立脚本。
+当前 40 个 live/API 示例脚本位于
+[`live-tests/examples/`](live-tests/examples/)：23 个运行时同名镜像
+（`01_prompt_streaming` … `23_infra_integration`）+ 17 个原仓库根示例
+（`30` … `46`）。
 
 ```bash
-cd live-tests/examples
-source ~/.omp_llm_env && python 01_prompt_streaming.py   # 跑真实 DeepSeek
-python 30_basic_prompt.py                                # 无 key → 打印 SKIP 并 exit 0
+# P1 统一入口：Catalog 检索、依赖诊断与 legacy implementation 运行
+python -m examples list
+python -m examples describe agent.tool_calling
+python -m examples doctor agent.tool_calling
+python -m examples run agent.tool_calling
+python -m examples course 01 --mode recorded
+python -m examples course 01 --mode live
+
+# 当前路径继续兼容
+source ~/.omp_llm_env && python live-tests/examples/01_prompt_streaming.py
+python live-tests/examples/30_basic_prompt.py             # 无 key → 打印 SKIP 并 exit 0
 ```
 
 `live-tests/` 另含按架构层组织的**真实 LLM 集成测试**（agent / loop / tools / runtime /
 strategy），镜像 runtime 仓库的 `llm-harness-live-tests` 惯例；每层含一个不依赖 key 的
-离线构造冒烟。详见 [`live-tests/README.md`](live-tests/README.md)。
+离线构造冒烟。它将继续承担严格行为验证，不会被可运行文档的弱断言替代。详见
+[`live-tests/README.md`](live-tests/README.md)。
 
 ```bash
 python -m pytest live-tests/ -v                           # 跑 5 层测试（真实 DeepSeek）
 ```
 
-> `live-tests/examples/` 中的每个示例都能与 `llm-harness-runtime` 同名示例 1:1 对照
->（同一 DeepSeek-V4-Flash 端点），用于交叉验证两套实现。
+> P1 已实现 Single Scenario Catalog、Runner 和 Academy manifest bridge；当前 `run`
+> 仍执行 catalog 指向的 legacy script。native scenario adapters、统一 result envelope 和
+> strict verifier 尚未实现。`live-tests/examples/` 将作为 legacy adapter 与 source pool，
+> 旧脚本路径在兼容窗口内继续工作；完整迁移步骤见
+> [场景统一计划](docs/academy/2026-08-21-live-tests-academy-scenario-unification-plan.md)。
 
 ---
 

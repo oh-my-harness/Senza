@@ -61,7 +61,7 @@ Word/PDF 属于正文定稿后的派生产物。本阶段以 Markdown 作为唯�
 - 教材包含序言、10 章正文、术语表和源码地图；序言与正文合计 2,968 行；
 - `course_manifest.json` 将每个 Lab 映射到唯一教材章节，自动检查章节篇幅、成熟度、实验链接、
   能力边界、复习题、代码围栏和行尾空白；
-- `python -m pytest academy/tests academy/labs -q`：`63 passed`；
+- `python -m pytest academy/tests academy/labs -q`：通过；具体用例数以当前分支 CI 为准；
 - Academy 范围内的仓库内链接全部解析且不会逃出 Senza 根目录；跨仓库源码与理论引用均使用
   固定 commit 的 GitHub URL，不依赖本机兄弟目录；
 - Academy 的 38 个 Python 文件按 Python 3.9 grammar 解析通过，`compileall` 通过；

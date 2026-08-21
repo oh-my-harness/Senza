@@ -127,6 +127,6 @@ def render_trace(payload: dict[str, Any]) -> str:
     lines.extend(["", "Capability boundaries"])
     lines.extend(f"- {boundary}" for boundary in payload["boundaries"])
     if payload["live_examples"]:
-        lines.extend(["", "Canonical live examples"])
+        lines.extend(["", "Mapped live examples (check Catalog status before use)"])
         lines.extend(f"- {example}" for example in payload["live_examples"])
     return "\n".join(lines)

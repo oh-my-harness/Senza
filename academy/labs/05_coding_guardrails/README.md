@@ -23,9 +23,13 @@ recorded 模式会把一个带单行 bug 的 fixture 复制到临时目录，先
 ```powershell
 python academy/labs/05_coding_guardrails/demo.py
 python academy/labs/05_coding_guardrails/demo.py --mode live --live-example fs
-python academy/labs/05_coding_guardrails/demo.py --mode live --live-example approval
 python academy/labs/05_coding_guardrails/demo.py --mode live --live-example safety
+python -m examples describe safety.rules_approval
 ```
+
+`approval` 当前已在统一 Catalog 中标为 `quarantined / needs-fix`：原脚本的三个 part
+共享模块级执行计数，最后一段会混入前两段的调用，不能作为可靠的 rate-limit 证据。它仍可用于
+源码阅读；修复前若确需诊断运行，必须显式加 `--allow-quarantined`，且输出不计入课程验收。
 
 ## 观察点
 

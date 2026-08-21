@@ -231,7 +231,8 @@ cargo test --workspace --all-features
 
 ### 9.1 实际验证记录
 
-- Academy：`63 passed`；10 个 recorded demo 均可在无 Provider、无 API key 环境运行；
+- Academy 测试与 10 个 recorded demo 均可在无 Provider、无 API key 环境运行；具体用例数以
+  当前分支的 CI collect/run 结果为准，避免随合同测试增长而漂移；
 - Python：`compileall` 通过，并用 Python 3.9 语法树解析复核；Academy 的仓库内链接全部解析且
   保持在 Senza 根目录内，跨仓库引用固定到对应 commit 的 GitHub URL；
 - Senza：`cargo fmt --check`、clippy、13 个 Rust 单元测试通过；使用 Python 3.13 环境
