@@ -12,7 +12,12 @@ REPOSITORY_ROOT = LAB_DIR.parents[2]
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from academy.common import load_trace, render_trace, run_live_example  # noqa: E402
+from academy.common import (  # noqa: E402
+    live_examples_for_lab,
+    load_trace,
+    render_trace,
+    run_live_example,
+)
 
 try:
     from .retrieval import BM25Index, load_fixture_documents
@@ -20,10 +25,7 @@ except ImportError:  # Direct script execution.
     from retrieval import BM25Index, load_fixture_documents
 
 
-LIVE_EXAMPLES = {
-    "rag": "36_rag_qa.py",
-    "infra": "23_infra_integration.py",
-}
+LIVE_EXAMPLES = live_examples_for_lab("07")
 
 RECORDED_QUERIES = (
     "Senza local_source BM25 knowledge_search knowledge_read",

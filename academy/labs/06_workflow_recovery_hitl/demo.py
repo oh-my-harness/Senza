@@ -11,7 +11,12 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from academy.common import load_trace, render_trace, run_live_example
+from academy.common import (
+    live_examples_for_lab,
+    load_trace,
+    render_trace,
+    run_live_example,
+)
 
 try:
     from .workflow_scenario import approve_and_publish, create_paused_checkpoint, restore_from_step
@@ -19,12 +24,7 @@ except ImportError:  # Direct script execution.
     from workflow_scenario import approve_and_publish, create_paused_checkpoint, restore_from_step
 
 
-LIVE_EXAMPLES = {
-    "workflow": "08_workflow.py",
-    "executor": "39_executor_steps.py",
-    "hitl": "41_human_in_the_loop.py",
-    "recovery": "45_hooks_retries.py",
-}
+LIVE_EXAMPLES = live_examples_for_lab("06")
 
 
 def main() -> None:

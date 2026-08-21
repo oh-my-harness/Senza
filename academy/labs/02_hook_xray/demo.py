@@ -12,11 +12,16 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from academy.common import load_trace, render_trace, run_live_example
+from academy.common import (
+    live_examples_for_lab,
+    load_trace,
+    render_trace,
+    run_live_example,
+)
 
 
 TRACE_PATH = Path(__file__).with_name("expected_trace.json")
-LIVE_EXAMPLE = "07_hooks.py"
+LIVE_EXAMPLE = live_examples_for_lab("02")["default"]
 
 
 def build_parser() -> argparse.ArgumentParser:

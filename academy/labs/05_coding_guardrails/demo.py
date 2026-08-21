@@ -10,7 +10,12 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from academy.common import load_trace, render_trace, run_live_example
+from academy.common import (
+    live_examples_for_lab,
+    load_trace,
+    render_trace,
+    run_live_example,
+)
 
 try:
     from .coding_scenario import run_scenario
@@ -18,11 +23,7 @@ except ImportError:  # Direct script execution.
     from coding_scenario import run_scenario
 
 
-LIVE_EXAMPLES = {
-    "fs": "22_fs_tools.py",
-    "approval": "14_rules_approval.py",
-    "safety": "15_safety_injection.py",
-}
+LIVE_EXAMPLES = live_examples_for_lab("05")
 
 
 def main() -> None:

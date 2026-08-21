@@ -12,13 +12,18 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from academy.common import load_trace, render_trace, run_live_example
+from academy.common import (
+    live_examples_for_lab,
+    load_trace,
+    render_trace,
+    run_live_example,
+)
 
 from state_model import run_recorded_scenario
 
 
 TRACE_PATH = Path(__file__).with_name("expected_trace.json")
-LIVE_EXAMPLE = "11_spawn_subagent.py"
+LIVE_EXAMPLE = live_examples_for_lab("08")["default"]
 
 
 def build_parser() -> argparse.ArgumentParser:

@@ -14,7 +14,15 @@ REPOSITORY_ROOT = LAB_DIR.parents[2]
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from academy.common import load_trace, render_trace, run_live_example  # noqa: E402
+from academy.common import (  # noqa: E402
+    live_examples_for_lab,
+    load_trace,
+    render_trace,
+    run_live_example,
+)
+
+
+LIVE_EXAMPLE = live_examples_for_lab("03")["default"]
 
 
 RECORDED_SCENARIOS = (
@@ -137,7 +145,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Optional[list[str]] = None) -> None:
     args = build_parser().parse_args(argv)
     if args.mode == "live":
-        run_live_example("32_plugins.py")
+        run_live_example(LIVE_EXAMPLE)
         return
     run_recorded()
 

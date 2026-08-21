@@ -1,14 +1,25 @@
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from academy.common import load_trace
 
 
 ACADEMY_ROOT = Path(__file__).resolve().parents[1]
+REPOSITORY_ROOT = ACADEMY_ROOT.parent
+COURSE_MANIFEST_PATH = ACADEMY_ROOT / "course_manifest.json"
+SCENARIO_CATALOG_PATH = REPOSITORY_ROOT / "examples" / "catalog.json"
 
 
 def _trace_paths() -> list[Path]:
     return sorted((ACADEMY_ROOT / "labs").glob("*/expected_trace.json"))
+
+
+def _load_manifest() -> dict:
+    return json.loads(COURSE_MANIFEST_PATH.read_text(encoding="utf-8"))
+
+
+def _load_scenario_catalog() -> dict:
+    return json.loads(SCENARIO_CATALOG_PATH.read_text(encoding="utf-8"))
 
 
 def test_every_recorded_trace_obeys_the_common_contract():
@@ -20,15 +31,14 @@ def test_every_recorded_trace_obeys_the_common_contract():
 
 
 def test_every_live_example_link_resolves_to_the_canonical_directory():
-    repository_root = ACADEMY_ROOT.parent
-    examples_dir = repository_root / "live-tests" / "examples"
+    examples_dir = REPOSITORY_ROOT / "live-tests" / "examples"
     for path in _trace_paths():
         for filename in load_trace(path)["live_examples"]:
             assert (examples_dir / filename).is_file(), f"{path}: missing live example {filename}"
 
 
 def test_course_manifest_matches_all_ten_labs_and_required_artifacts():
-    manifest = json.loads((ACADEMY_ROOT / "course_manifest.json").read_text(encoding="utf-8"))
+    manifest = _load_manifest()
     labs = manifest["labs"]
     assert [lab["id"] for lab in labs] == [f"{number:02d}" for number in range(1, 11)]
 
@@ -50,7 +60,57 @@ def test_course_manifest_matches_all_ten_labs_and_required_artifacts():
 
 
 def test_first_release_wave_contains_the_six_stable_labs():
-    manifest = json.loads((ACADEMY_ROOT / "course_manifest.json").read_text(encoding="utf-8"))
+    manifest = _load_manifest()
     wave_one = [lab for lab in manifest["labs"] if lab["release_wave"] == 1]
     assert [lab["id"] for lab in wave_one] == ["01", "02", "03", "04", "05", "06"]
     assert all(lab["maturity"] == "stable" for lab in wave_one)
+
+
+def test_course_scenario_refs_resolve_to_catalog_and_existing_targets():
+    manifest = _load_manifest()
+    scenarios = {
+        scenario["id"]: scenario for scenario in _load_scenario_catalog()["scenarios"]
+    }
+
+    for lab in manifest["labs"]:
+        refs = lab["scenario_refs"]
+        aliases = [ref["alias"] for ref in refs]
+        assert len(aliases) == len(set(aliases)), f"lab {lab['id']}: duplicate alias"
+        assert all(ref["role"] in {"primary", "supporting"} for ref in refs)
+        assert sum(ref["role"] == "primary" for ref in refs) == 1
+        for ref in refs:
+            scenario_id = ref["scenario_id"]
+            assert scenario_id in scenarios, (
+                f"lab {lab['id']}: missing catalog scenario {scenario_id}"
+            )
+            target = REPOSITORY_ROOT / scenarios[scenario_id]["legacy_path"]
+            assert target.is_file(), f"lab {lab['id']}: missing scenario target {target}"
+
+
+def test_course_trace_live_examples_exactly_follow_manifest_catalog_order():
+    manifest = _load_manifest()
+    scenarios = {
+        scenario["id"]: scenario for scenario in _load_scenario_catalog()["scenarios"]
+    }
+
+    for lab in manifest["labs"]:
+        trace_path = ACADEMY_ROOT / "labs" / lab["directory"] / "expected_trace.json"
+        expected_legacy_paths = [
+            scenarios[ref["scenario_id"]]["legacy_path"]
+            for ref in lab["scenario_refs"]
+        ]
+        trace_legacy_paths = [
+            str(PurePosixPath("live-tests/examples") / filename)
+            for filename in load_trace(trace_path)["live_examples"]
+        ]
+        assert trace_legacy_paths == expected_legacy_paths
+
+
+def test_course_manifest_has_twenty_edges_and_eighteen_unique_scenarios():
+    refs = [
+        ref
+        for lab in _load_manifest()["labs"]
+        for ref in lab["scenario_refs"]
+    ]
+    assert len(refs) == 20
+    assert len({ref["scenario_id"] for ref in refs}) == 18
