@@ -15,17 +15,19 @@ for import_path in (LAB_DIR, REPOSITORY_ROOT):
     if str(import_path) not in sys.path:
         sys.path.insert(0, str(import_path))
 
-from academy.common import load_trace, render_trace, run_live_example  # noqa: E402
+from academy.common import (  # noqa: E402
+    live_examples_for_lab,
+    load_trace,
+    render_trace,
+    run_live_example,
+)
 from proposal import run_proposal_pipeline  # noqa: E402
 
 
 FIXTURES_DIR = LAB_DIR / "fixtures"
 BAD_CASES_PATH = FIXTURES_DIR / "bad_cases.jsonl"
 RETENTION_CASES_PATH = FIXTURES_DIR / "retention_cases.jsonl"
-LIVE_EXAMPLES = {
-    "plugins": "32_plugins.py",
-    "audit": "12_tracing_audit.py",
-}
+LIVE_EXAMPLES = live_examples_for_lab("10")
 
 
 def run_recorded() -> dict:

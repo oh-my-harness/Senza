@@ -7,7 +7,7 @@ test skips gracefully (see `providers_from_env` / `provider_or_skip`). Each
 layer file also ships an offline *construction* smoke (no key needed) that
 validates every API call signature.
 
-Default provider is the current OMP DeepSeek endpoint:
+Default OpenAI-compatible provider is the current OMP DeepSeek endpoint:
 
     base_url = http://api.hyper-op.com/v1   (openai-completions)
     model    = DeepSeek-V4-Flash
@@ -15,7 +15,8 @@ Default provider is the current OMP DeepSeek endpoint:
 Overridable via env:
     OPENAI_API_KEY / ANTHROPIC_API_KEY      provider keys
     OPENAI_API_BASE                         default: http://api.hyper-op.com/v1
-    SENZA_LIVE_MODEL                        default: DeepSeek-V4-Flash
+    SENZA_LIVE_MODEL                        explicit shared model override
+    ANTHROPIC_MODEL                         Anthropic-only default override
 
 If `OPENAI_API_KEY` is unset, `providers_from_env` sources `~/.omp_llm_env`
 (the current OMP session's LLM env) so the DeepSeek setup "just works".
@@ -36,6 +37,7 @@ MULTI_TURN_TIMEOUT_MS = 120_000
 
 # ── OMP DeepSeek default ────────────────────────────────────────────────────
 DEFAULT_MODEL = "DeepSeek-V4-Flash"
+DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-20250514"
 DEFAULT_BASE_URL = "http://api.hyper-op.com/v1"
 _OMP_LLM_ENV = Path.home() / ".omp_llm_env"
 
@@ -60,7 +62,12 @@ _load_omp_env()
 
 
 def live_model() -> str:
-    return os.environ.get("SENZA_LIVE_MODEL", DEFAULT_MODEL)
+    explicit = os.environ.get("SENZA_LIVE_MODEL")
+    if explicit:
+        return explicit
+    if os.environ.get("ANTHROPIC_API_KEY") and not os.environ.get("OPENAI_API_KEY"):
+        return os.environ.get("ANTHROPIC_MODEL", DEFAULT_ANTHROPIC_MODEL)
+    return DEFAULT_MODEL
 
 
 def live_base_url() -> str:
@@ -95,13 +102,13 @@ def provider_or_skip() -> senza.Provider:
     return entries[0][1]
 
 
-def make_harness(provider, customize=None):
+def make_harness(provider, customize=None, *, model=None):
     """Build an AgentHarness bound to a real provider.
 
     `customize` is `Callable[[HarnessBuilder], HarnessBuilder]` applied after
-    the builder is seeded with the live model + provider.
+    the builder is seeded with the selected model + provider.
     """
-    builder = senza.HarnessBuilder(live_model()).provider("*", provider)
+    builder = senza.HarnessBuilder(model or live_model()).provider("*", provider)
     if customize:
         builder = customize(builder)
     return builder.build()

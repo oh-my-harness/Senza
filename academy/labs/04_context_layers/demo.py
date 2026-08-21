@@ -13,15 +13,16 @@ REPOSITORY_ROOT = LAB_DIR.parents[2]
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from academy.common import load_trace, render_trace, run_live_example  # noqa: E402
+from academy.common import (  # noqa: E402
+    live_examples_for_lab,
+    load_trace,
+    render_trace,
+    run_live_example,
+)
 
 
 LAYER_ORDER = ("stable_prefix", "skill", "status", "trajectory", "compaction")
-LIVE_EXAMPLES = {
-    "skills": "06_skills_model_switch.py",
-    "status": "16_status_panel.py",
-    "compaction": "21_context_aware_compact.py",
-}
+LIVE_EXAMPLES = live_examples_for_lab("04")
 
 STABLE_PREFIX = (
     "system: You are a Senza Developer Agent; inspect before editing.",

@@ -15,22 +15,41 @@ Run:
   source ~/.omp_llm_env && python live-tests/examples/31_multi_provider.py
 """
 
-from _common import make_harness, providers_from_env, require_provider, run_prompt
+import os
+
+from _common import (
+    live_model,
+    make_harness,
+    providers_from_env,
+    run_prompt,
+)
+
+
+def _model_for_provider(name: str) -> str:
+    if name == "anthropic":
+        return os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+    return live_model()
 
 
 def main() -> None:
     print("=== 31: Multiple Providers ===\n")
-    require_provider()  # no-key gate: prints SKIP + exits 0
-
     entries = providers_from_env()
+    if {name for name, _ in entries} != {"openai", "anthropic"}:
+        print(
+            "SKIP: this scenario needs both OPENAI_API_KEY and "
+            "ANTHROPIC_API_KEY to prove multi-provider routing."
+        )
+        return
     print(f"Providers configured from env: {[name for name, _ in entries]}\n")
 
     prompt = "Say hello in one word."
     for name, provider in entries:
+        model = _model_for_provider(name)
         print(f"--- {name} router ---")
         harness = make_harness(
             provider,
             lambda b: b.system_prompt("You are a helpful assistant.").max_tokens(256),
+            model=model,
         )
         events = run_prompt(harness, prompt, timeout_ms=60_000)
         for event in events:
@@ -41,7 +60,8 @@ def main() -> None:
         print("\n")
 
     print(
-        "[note] `make_harness` seeds every harness with the live model and a "
+        "[note] `make_harness` seeds every harness with a provider-compatible "
+        "model and a "
         "`*` provider pattern, so each configured provider serves the same "
         "prompt. The runtime demo pins distinct models to distinct providers "
         "via `.provider(pattern, provider)` per harness."
