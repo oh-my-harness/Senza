@@ -42,7 +42,7 @@ def require_provider():
         print("SKIP: no LLM provider configured (set OPENAI_API_KEY / ANTHROPIC_API_KEY).")
         sys.exit(0)
     name, provider = entries[0]
-    print(f"Provider: {name} | Model: {os.environ.get('SENZA_LIVE_MODEL', 'DeepSeek-V4-Flash')}")
+    print(f"Provider: {name} | Model: {live_model()}")
     return provider
 
 

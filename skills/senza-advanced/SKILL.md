@@ -21,9 +21,9 @@ description: >-
 > SDK: `import senza`
 > Prerequisites: read `senza-agent` and `senza-workflow` skills first.
 
-## Sub-Agent Spawning (7 LLM Tools)
+## Sub-Agent Spawning (5 Main-Side Tools Mounted by Default)
 
-When an LLM step's `allowed_tools` includes `"spawn_agent"`, the engine auto-registers **7 tools** + a MessageBus for main↔sub async communication. No extra setup needed.
+When an LLM step's `allowed_tools` includes `"spawn_agent"`, the engine registers a MessageBus and **5 management tools on the main agent**. The runtime protocol also defines 2 child-side reverse-communication tools, but Senza's current child factory returns `NoopPlugin`, so it does not mount those tools by default and it prevents recursive spawn.
 
 ```python
 workflow = {
@@ -33,14 +33,14 @@ workflow = {
             "id": "orchestrator",
             "name": "编排者",
             "prompt": "分析任务，派发 sub-agent 并行处理，汇总结果",
-            "allowed_tools": ["spawn_agent"],  # ← triggers 7-tool registration
+            "allowed_tools": ["spawn_agent"],  # ← mounts the 5 main-side tools
         }
     ],
     "edges": [],
 }
 ```
 
-### The 7 Tools
+### The 7 Protocol Tool Types (Only the Main 5 Are Mounted by Default)
 
 | Tool | Direction | Params | Description |
 |------|-----------|--------|-------------|
@@ -55,7 +55,7 @@ workflow = {
 ### Key Mechanisms
 
 - **MessageBus**: unified event channel. `register`/`send`/`wait`/`query_status`/`abort_agent`.
-- **AsyncSpawnHook** (ShouldStop hook): sub-agent completion events injected into main agent's conversation.
+- **AsyncSpawnHook** (AfterTurn hook): drains sub-agent events into the main agent's conversation.
 - **IdleWatcher**: when bus has no in-flight events, triggers `harness.continue_run()`.
 - **AbortCascadeHook**: step abort cascades to cancel all sub-agents.
 - Spawn is **asynchronous** — `spawn_agent` returns immediately with `agent_id`. Results arrive via `await_subagent_reply`.
@@ -201,10 +201,10 @@ for event in event_iter:
 
 ## Strategy Plugins
 
-Senza ships 12 strategy plugins (plus helpers) via `create_*` functions. Each is a `Plugin` you install on a `HarnessBuilder` or `WorkflowEngine`.
+`senza.strategy` exposes 10 Plugin factories plus 2 helpers. Only values returned by the Plugin factories are installed with `.plugin(...)`; the helpers return an event-stream pair or a compaction prompt pair.
 
-| Plugin | Function | Description |
-|--------|----------|-------------|
+| Kind | Function | Description |
+|------|----------|-------------|
 | SafetyDefaults | `senza.strategy.safety_defaults()` | Bash blacklist + path traversal guard |
 | LoopSafety | `senza.strategy.loop_safety(config=None)` | Death-spiral / repetition / failure circuit breaker |
 | StatusPanel | `senza.strategy.status_panel()` | Status bar + `todo_write` tool |
@@ -216,8 +216,8 @@ Senza ships 12 strategy plugins (plus helpers) via `create_*` functions. Each is
 | Audit | `senza.strategy.audit(sink_path, trace_id=None, task_id=None)` | Tool call audit log (JSONL) |
 | Notify | `senza.strategy.notify()` | LLM proactively notifies user |
 | ToolOutputGuard | `senza.strategy.tool_output_guard(env, config=None)` | Output truncation safety net |
-| WebhookStream | `senza.strategy.webhook_stream(buffer)` | External event trigger |
-| ContextAwareCompaction | `senza.strategy.context_aware_compaction_prompt()` | Context-aware compaction prompt pair |
+| Helper | `senza.strategy.webhook_stream(buffer)` | Returns an external-event channel/stream pair; not a Plugin |
+| Helper | `senza.strategy.context_aware_compaction_prompt()` | Returns a context-aware compaction prompt pair; not a Plugin |
 
 **Production safety pattern** — combine SafetyDefaults + LoopSafety + Audit:
 

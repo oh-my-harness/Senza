@@ -1,0 +1,4 @@
+{"case_id":"keep-bounded-select","tool_name":"run_query","args":{"sql":"SELECT id FROM users LIMIT 5"},"expected_action":"allow","expected_effective_sql":"SELECT id FROM users LIMIT 5"}
+{"case_id":"keep-unbounded-select-rewrite","tool_name":"run_query","args":{"sql":"SELECT id FROM users"},"expected_action":"modify","expected_effective_sql":"SELECT id FROM users LIMIT 100"}
+{"case_id":"keep-scoped-delete","tool_name":"run_query","args":{"sql":"DELETE FROM sessions WHERE expired_at < '2026-01-01'"},"expected_action":"allow","expected_effective_sql":"DELETE FROM sessions WHERE expired_at < '2026-01-01'"}
+{"case_id":"keep-status-tool","tool_name":"check_db_status","args":{},"expected_action":"allow","expected_effective_sql":null}

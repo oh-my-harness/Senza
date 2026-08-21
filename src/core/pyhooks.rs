@@ -1,4 +1,4 @@
-//! 11 个 hook trait 的 Python 回调包装（5 个通知 + 4 个决策 + 2 个变换）。
+//! 12 个 hook trait 的 Python 回调包装（5 个通知 + 5 个决策 + 2 个变换）。
 //!
 //! 统一模式：`Arc<Py<PyAny>>` 持有 callback，`spawn_blocking` +
 //! `Python::attach` + `call1` 调用 Python 函数。

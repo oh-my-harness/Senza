@@ -1,0 +1,73 @@
+{
+  "lab": "06",
+  "title": "Workflow：确定性检查、按步恢复与人工审批",
+  "maturity": "stable",
+  "theory": "自主 Agent 适合步骤内部的开放决策；Workflow 适合跨步骤的确定性边界、恢复和审批。",
+  "runtime_mapping": "WorkflowEngine 组合 LLM step、Executor、Judge、TaskStore、restore_from_step 与外部事件。",
+  "claims": [
+    "任务在 approve step 持久化为 paused，未审批时不会进入 publish。",
+    "从 check step 恢复会保留上游、重跑 check，并废弃旧的下游审批状态。",
+    "显式审批事件到达后，任务继续到 publish 并转为 succeeded。"
+  ],
+  "boundaries": [
+    "recorded 状态机用于稳定讲解；真实 Senza 行为由 39/41/45 号 live 示例和 Workflow 测试证明。",
+    "pause/cancel 通常在 step 安全边界生效，不承诺抢占正在进行的 Provider 请求。"
+  ],
+  "live_examples": [
+    "08_workflow.py",
+    "39_executor_steps.py",
+    "41_human_in_the_loop.py",
+    "45_hooks_retries.py"
+  ],
+  "events": [
+    {
+      "seq": 1,
+      "kind": "workflow",
+      "actor": "draft step",
+      "summary": "开放式 LLM step 生成 release note 草稿",
+      "status": "ok"
+    },
+    {
+      "seq": 2,
+      "kind": "workflow",
+      "actor": "check executor",
+      "summary": "确定性程序检查必需字段并返回 passed",
+      "status": "passed"
+    },
+    {
+      "seq": 3,
+      "kind": "workflow",
+      "actor": "approval tool",
+      "summary": "任务到达人审边界并写入 TaskStore",
+      "status": "paused"
+    },
+    {
+      "seq": 4,
+      "kind": "workflow",
+      "actor": "restore_from_step",
+      "summary": "模拟重启后从 check 恢复，保留 draft 并重跑确定性检查",
+      "status": "ok"
+    },
+    {
+      "seq": 5,
+      "kind": "workflow",
+      "actor": "approval tool",
+      "summary": "旧下游状态被丢弃，任务再次停在人审边界",
+      "status": "paused"
+    },
+    {
+      "seq": 6,
+      "kind": "user",
+      "actor": "Reviewer",
+      "summary": "提交 approved=true 与 reviewer 身份",
+      "status": "accepted"
+    },
+    {
+      "seq": 7,
+      "kind": "workflow",
+      "actor": "publish step",
+      "summary": "审批后才执行发布并将任务标记 succeeded",
+      "status": "passed"
+    }
+  ]
+}

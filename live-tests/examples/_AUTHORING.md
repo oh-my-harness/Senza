@@ -1,6 +1,6 @@
 # Senza live-tests examples — subagent authoring conventions
 
-You are writing Python example files for `Senza/live-tests/examples/`. Repo root: `/Users/hhl/Documents/projs/oh-my-harness/Senza`.
+You are writing Python example files for `live-tests/examples/` inside the Senza repository. Resolve all paths from the repository root; do not embed a developer-specific absolute path.
 
 ## Hard rules
 - Write ONLY the one file assigned. Do NOT create/delete any other file. Do NOT run `git`, lint, formatters, or any project-wide build/test (the main agent runs those).
@@ -23,9 +23,9 @@ You are writing Python example files for `Senza/live-tests/examples/`. Repo root
 - Harness: `make_example_harness(customize)` where customize is `lambda b: b...`; builder methods include `.system_prompt(s)`, `.max_tokens(n)`, `.temperature(f)`, `.tool(t)`, `.tools([...])`, `.hooks([...])`, `.skills([...])`, `.plugin(p)`, `.env(e)`, `.set_model` (runtime method), `.model_info(ctx, max)`, `.auto_compact(bool)` etc.
 - Event dict types: agent_start/end, turn_start/end, tool_call_start/end, text_delta, settled/aborted/error. `senza.extract_text(events)`, `senza.stream_prompt(obj, text, timeout_ms)`.
 - Tools: `senza.create_tool(name, description, parameters_schema=json-str, callback=(args,ctx)->{"content":[...],"terminate":bool})`. Return for tool callbacks: dict with "content" list of {"type":"text","text":...}.
-- Hooks: `senza.hooks.before_turn(cb)` etc. `before_tool_call` cb must return `"allow"`; `after_tool_call` cb must return `"passthrough"`.
+- Hooks: `senza.hooks.before_turn(cb)` etc. `before_tool_call` returns `"allow"`, `"deny"`, or a dict with `{"action": "allow" | "modify" | "deny", ...}`; `after_tool_call` returns `"passthrough"` or a patch dict such as `{"action": "patch", "content": [...]}`.
 - WorkflowEngine: `senza.WorkflowEngine(wf_dict, provider, model, judge)`, `.with_task_store(dir)`, `.with_tool(t)`, `.with_executor(name, ex)`, `.run()`, `.state()`, `.step_history()`, `.task_id()`, static `.restore(dir, task_id, provider, model, judge)`. `senza.create_judge(cb)` where cb(ctx)->"to:X" or "done"; `senza.create_executor(cb)`, `senza.create_shell_executor([cmds])`, `senza.create_http_executor([hosts])`, `senza.create_composite_judge()` + `.on(step, cb)`.
-- Strategy plugins (factories, verify in pyi `senza.strategy.*`): safety_defaults(), loop_safety(), status_panel(), memory_defense(), injection_filter(), source_tag([..]), project_instruction(), audit(sink_path=, trace_id=, task_id=), notify(...), tool_output_guard(env), webhook_stream(buffer). Plugins attach via `.plugin(p)`.
+- Strategy exposes 10 Plugin factories (verify in pyi `senza.strategy.*`): safety_defaults(), loop_safety(), status_panel(), memory_defense(), injection_filter(), source_tag([..]), project_instruction(env), audit(sink_path=, trace_id=, task_id=), notify(), tool_output_guard(env). Plugins attach via `.plugin(p)`. The 2 helpers `webhook_stream(buffer)` and `context_aware_compaction_prompt()` do not return Plugin objects.
 - Knowledge: `senza.knowledge.local_source(path, source_id)`, `.plugin(sources=[...])`.
 - Infra: `senza.infra.seatbelt_sandbox()`, `senza.create_os_env(working_dir=".")`, `senza.infra.jsonl_audit_sink`, `senza.JsonlAuditSink.validate(path)`, `senza.infra.in_memory_trace_exporter`.
 - File numbering: exact filename given in the assignment. Write file at `live-tests/examples/<NAME>`.

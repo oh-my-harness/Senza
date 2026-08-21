@@ -1,0 +1,66 @@
+{
+  "lab": "09",
+  "title": "可靠性评测：Model + Harness，而不是一条漂亮轨迹",
+  "maturity": "teaching",
+  "theory": "评测对象是 Model 与 Harness 的组合；Pass@k 与 Pass^k 的经验 p 必须来自同一任务的重复运行，跨 case 报告对每个 case 指标做宏平均。",
+  "runtime_mapping": "Audit、Hook timeline、UsageLedger、Pricing 与 Budget 提供数据；Academy runner 负责 dataset、重复运行、verifier 和报告。",
+  "claims": [
+    "同一组 case 可以比较 bare 与 guarded 两个 Harness variant。",
+    "确定性 verifier 同时检查结果、安全执行状态和成本上限。",
+    "报告把总体通过率与按 case 估计后宏平均的 Pass@k/Pass^k 分开，同时呈现延迟、成本和 token。"
+  ],
+  "boundaries": [
+    "senza-eval 是 Academy 新增的教学 runner，不是 Runtime/Senza 当前内建评测平台。",
+    "recorded outcomes 只证明 runner 和统计口径；不能证明任何 live 模型的真实成功率。",
+    "Pass@k/Pass^k 在同一 case 内估计后做宏平均；跨 case pooled pass rate 只作总体描述。",
+    "样本仅用于教学，不能据此做生产模型或 Harness 的统计结论。"
+  ],
+  "live_examples": [
+    "12_tracing_audit.py",
+    "13_budget_pricing.py"
+  ],
+  "events": [
+    {
+      "seq": 1,
+      "kind": "eval",
+      "actor": "dataset loader",
+      "summary": "加载 3 个 JSONL case：结果、动作状态与预算约束",
+      "status": "ok"
+    },
+    {
+      "seq": 2,
+      "kind": "eval",
+      "actor": "variant matrix",
+      "summary": "为 bare 与 guarded 两个 Model+Harness variant 各读取 9 次 recorded run",
+      "status": "ok"
+    },
+    {
+      "seq": 3,
+      "kind": "eval",
+      "actor": "deterministic verifier",
+      "summary": "逐次检查 required/forbidden 文本、executed 状态和成本上限",
+      "status": "passed"
+    },
+    {
+      "seq": 4,
+      "kind": "eval",
+      "actor": "metrics",
+      "summary": "按 variant/case 计算经验 p 与 Pass@3/Pass^3，再做 case 宏平均；总体 pass rate、延迟与成本单独汇总",
+      "status": "ok"
+    },
+    {
+      "seq": 5,
+      "kind": "eval",
+      "actor": "reporter",
+      "summary": "按宏平均连续可靠性优先、总体通过率次之、成本再打破平局的规则推荐 guarded variant",
+      "status": "accepted"
+    },
+    {
+      "seq": 6,
+      "kind": "agent",
+      "actor": "course boundary",
+      "summary": "把 recorded 结果标记为 runner 测试，不冒充 live 模型评测",
+      "status": "info"
+    }
+  ]
+}

@@ -1,0 +1,221 @@
+{
+  "schema_version": 1,
+  "title": "Senza Academy：从 Agent 理论到 Runtime/Senza 实践",
+  "source_pins": {
+    "runtime": "c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9",
+    "senza": "53cb8b5e71cf6c8ddf41397039adbdcfbfce2685",
+    "ai_agent_book": "1d2e04ee733dde245af2eb718cfc92d2d0542b7e"
+  },
+  "labs": [
+    {
+      "id": "01",
+      "directory": "01_react_tool_calling",
+      "title": "ReAct 与 Tool Calling",
+      "textbook": "01-react-tool-calling.md",
+      "book_chapters": [1],
+      "maturity": "stable",
+      "release_wave": 1,
+      "scenario_refs": [
+        {
+          "alias": "default",
+          "scenario_id": "agent.tool_calling",
+          "role": "primary"
+        }
+      ]
+    },
+    {
+      "id": "02",
+      "directory": "02_hook_xray",
+      "title": "Hook X 光片",
+      "textbook": "02-hook-lifecycle.md",
+      "book_chapters": [1],
+      "maturity": "stable",
+      "release_wave": 1,
+      "scenario_refs": [
+        {
+          "alias": "default",
+          "scenario_id": "agent.hooks",
+          "role": "primary"
+        }
+      ]
+    },
+    {
+      "id": "03",
+      "directory": "03_plugin_db_safety",
+      "title": "Plugin 与 DB Safety",
+      "textbook": "03-plugin-composition.md",
+      "book_chapters": [4, 9],
+      "maturity": "stable",
+      "release_wave": 1,
+      "scenario_refs": [
+        {
+          "alias": "default",
+          "scenario_id": "plugin.composition",
+          "role": "primary"
+        }
+      ]
+    },
+    {
+      "id": "04",
+      "directory": "04_context_layers",
+      "title": "Context Layers",
+      "textbook": "04-context-layers.md",
+      "book_chapters": [2],
+      "maturity": "stable",
+      "release_wave": 1,
+      "scenario_refs": [
+        {
+          "alias": "skills",
+          "scenario_id": "context.skills_model_switch",
+          "role": "primary"
+        },
+        {
+          "alias": "status",
+          "scenario_id": "context.status_panel",
+          "role": "supporting"
+        },
+        {
+          "alias": "compaction",
+          "scenario_id": "context.compaction_prompt",
+          "role": "supporting"
+        }
+      ]
+    },
+    {
+      "id": "05",
+      "directory": "05_coding_guardrails",
+      "title": "Coding Agent 与 Guardrails",
+      "textbook": "05-coding-guardrails.md",
+      "book_chapters": [5],
+      "maturity": "stable",
+      "release_wave": 1,
+      "scenario_refs": [
+        {
+          "alias": "fs",
+          "scenario_id": "tools.filesystem",
+          "role": "primary"
+        },
+        {
+          "alias": "approval",
+          "scenario_id": "safety.rules_approval",
+          "role": "supporting"
+        },
+        {
+          "alias": "safety",
+          "scenario_id": "safety.defaults_injection",
+          "role": "supporting"
+        }
+      ]
+    },
+    {
+      "id": "06",
+      "directory": "06_workflow_recovery_hitl",
+      "title": "Workflow、Recovery 与 HITL",
+      "textbook": "06-workflow-recovery-hitl.md",
+      "book_chapters": [1, 6],
+      "maturity": "stable",
+      "release_wave": 1,
+      "scenario_refs": [
+        {
+          "alias": "workflow",
+          "scenario_id": "workflow.basic",
+          "role": "supporting"
+        },
+        {
+          "alias": "executor",
+          "scenario_id": "workflow.executor",
+          "role": "supporting"
+        },
+        {
+          "alias": "hitl",
+          "scenario_id": "workflow.hitl",
+          "role": "supporting"
+        },
+        {
+          "alias": "recovery",
+          "scenario_id": "workflow.retry_replay",
+          "role": "primary"
+        }
+      ]
+    },
+    {
+      "id": "07",
+      "directory": "07_knowledge_memory_recall",
+      "title": "Knowledge、Memory 与 Recall",
+      "textbook": "07-knowledge-memory-recall.md",
+      "book_chapters": [3],
+      "maturity": "preview",
+      "release_wave": 2,
+      "scenario_refs": [
+        {
+          "alias": "rag",
+          "scenario_id": "knowledge.rag",
+          "role": "primary"
+        },
+        {
+          "alias": "infra",
+          "scenario_id": "knowledge.infrastructure_wiring",
+          "role": "supporting"
+        }
+      ]
+    },
+    {
+      "id": "08",
+      "directory": "08_basic_multi_agent",
+      "title": "Basic Multi-Agent",
+      "textbook": "08-basic-multi-agent.md",
+      "book_chapters": [10],
+      "maturity": "teaching",
+      "release_wave": 2,
+      "scenario_refs": [
+        {
+          "alias": "default",
+          "scenario_id": "multi_agent.spawn",
+          "role": "primary"
+        }
+      ]
+    },
+    {
+      "id": "09",
+      "directory": "09_reliability_eval",
+      "title": "Reliability Eval",
+      "textbook": "09-reliability-eval.md",
+      "book_chapters": [7],
+      "maturity": "teaching",
+      "release_wave": 2,
+      "scenario_refs": [
+        {
+          "alias": "audit",
+          "scenario_id": "observability.audit",
+          "role": "primary"
+        },
+        {
+          "alias": "budget",
+          "scenario_id": "observability.budget_pricing",
+          "role": "supporting"
+        }
+      ]
+    },
+    {
+      "id": "10",
+      "directory": "10_improvement_proposal",
+      "title": "Improvement Proposal",
+      "textbook": "10-improvement-proposal.md",
+      "book_chapters": [9],
+      "maturity": "teaching",
+      "release_wave": 2,
+      "scenario_refs": [
+        {
+          "alias": "plugins",
+          "scenario_id": "plugin.composition",
+          "role": "primary"
+        },
+        {
+          "alias": "audit",
+          "scenario_id": "observability.audit",
+          "role": "supporting"
+        }
+      ]
+    }
+  ]
+}
