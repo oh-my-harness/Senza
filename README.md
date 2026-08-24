@@ -56,7 +56,7 @@ pip install senza-sdk
 ```python
 import senza
 
-print(senza.version())  # e.g. "1.1.0"
+print(senza.version())  # e.g. "1.2.0"
 ```
 
 ---
@@ -93,7 +93,7 @@ harness = (
 print(harness.chat("用一句话解释闭包。"))
 ```
 
-`harness.chat(text)` 是 1.1.0 新增的便捷方法，内部等价于
+`harness.chat(text)` 是 1.2.0 新增的便捷方法，内部等价于
 `senza.extract_text(harness.prompt_and_collect(text))` —— 一步取回纯文本回复。
 如需逐 token 流式或原始事件，用 `stream_prompt()` 或 `prompt_and_collect()`。
 

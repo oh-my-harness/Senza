@@ -65,7 +65,7 @@ jobs:
           # Extract version from git tag (e.g. refs/tags/v1.0.3 → 1.0.3)
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             VERSION="${GITHUB_REF#refs/tags/v}"
-            sed -i -E '0,/^version = ".*"/s//version = "'"$VERSION"'"/' Cargo.toml
+            perl -pi -e "s/^version = \".*\"/version = \"$VERSION\"/" Cargo.toml
             echo "Injected version $VERSION from tag"
           fi
 
@@ -173,7 +173,7 @@ jobs:
           perl -pi -e "s/PLACEHOLDER/${{ steps.rev.outputs.rev }}/g" Cargo.toml
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             VERSION="${GITHUB_REF#refs/tags/v}"
-            sed -i -E '0,/^version = ".*"/s//version = "'"$VERSION"'"/' Cargo.toml
+            perl -pi -e "s/^version = \".*\"/version = \"$VERSION\"/" Cargo.toml
             echo "Injected version $VERSION from tag"
           fi
 
@@ -258,7 +258,7 @@ jobs:
           perl -pi -e "s/PLACEHOLDER/${{ steps.rev.outputs.rev }}/g" Cargo.toml
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             VERSION="${GITHUB_REF#refs/tags/v}"
-            sed -i -E '0,/^version = ".*"/s//version = "'"$VERSION"'"/' Cargo.toml
+            perl -pi -e "s/^version = \".*\"/version = \"$VERSION\"/" Cargo.toml
             echo "Injected version $VERSION from tag"
           fi
 
