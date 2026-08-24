@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use llm_harness_runtime::platform::sandbox::{ResourceLimits, Sandbox, SandboxConfig};
+use llm_harness_platform::sandbox::{ResourceLimits, Sandbox, SandboxConfig};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
@@ -136,7 +136,8 @@ pub fn create_seatbelt_sandbox<'py>(
     config: Option<Bound<'py, PyDict>>,
 ) -> PyResult<Bound<'py, PySandbox>> {
     let cfg = dict_to_sandbox_config(config.as_ref())?;
-    let sandbox = llm_harness_runtime_sandbox_seatbelt::SeatbeltSandbox::new(cfg);
+    let sandbox = llm_harness_sandbox::SeatbeltSandbox::new(cfg)
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
     Py::new(
         py,
         PySandbox {
@@ -155,7 +156,7 @@ pub fn create_bwrap_sandbox<'py>(
     config: Option<Bound<'py, PyDict>>,
 ) -> PyResult<Bound<'py, PySandbox>> {
     let cfg = dict_to_sandbox_config(config.as_ref())?;
-    let sandbox = llm_harness_runtime_sandbox_bwrap::BwrapSandbox::new(cfg)
+    let sandbox = llm_harness_sandbox::BwrapSandbox::new(cfg)
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
     Py::new(
         py,

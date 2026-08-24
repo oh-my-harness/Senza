@@ -1,12 +1,12 @@
 //! `JsonlAuditSink` PyO3 binding.
 //!
-//! Wraps `llm_harness_runtime_audit_jsonl::JsonlAuditSink`, exposing
+//! Wraps `llm_harness_audit_jsonl::JsonlAuditSink`, exposing
 //! construction and the async `validate` class method as a synchronous
 //! Python call (blocking on the global tokio runtime with panic isolation).
 
 use std::path::PathBuf;
 
-use llm_harness_runtime_audit_jsonl::JsonlAuditSink;
+use llm_harness_audit_jsonl::JsonlAuditSink;
 use pyo3::prelude::*;
 
 use crate::core::pyagent::runtime;

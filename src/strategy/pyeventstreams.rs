@@ -5,9 +5,9 @@ use pyo3::prelude::*;
 use pyo3::types::PyTuple;
 use tokio::sync::Mutex as TokioMutex;
 
-use llm_harness_runtime::lifecycle::event::WaitForExternalEventTool;
-use llm_harness_runtime::lifecycle::task::TaskId;
 use llm_harness_types::Tool;
+use llm_harness_workflow::lifecycle::event::WaitForExternalEventTool;
+use llm_harness_workflow::lifecycle::task::TaskId;
 
 use crate::shared::value_conv::pyobject_to_value;
 

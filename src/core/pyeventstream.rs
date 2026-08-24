@@ -6,9 +6,9 @@
 use std::sync::Arc;
 
 use futures::future::BoxFuture;
-use llm_harness_runtime::lifecycle::event::{Event, EventStream, WaitForExternalEventTool};
-use llm_harness_runtime::lifecycle::task::TaskId;
 use llm_harness_types::{DataBlock, Tool};
+use llm_harness_workflow::lifecycle::event::{Event, EventStream, WaitForExternalEventTool};
+use llm_harness_workflow::lifecycle::task::TaskId;
 use pyo3::prelude::*;
 use tokio::sync::{Mutex, mpsc};
 

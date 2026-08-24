@@ -7,11 +7,11 @@
 
 use std::sync::Arc;
 
-use llm_harness_runtime::rules::{
+use llm_harness_types::BeforeToolCallHook;
+use llm_harness_workflow::rules::{
     Contains, Decision, NumberRangeField, Predicate, RateLimit, RegexField, Rule,
     RuleBasedApprovalHook, RuleChain, RuleChainBuilder,
 };
-use llm_harness_types::BeforeToolCallHook;
 use pyo3::prelude::*;
 
 use crate::core::pyhooks::{HookKind, PyHookWrapper};

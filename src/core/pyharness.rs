@@ -16,8 +16,8 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use llm_harness_agent::{AgentHarness, AgentHarnessEvent};
-use llm_harness_runtime_knowledge::{KnowledgeAccessContext, KnowledgeScope, PrincipalRef};
-use llm_harness_runtime_mcp::builder::McpAgentHarness;
+use llm_harness_knowledge::{KnowledgeAccessContext, KnowledgeScope, PrincipalRef};
+use llm_harness_mcp::builder::McpAgentHarness;
 use llm_harness_types::{HarnessPhase, RunRequest, ThinkingLevel, Tool};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};

@@ -2,8 +2,8 @@
 
 use std::sync::Arc;
 
-use llm_harness_runtime::workflow::executor::{HttpCallExecutor, HttpCallPolicy, ShellExecutor};
-use llm_harness_runtime_sandbox_os::OsEnv;
+use llm_harness_sandbox::os::OsEnv;
+use llm_harness_workflow::workflow::executor::{HttpCallExecutor, HttpCallPolicy, ShellExecutor};
 use pyo3::prelude::*;
 
 pub mod core;
@@ -483,7 +483,7 @@ fn create_judge<'py>(
     let judge = crate::runtime::pyworkflow::PyJudge::new(callback);
     let wrapper = crate::runtime::pyworkflow::PyJudgeWrapper {
         judge: Arc::new(judge)
-            as Arc<dyn llm_harness_runtime::workflow::judge::StepTransitionJudge>,
+            as Arc<dyn llm_harness_workflow::workflow::judge::StepTransitionJudge>,
     };
     Py::new(py, wrapper).map(|p| p.into_bound(py))
 }
@@ -621,10 +621,10 @@ fn create_fs_tools_plugin<'py>(
     py: Python<'py>,
 ) -> PyResult<Bound<'py, crate::core::pyplugin::PyPluginWrapper>> {
     let store = Arc::new(parking_lot::RwLock::new(
-        llm_harness_runtime_tools::FileSnapshotStore::new(),
+        llm_harness_tools::FileSnapshotStore::new(),
     ));
     let plugin: Arc<dyn llm_harness_agent::Plugin> =
-        Arc::new(llm_harness_runtime_tools::FsToolsPlugin::new(Some(store)));
+        Arc::new(llm_harness_tools::FsToolsPlugin::new(Some(store)));
     Py::new(py, crate::core::pyplugin::PyPluginWrapper::new(plugin)).map(|p| p.into_bound(py))
 }
 

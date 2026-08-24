@@ -1,10 +1,10 @@
 //! `InMemoryTraceExporter` PyO3 binding.
 //!
-//! Wraps `llm_harness_runtime_trace_otel::InMemoryTraceExporter`,
+//! Wraps `llm_harness_trace_otel::InMemoryTraceExporter`,
 //! exposing span retrieval as Python dicts.
 
-use llm_harness_runtime::observability::tracer::{AttributeValue, SpanEvent, SpanKind, SpanStatus};
-use llm_harness_runtime_trace_otel::InMemoryTraceExporter;
+use llm_harness_platform::tracer::{AttributeValue, SpanEvent, SpanKind, SpanStatus};
+use llm_harness_trace_otel::InMemoryTraceExporter;
 use pyo3::prelude::*;
 
 /// Convert a `SpanKind` to its string representation.

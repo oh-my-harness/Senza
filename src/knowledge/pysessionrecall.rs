@@ -8,7 +8,7 @@ use crate::core::pyplugin::PyPluginWrapper;
 /// Opaque wrapper for `SessionRecallIndex`.
 #[pyclass(name = "SessionRecallIndex")]
 pub struct PySessionRecallIndex {
-    pub index: Arc<dyn llm_harness_runtime_session_recall::SessionRecallIndex>,
+    pub index: Arc<dyn llm_harness_session_recall::SessionRecallIndex>,
 }
 
 /// Opaque wrapper for `SessionRepo`.
@@ -23,7 +23,7 @@ pub struct PySessionRepo {
 /// registration in a `KnowledgeRegistry` via `create_knowledge_plugin`.
 #[pyclass(name = "SessionRecallKnowledgeSource")]
 pub struct PySessionRecallKnowledgeSource {
-    pub source: Arc<llm_harness_runtime_session_recall::SessionRecallKnowledgeSource>,
+    pub source: Arc<llm_harness_session_recall::SessionRecallKnowledgeSource>,
 }
 
 #[pymethods]
@@ -34,7 +34,7 @@ impl PySessionRecallKnowledgeSource {
         &self,
         py: Python<'py>,
     ) -> PyResult<Bound<'py, super::pylocalsource::PyKnowledgeSource>> {
-        let source: Arc<dyn llm_harness_runtime_knowledge::KnowledgeSource> = self.source.clone();
+        let source: Arc<dyn llm_harness_knowledge::KnowledgeSource> = self.source.clone();
         Ok(Py::new(py, super::pylocalsource::PyKnowledgeSource { source })?.into_bound(py))
     }
 }
@@ -45,8 +45,8 @@ impl PySessionRecallKnowledgeSource {
 pub fn create_in_memory_session_recall_index<'py>(
     py: Python<'py>,
 ) -> PyResult<Bound<'py, PySessionRecallIndex>> {
-    let index: Arc<dyn llm_harness_runtime_session_recall::SessionRecallIndex> =
-        Arc::new(llm_harness_runtime_session_recall::InMemorySessionRecallIndex::default());
+    let index: Arc<dyn llm_harness_session_recall::SessionRecallIndex> =
+        Arc::new(llm_harness_session_recall::InMemorySessionRecallIndex::default());
     Ok(Py::new(py, PySessionRecallIndex { index })?.into_bound(py))
 }
 
@@ -57,9 +57,9 @@ pub fn create_sqlite_session_recall_index<'py>(
     py: Python<'py>,
     path: &str,
 ) -> PyResult<Bound<'py, PySessionRecallIndex>> {
-    let index = llm_harness_runtime_session_recall::SqliteSessionRecallIndex::open(path)
+    let index = llm_harness_session_recall::SqliteSessionRecallIndex::open(path)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-    let index: Arc<dyn llm_harness_runtime_session_recall::SessionRecallIndex> = Arc::new(index);
+    let index: Arc<dyn llm_harness_session_recall::SessionRecallIndex> = Arc::new(index);
     Ok(Py::new(py, PySessionRecallIndex { index })?.into_bound(py))
 }
 
@@ -100,19 +100,16 @@ pub fn create_session_recall_knowledge_source<'py>(
     let repo: PyRef<'_, PySessionRepo> = repo.extract()?;
     let index: PyRef<'_, PySessionRecallIndex> = index.extract()?;
 
-    let access_control = Arc::new(llm_harness_runtime_knowledge::KnowledgeAccessControl::new(
-        Arc::new(llm_harness_runtime_knowledge::AllowAllAuthorizer),
+    let access_control = Arc::new(llm_harness_knowledge::KnowledgeAccessControl::new(
+        Arc::new(llm_harness_knowledge::AllowAllAuthorizer),
     ));
 
-    let service = Arc::new(
-        llm_harness_runtime_session_recall::SessionRecallService::new(
-            repo.repo.clone(),
-            index.index.clone(),
-            access_control,
-        ),
-    );
-    let source =
-        Arc::new(llm_harness_runtime_session_recall::SessionRecallKnowledgeSource::new(service));
+    let service = Arc::new(llm_harness_session_recall::SessionRecallService::new(
+        repo.repo.clone(),
+        index.index.clone(),
+        access_control,
+    ));
+    let source = Arc::new(llm_harness_session_recall::SessionRecallKnowledgeSource::new(service));
     Ok(Py::new(py, PySessionRecallKnowledgeSource { source })?.into_bound(py))
 }
 
@@ -140,10 +137,9 @@ pub fn create_history_recall_plugin<'py>(
 ) -> PyResult<Bound<'py, PyPluginWrapper>> {
     let src: PyRef<'_, PySessionRecallKnowledgeSource> = source.extract()?;
 
-    let mut plugin_config =
-        llm_harness_runtime_session_recall::HistoryRecallPluginConfig::default();
+    let mut plugin_config = llm_harness_session_recall::HistoryRecallPluginConfig::default();
     if let Some(cfg) = config {
-        let mut budget = llm_harness_runtime_session_recall::SessionRecallBudget::default();
+        let mut budget = llm_harness_session_recall::SessionRecallBudget::default();
         if let Some(v) = cfg
             .get_item("max_hits")?
             .and_then(|v| v.extract::<usize>().ok())
@@ -189,11 +185,9 @@ pub fn create_history_recall_plugin<'py>(
         }
     }
 
-    let plugin = llm_harness_runtime_session_recall::HistoryRecallPlugin::new(
-        src.source.clone(),
-        plugin_config,
-    )
-    .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+    let plugin =
+        llm_harness_session_recall::HistoryRecallPlugin::new(src.source.clone(), plugin_config)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
 
     let plugin: Arc<dyn llm_harness_agent::Plugin> = Arc::new(plugin);
     Ok(Py::new(py, PyPluginWrapper::new(plugin))?.into_bound(py))
