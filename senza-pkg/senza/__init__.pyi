@@ -302,6 +302,41 @@ def create_plugin(
 ) -> Plugin: ...
 def create_fs_tools_plugin() -> Plugin: ...
 
+# ── Native tool wrapper ──────────────────────────────────────────────────────
+
+class NativeTool:
+    """Opaque wrapper for a Rust-native Tool."""
+    @property
+    def name(self) -> str: ...
+    @property
+    def description(self) -> str: ...
+
+# ── Web / Code tools ─────────────────────────────────────────────────────────
+
+def create_web_search_tool(
+    config: Optional[dict] = ...,
+) -> NativeTool: ...
+
+def create_web_fetch_tool(
+    config: Optional[dict] = ...,
+) -> NativeTool: ...
+
+def create_web_tools_plugin(
+    config: Optional[dict] = ...,
+) -> Plugin: ...
+
+def create_code_exec_tool(
+    timeout_secs: Optional[int] = ...,
+) -> NativeTool: ...
+
+# ── Inspector ────────────────────────────────────────────────────────────────
+
+class Inspector:
+    """Agent Inspector Web API handle. Drop to shut down."""
+    @property
+    def bound_addr(self) -> Optional[str]: ...
+    def shutdown(self) -> None: ...
+
 # ── Knowledge ────────────────────────────────────────────────────────────────
 
 class KnowledgeSource:
@@ -727,6 +762,7 @@ class AgentHarness:
     def delete_branch(self, leaf: str) -> None: ...
     def generate_branch_summary(self, leaf: str) -> dict: ...
     def shutdown(self) -> None: ...
+    def mount_inspector(self, port: int = 8080) -> Inspector: ...
 
     # ── Context manager ──
     def __enter__(self) -> AgentHarness: ...

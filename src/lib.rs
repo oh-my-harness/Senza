@@ -161,6 +161,24 @@ fn senza(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(create_http_executor, m)?)?;
     m.add_function(wrap_pyfunction!(create_os_env, m)?)?;
     m.add_function(wrap_pyfunction!(create_fs_tools_plugin, m)?)?;
+    m.add_class::<crate::core::pywebtools::PyNativeTool>()?;
+    m.add_function(wrap_pyfunction!(
+        crate::core::pywebtools::create_web_search_tool,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        crate::core::pywebtools::create_web_fetch_tool,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        crate::core::pywebtools::create_web_tools_plugin,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        crate::core::pywebtools::create_code_exec_tool,
+        m
+    )?)?;
+    m.add_class::<crate::core::pyinspector::PyInspector>()?;
     m.add_function(wrap_pyfunction!(
         strategy::pysafety::create_safety_defaults_plugin,
         m

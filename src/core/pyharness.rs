@@ -24,6 +24,7 @@ use pyo3::types::{PyDict, PyList};
 use tokio::sync::broadcast;
 
 use crate::core::pyagent::runtime;
+use crate::core::pyinspector::PyInspector;
 use crate::runtime::pyworkflow::cost_aggregate_to_dict;
 use crate::shared::event_stream::agent_event_to_dict;
 use crate::shared::pyerror::harness_error_to_pyerr;
@@ -1087,6 +1088,26 @@ impl PyAgentHarness {
             })?;
         }
         Ok(())
+    }
+    /// Mount the Agent Inspector Web API on the given port.
+    ///
+    /// Returns an `Inspector` handle. Dropping it shuts down the server.
+    /// Call this after `build()`, before `prompt()`.
+    #[pyo3(signature = (port = 8080))]
+    fn mount_inspector(&self, py: Python<'_>, port: u16) -> PyResult<Py<PyInspector>> {
+        let harness: Arc<AgentHarness> = match &self.harness {
+            HarnessRef::Base(h) => h.clone(),
+            HarnessRef::Mcp(_) => {
+                return Err(pyo3::exceptions::PyRuntimeError::new_err(
+                    "mount_inspector is not supported on MCP harnesses",
+                ));
+            }
+        };
+        let rt = runtime(py);
+        let inspector = crate::shared::pyerror::detach_catch_panic_result(py, move || {
+            rt.block_on(async move { PyInspector::mount(harness, port).await })
+        })?;
+        Py::new(py, inspector)
     }
 
     /// Context manager exit: aborts any in-progress prompt and returns.

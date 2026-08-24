@@ -8,4 +8,4 @@ docs/superpowers
 .cargo/config.toml
 target
 .venv/
-*.so
+*.sosenza_agent.egg-info/

@@ -108,32 +108,48 @@ impl PyHarnessBuilder {
         slf
     }
 
-    /// 注册一个 `Tool`（来自 `create_tool`）。
+    /// 注册一个 `Tool`（来自 `create_tool` 或 `create_web_search_tool` 等）。
     fn tool<'a>(
         mut slf: PyRefMut<'a, Self>,
-        tool: &Bound<'_, PyToolWrapper>,
-    ) -> PyRefMut<'a, Self> {
+        tool: &Bound<'_, PyAny>,
+    ) -> PyResult<PyRefMut<'a, Self>> {
         if let Some(b) = slf.builder.take() {
-            let t: Arc<dyn Tool> = tool.borrow().tool.clone();
+            let t: Arc<dyn Tool> = if let Ok(w) = tool.extract::<PyRef<'_, PyToolWrapper>>() {
+                w.tool.clone()
+            } else if let Ok(n) = tool.extract::<PyRef<'_, crate::core::pywebtools::PyNativeTool>>() {
+                n.tool.clone()
+            } else {
+                return Err(pyo3::exceptions::PyTypeError::new_err(
+                    "expected a Tool (from create_tool) or NativeTool (from create_web_search_tool, etc.)",
+                ));
+            };
             slf.builder = Some(b.tool(t));
         }
-        slf
+        Ok(slf)
     }
 
-    /// 批量注册多个 `Tool`（来自 `create_tool`）。等效于逐个调用 `.tool(t)`。
+    /// 批量注册多个 `Tool`（来自 `create_tool` 或 `create_web_search_tool` 等）。
     #[pyo3(text_signature = "($self, tools)")]
     fn tools<'a>(
         mut slf: PyRefMut<'a, Self>,
-        tools: Vec<Bound<'_, PyToolWrapper>>,
-    ) -> PyRefMut<'a, Self> {
+        tools: Vec<Bound<'_, PyAny>>,
+    ) -> PyResult<PyRefMut<'a, Self>> {
         if let Some(mut b) = slf.builder.take() {
-            for wrapper in &tools {
-                let t: Arc<dyn Tool> = wrapper.borrow().tool.clone();
+            for item in &tools {
+                let t: Arc<dyn Tool> = if let Ok(w) = item.extract::<PyRef<'_, PyToolWrapper>>() {
+                    w.tool.clone()
+                } else if let Ok(n) = item.extract::<PyRef<'_, crate::core::pywebtools::PyNativeTool>>() {
+                    n.tool.clone()
+                } else {
+                    return Err(pyo3::exceptions::PyTypeError::new_err(
+                        "each item must be a Tool or NativeTool",
+                    ));
+                };
                 b = b.tool(t);
             }
             slf.builder = Some(b);
         }
-        slf
+        Ok(slf)
     }
 
     /// 安装一个 `Plugin`（来自 `create_plugin`），累积其 tools/hooks/skills。
