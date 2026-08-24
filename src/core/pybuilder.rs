@@ -116,7 +116,8 @@ impl PyHarnessBuilder {
         if let Some(b) = slf.builder.take() {
             let t: Arc<dyn Tool> = if let Ok(w) = tool.extract::<PyRef<'_, PyToolWrapper>>() {
                 w.tool.clone()
-            } else if let Ok(n) = tool.extract::<PyRef<'_, crate::core::pywebtools::PyNativeTool>>() {
+            } else if let Ok(n) = tool.extract::<PyRef<'_, crate::core::pywebtools::PyNativeTool>>()
+            {
                 n.tool.clone()
             } else {
                 return Err(pyo3::exceptions::PyTypeError::new_err(
@@ -138,7 +139,9 @@ impl PyHarnessBuilder {
             for item in &tools {
                 let t: Arc<dyn Tool> = if let Ok(w) = item.extract::<PyRef<'_, PyToolWrapper>>() {
                     w.tool.clone()
-                } else if let Ok(n) = item.extract::<PyRef<'_, crate::core::pywebtools::PyNativeTool>>() {
+                } else if let Ok(n) =
+                    item.extract::<PyRef<'_, crate::core::pywebtools::PyNativeTool>>()
+                {
                     n.tool.clone()
                 } else {
                     return Err(pyo3::exceptions::PyTypeError::new_err(
