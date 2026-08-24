@@ -26,7 +26,7 @@ Harness 上可以任意热插拔的模块。
 6. 判断“新需求应放进 Tool/Hook/外部后端，还是需要修改 Core”。
 
 先修知识：完成[第 1 章](01-react-tool-calling.md)和[第 2 章](02-hook-lifecycle.md)，特别是
-Tool callback 的环境边界、12 个固定 Hook 类型及其组合语义。
+Tool callback 的环境边界、13 个固定 Hook 类型及其组合语义。
 
 ## 理论直觉：把经验固化在模型之外
 
@@ -59,12 +59,12 @@ Plugin 提供中间层：
 
 ### Runtime Rust Plugin：四类贡献
 
-Runtime 的 [`Plugin` trait](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-agent/src/plugin.rs)可以贡献：
+Runtime 的 [`Plugin` trait](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-agent/src/plugin.rs)可以贡献：
 
 | 贡献 | 作用 |
 | --- | --- |
 | tools | 扩展模型可选择的观察/动作接口 |
-| hooks | 在 12 个固定生命周期边界提供策略 |
+| hooks | 在 13 个固定生命周期边界提供策略 |
 | skills | 提供按需加载的操作知识或流程说明 |
 | templates | 提供可复用 Prompt 模板 |
 
@@ -84,7 +84,7 @@ Python `create_plugin()` 这条公开构造路径没有让调用者直接传入�
 
 ### Builder：构建期收集与校验
 
-Runtime [`HarnessBuilder`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-runtime/src/builder.rs) 的
+Runtime [`HarnessBuilder`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-agent/src/builder.rs) 的
 `install()` 依次调用四个 `register_*` 方法，把贡献追加到 Builder。Senza
 [`HarnessBuilder.plugin()`](../../../src/core/pybuilder.rs)只是对这条 Rust 安装路径的 Python
 封装。
@@ -236,13 +236,13 @@ guard 返回 Deny。Runtime 生成结构化 ToolFailure 给模型作为 Observat
 
 ### 1. Rust 协议
 
-[`plugin.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-agent/src/plugin.rs)定义 `name()` 与四个
+[`plugin.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-agent/src/plugin.rs)定义 `name()` 与四个
 `register_*` 方法，并明确记录安装顺序与冲突处理。阅读时重点注意：协议没有 `start()` 或
 `hot_reload()`，也没有自动依赖解析。
 
 ### 2. Runtime 安装
 
-[`builder.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-runtime/src/builder.rs)中的 `install()`按
+[`builder.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-agent/src/builder.rs)中的 `install()`按
 tools、hooks、skills、templates 次序调用 Plugin，但每类贡献内部仍按 Plugin 注册顺序追加。
 `resolve_and_build()` 在返回 Harness 选项前调用 Tool 名冲突检查。这解释了为什么冲突是构建错误，
 而不是模型真正调用时才暴露。
@@ -261,7 +261,7 @@ Builder 后构造 Harness。`HarnessBuilder(pending)` 变成 consumed 之后，�
 
 [`Senza/src/runtime/pyworkflow.rs`](../../../src/runtime/pyworkflow.rs)用 `PyPluginAdapter` 把 Python
 Plugin 交给底层 step Plugin factory。Runtime 的
-[`workflow/engine/runner.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-runtime/src/workflow/engine/runner.rs)
+[`workflow/engine/runner.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-workflow/src/workflow/engine/runner.rs)
 只在命中当前 `step.id()` 的 factory 时安装 Plugin，然后再构造该 step 的 Harness。这是作用域
 隔离的源码依据。
 
@@ -333,7 +333,7 @@ live 模式委托
 
 ### 误解二：Plugin 可以创造任意 Hook 位置
 
-Plugin 只能把实现注册到 Core 已定义的 12 个槽位。它可以贡献多个 Hook，却不能要求 Core 在任意
+Plugin 只能把实现注册到 Core 已定义的 13 个槽位。它可以贡献多个 Hook，却不能要求 Core 在任意
 源码行回调。如果没有合适槽位，要么把行为封装在 Tool/后端内部，要么正式扩展 Runtime 契约。
 
 ### 误解三：前置依赖一定是另一个 Plugin
@@ -370,7 +370,7 @@ Hook 能在 Harness 边界阻断明显危险调用，但生产安全必须依靠
 ## 小结
 
 Plugin 让团队把已验证的 Tool、Hook 及 Rust 侧的 Skill/Template 组合成可复用外部产物。它之所以
-容易添加，不是因为能侵入任意位置，而是因为 Builder、12 个 Hook 与 Tool trait 提供了稳定协议。
+容易添加，不是因为能侵入任意位置，而是因为 Builder、13 个 Hook 与 Tool trait 提供了稳定协议。
 组合是否安全取决于 Hook 代数、注册顺序、名称空间、作用域和外部依赖；“能装上”只是兼容性的
 第一步。
 
@@ -390,8 +390,8 @@ Plugin 让团队把已验证的 Tool、Hook 及 Rust 侧的 Skill/Template 组�
 
 - 理论坐标：[《动手学 AI Agent》第 1 章](https://github.com/bojieli/ai-agent-book/blob/1d2e04ee733dde245af2eb718cfc92d2d0542b7e/book/chapter1.md)中的外部产物、
   Harness 工程与安全边界；
-- Runtime Plugin 协议：[`plugin.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-agent/src/plugin.rs)；
-- Runtime Builder：[`builder.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-runtime/src/builder.rs)；
+- Runtime Plugin 协议：[`plugin.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-agent/src/plugin.rs)；
+- Runtime Builder：[`builder.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-agent/src/builder.rs)；
 - Academy 实验：[`Lab 03 README`](../../../academy/labs/03_plugin_db_safety/README.md)；
 - Python live 示例：[`32_plugins.py`](../../../live-tests/examples/32_plugins.py)；
 - 架构总览：[Academy 架构导读](../architecture.md)；

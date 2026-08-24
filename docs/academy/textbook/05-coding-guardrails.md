@@ -175,11 +175,11 @@ Lab 的 recorded 模式为了无 Provider、跨平台和零风险，使用 `eval
 
 ## 源码导读
 
-1. [`runtime-tools/src/lib.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-runtime-tools/src/lib.rs)
+1. [`runtime-tools/src/lib.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-tools/src/lib.rs)
    是六个文件工具的 Plugin 聚合入口，可看到共享 snapshot store 和注册清单。
 2. Senza 的 [`src/lib.rs`](../../../src/lib.rs) 暴露 `create_os_env()` 与
    `create_fs_tools_plugin()`；Runtime 的
-   [`env.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-runtime-sandbox-os/src/env.rs)
+   [`env.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-sandbox/src/os.rs)
    直接调用真实文件系统和宿主 shell。
 3. [`pyrules.rs`](../../../src/runtime/pyrules.rs) 把 Python RuleChain 变成
    `BeforeToolCallHook`。结合
@@ -187,15 +187,15 @@ Lab 的 recorded 模式为了无 Provider、跨平台和零风险，使用 `eval
    真正执行”的区别。该脚本当前有跨 part 共享计数问题，已被统一 Catalog 隔离，修复前不能当作
    rate-limit 的通过证据。
 4. [`pysafety.rs`](../../../src/strategy/pysafety.rs) 是 Python Plugin 工厂；具体分发位于
-   [`safety/mod.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-strategy/src/safety/mod.rs)：只有工具名为
+   [`safety/mod.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-strategy/src/safety/mod.rs)：只有工具名为
    `bash`、`read`、`write`、`edit` 时进入相应检查。
-5. [`safety/command.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-strategy/src/safety/command.rs)
+5. [`safety/command.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-strategy/src/safety/command.rs)
    明确写出了默认命令检测规则和已知限制；
-   [`safety/path.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-strategy/src/safety/path.rs)
+   [`safety/path.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-strategy/src/safety/path.rs)
    定义了静态 `..` 检查和可选的 canonicalize 检查。继续沿调用点核对会发现：标准 Senza run
    当前没有把 `ExecutionEnv` 放入该 Hook 查询的 Run extension，因而通常只执行词法检查；即使
    手工注入，当前 OS env 的 `file_info()` 也返回拼接路径而非解析 symlink 后的 canonical path。
-6. [`sandbox.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-runtime-sandbox-os/src/sandbox.rs)
+6. [`sandbox.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-sandbox/src/lib.rs)
    直接将 `OsEnvSandbox` 描述为“without security isolation”，这是不能把 OS env 宣传成强沙箱的
    最直接证据。
 

@@ -87,7 +87,7 @@ Runtime 的协议一共定义 7 个 LLM 可见工具，但它们分属两侧：
 HarnessBuilder.enable_spawn(...)
         │
         ├─ Main harness：自动挂载 5 个管理工具
-        ├─ MessageBus + AsyncSpawnHook：投递事件并唤醒 Main
+        ├─ MessageBus + SpawnPlugin：投递事件并唤醒 Main
         └─ child factory：返回 NoopPlugin
                          ├─ 不贡献递归 spawn 工具
                          └─ 不自动贡献 2 个 child-side 通信工具
@@ -122,7 +122,7 @@ Main 要比较 canary release 与 blue-green release。它保留一条私有备�
 
 ## 源码导读
 
-1. [Runtime spawn tools](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-runtime/src/spawn/tools.rs)：文件开头
+1. [Runtime spawn tools](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-subagents/src/tools.rs)：文件开头
    直接列出 7 个工具；继续查看每个 schema、并行/顺序执行模式和 timeout/abort 行为。
 2. [Senza `wire_spawn`](../../../src/runtime/pyspawn.rs)：对照模块注释中的装配步骤，找到 Main 的
    5 次 `.tool(...)` 注册和 child factory 返回 `NoopPlugin` 的位置。
@@ -211,6 +211,6 @@ child-side 协议工具，但 Senza 默认 child 的 `NoopPlugin` 不会自动�
 
 - [《动手学 AI Agent》第 10 章：多 Agent 系统](https://github.com/bojieli/ai-agent-book/blob/1d2e04ee733dde245af2eb718cfc92d2d0542b7e/book/chapter10.md)
 - [Lab 08：Basic Multi-Agent](../../../academy/labs/08_basic_multi_agent/README.md)
-- [Runtime spawn 工具实现](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-runtime/src/spawn/tools.rs)
+- [Runtime spawn 工具实现](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-subagents/src/tools.rs)
 - [Senza spawn live example](../../../live-tests/examples/11_spawn_subagent.py)
 - [Lab 06：Workflow、恢复与 HITL](../../../academy/labs/06_workflow_recovery_hitl/README.md)

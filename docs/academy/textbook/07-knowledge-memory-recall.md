@@ -140,18 +140,18 @@ Runtime 已定义这条链路，但当前 Senza Python surface 只暴露 repo、
 
 建议按“真实可运行 → 写侧边界 → Recall 缺口”的顺序阅读：
 
-1. [Runtime BM25 index](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-runtime-knowledge-local/src/index.rs)：
+1. [Runtime BM25 index](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-knowledge-local/src/index.rs)：
    看 `Bm25DocumentSearchIndex::build` 如何计算文档频率，`search` 如何做长度归一化与排序。
 2. [Senza local source](../../../src/knowledge/pylocalsource.rs) 与
    [Knowledge Plugin binding](../../../src/knowledge/pyknowledge.rs)：前者创建本地文档 source，
    后者把 source 注册进 registry 并贡献 `knowledge_search`/`knowledge_read`。
-3. [Runtime MemoryStore](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-runtime-memory/src/store.rs)：
+3. [Runtime MemoryStore](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-memory/src/store.rs)：
    注意它只定义 descriptor、`upsert` 和 `delete`，并明确不继承 KnowledgeSource。
 4. [Senza Memory binding](../../../src/knowledge/pymemory.rs)：查看 `InMemoryStore` 的
    `Mutex<Vec>`、`AllowAllGate` 缺省值，以及 store/source ID 只做契约匹配而没有同步代码。
-5. [Runtime Session Recall 入口](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-runtime-session-recall/src/lib.rs)、
-   [Projector](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-runtime-session-recall/src/projector.rs) 和
-   [History Recall Plugin](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-runtime-session-recall/src/plugin.rs)：
+5. [Runtime Session Recall 入口](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-session-recall/src/lib.rs)、
+   [Projector](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-session-recall/src/projector.rs) 和
+   [History Recall Plugin](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-session-recall/src/plugin.rs)：
    入口文档列出完整装配条件；Projector 建投影；Plugin 在 `transform_context` 读取并注入。
 6. [Senza Recall binding](../../../src/knowledge/pysessionrecall.rs)：对照上一步，找出当前公开构造函数
    中缺少的 projector、observer 和 index population 路径。

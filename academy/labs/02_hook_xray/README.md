@@ -9,11 +9,11 @@
 任意一行插入逻辑。
 
 权威定义见 Runtime 的
-[`HarnessHooks`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-agent/src/harness/state.rs)；多 Hook
+[`HarnessHooks`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-agent/src/harness/state.rs)；多 Hook
 组合语义见
-[`composite.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-loop/src/composite.rs)。
+[`composite.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-loop/src/composite.rs)。
 
-## 12 个固定挂载点
+## 13 个固定挂载点
 
 | Hook | Core 中的时机 | 同类 Hook 的组合语义 |
 | --- | --- | --- |
@@ -29,6 +29,7 @@
 | `should_stop` | 模型自然停止后 | 全部执行，不短路；任一返回 `true` 则停止 |
 | `before_compact` | 实际压缩前的条件分支 | 第一个非 `Proceed` 决策短路 |
 | `final_answer_validator` | 候选答案越过提交边界前 | 按序校验，第一个拒绝短路 |
+| `after_run` | run 结束、Harness 回到 Idle 后 | 全部执行，纯通知 |
 
 这张表也解释了为什么“Plugin 可以随意组合”只在契约范围内成立：多个 Plugin 可以向
 同一固定槽位贡献 Hook，但顺序和返回类型会决定组合结果；不能假设所有 Hook 都是简单
@@ -39,7 +40,7 @@
 在 Senza 仓库根目录执行：
 
 ```powershell
-# 默认：覆盖 12 类固定挂载点的教学图谱
+# 默认：覆盖 13 类固定挂载点的教学图谱
 python academy/labs/02_hook_xray/demo.py
 
 # 在线：委托当前 Python Hook 权威示例
@@ -52,13 +53,13 @@ python -m pytest academy/labs/02_hook_xray/test_demo.py -q
 live 模式直接运行
 [`live-tests/examples/07_hooks.py`](../../../live-tests/examples/07_hooks.py)。该 Python 示例
 当前实际证明的是 `before_turn`、`after_turn`、`before_tool_call`、`after_tool_call` 四个
-边界及工具前后对称性；本课不会把它描述为“单次 live 覆盖 12 个 Hook”。
+边界及工具前后对称性；本课不会把它描述为“单次 live 覆盖 13 个 Hook”。
 
 ## 怎样阅读 recorded timeline
 
 recorded trace 是生命周期图谱，不是一条真实 run 的逐纳秒日志。前十项组成常见的
 run/turn/tool 主路径；`before_compact` 与 `final_answer_validator` 显示两个条件分支。
-它们被放在一份轨迹里是为了核对 12 类契约，并不声称每次 run 都会触发全部 Hook，
+它们被放在一份轨迹里是为了核对 13 类契约，并不声称每次 run 都会触发全部 Hook，
 也不声称图谱顺序替代 Runtime 源码中的实际控制流。
 
 ## 能力边界

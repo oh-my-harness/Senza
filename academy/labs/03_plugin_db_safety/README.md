@@ -38,7 +38,7 @@ create_plugin(name, tools=[...], hooks=[...])
 对应实现可从
 [`src/lib.rs`](../../../src/lib.rs)、[`src/core/pybuilder.rs`](../../../src/core/pybuilder.rs)、
 [`src/runtime/pyworkflow.rs`](../../../src/runtime/pyworkflow.rs) 和 Runtime 的
-[`plugin.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-agent/src/plugin.rs) 交叉核对。
+[`plugin.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-agent/src/plugin.rs) 交叉核对。
 
 ## 运行
 

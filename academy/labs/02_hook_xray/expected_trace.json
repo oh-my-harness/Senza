@@ -1,13 +1,13 @@
 {
   "lab": "02",
-  "title": "Hook X 光片：12 个固定生命周期边界",
+  "title": "Hook X 光片：13 个固定生命周期边界",
   "maturity": "stable",
   "theory": "《动手学 AI Agent》第1章：Agent = Model + Harness；Harness = 上下文管理 + 工具接口 + 约束 + 验证 + 纠正（https://github.com/bojieli/ai-agent-book/blob/1d2e04ee733dde245af2eb718cfc92d2d0542b7e/book/chapter1.md）",
-  "runtime_mapping": "Runtime Agent Core owns 12 fixed HarnessHooks slots; Plugins register implementations into those slots at build time",
+  "runtime_mapping": "Runtime Agent Core owns 13 fixed HarnessHooks slots; Plugins register implementations into those slots at build time",
   "claims": [
-    "HarnessHooks 定义 12 个固定挂载点，Plugin 选择槽位而不是选择任意源码位置。",
+    "HarnessHooks 定义 13 个固定挂载点，Plugin 选择槽位而不是选择任意源码位置。",
     "同类 Hook 的组合并非统一广播：Runtime 分别使用全执行、短路、链式变换、字段合并和聚合语义。",
-    "压缩与最终答案校验是条件分支，因此一次普通 tool-calling run 不必触发全部 12 个 Hook。"
+    "压缩与最终答案校验是条件分支，因此一次普通 tool-calling run 不必触发全部 13 个 Hook。"
   ],
   "boundaries": [
     "这是把主路径、压缩分支和答案提交分支合并展示的教学图谱，不是一条单次 live run 的完整时序证明。",

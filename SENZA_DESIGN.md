@@ -33,7 +33,7 @@ oh-my-harness 分三层，依赖只能向下：
 └──────────────────┬───────────────────────────┘
                    │ 依赖
 ┌──────────────────▼───────────────────────────┐
-│  runtime 层 (llm-harness-runtime, 14 crate)   │
+│  runtime 层 (llm-harness-runtime, 18 crate)   │
 │  WorkflowEngine + AgentHarness + TaskStore    │
 │  + Sandbox + ToolRegistry + Budget            │
 │  + llm-harness-py (PyO3 SDK)                  │
@@ -53,7 +53,7 @@ PyO3 module 名：`senza`（已从 `llm_harness_py` 改名）。
 
 | Python 类 / 函数 | Rust 来源 | 说明 |
 |------------------|-----------|------|
-| `HarnessBuilder` | `HarnessBuilder` (`llm-harness-runtime`) | Fluent API 构建 AgentHarness |
+| `HarnessBuilder` | `HarnessBuilder` (`llm-harness-agent`) | Fluent API 构建 AgentHarness |
 | `AgentHarness` | `AgentHarness` (`llm-harness-agent`) | 单轮 LLM prompt → streaming events；tool calling；abort |
 | `create_tool()` | `PyTool` → `Tool` trait | 从 Python callable 创建 Tool（支持 sync/async） |
 | `create_sync_tool()` | 同上（别名） | 显式同步 tool |
@@ -66,7 +66,7 @@ PyO3 module 名：`senza`（已从 `llm_harness_py` 改名）。
 
 | Python 类 / 函数 | Rust 来源 | 说明 |
 |------------------|-----------|------|
-| `WorkflowEngine` | `WorkflowEngine` (`llm-harness-runtime`) | 多步 workflow 编排；条件路由；崩溃恢复；事件流 |
+| `WorkflowEngine` | `WorkflowEngine` (`llm-harness-workflow`) | 多步 workflow 编排；条件路由；崩溃恢复；事件流 |
 | `create_judge()` | `PyJudge` → `StepTransitionJudge` trait | 从 Python callable 创建 judge |
 | `create_executor()` | `PyExecutor` → `StepExecutor` trait | 从 Python callable 创建 executor |
 | `Judge` / `Executor` | wrapper class | 持有已创建的 judge/executor 供注册 |
@@ -182,7 +182,7 @@ senza/                           # 本仓库 (github.com/oh-my-harness/Senza)
 │   │   ├── pyagent.rs           # Agent 类（test-utils only）
 │   │   ├── pyloop.rs            # asyncio 事件循环桥接
 │   │   └── pyviewer.rs          # session-viewer
-│   ├── runtime/                 # llm-harness-runtime
+│   ├── runtime/                 # llm-harness-workflow + llm-harness-subagents + llm-harness-platform
 │   │   ├── pyworkflow.rs        # WorkflowEngine + judge/executor/env wrapper
 │   │   ├── pybudget.rs          # BudgetExceededHook
 │   │   ├── pyrules.rs           # Rules 审批系统
@@ -557,7 +557,7 @@ handle.submit("审核通过", {"approved": True, "reviewer": "alice"})
 
 ### spawn_agent + sub-agent 通信（Senza 默认挂主侧 5 个）
 
-LLM step 的 `allowed_tools` 含 `"spawn_agent"` 时，引擎为主 Agent 注册 **5 个管理 tool** + MessageBus + AsyncSpawnHook + IdleWatcher + AbortCascadeHook。Runtime 另定义 2 个子侧反向通信 tool，但当前 Senza/Workflow 的 child factory 返回 `NoopPlugin`，默认不会把它们挂到子 Agent；该 factory 同时阻止递归 spawn。
+LLM step 的 `allowed_tools` 含 `"spawn_agent"` 时，引擎为主 Agent 注册 **5 个管理 tool** + MessageBus + SpawnPlugin。SpawnPlugin 统一管理 sub-agent 事件投递、空闲唤醒和级联取消（注册 `after_turn`/`after_run`/`on_abort` hook）。Runtime 另定义 2 个子侧反向通信 tool，但当前 Senza/Workflow 的 child factory 返回 `NoopPlugin`，默认不会把它们挂到子 Agent；该 factory 同时阻止递归 spawn。
 
 **架构**：MessageBus 统一事件通道，main↔sub 双向异步通信。spawn 是异步的（不阻塞），sub-agent 完成后结果自动注入 main agent 对话。
 
@@ -573,9 +573,7 @@ LLM step 的 `allowed_tools` 含 `"spawn_agent"` 时，引擎为主 Agent 注册
 
 **关键机制**：
 - `MessageBus` — `register`/`send`/`wait`/`query_status`/`abort_agent`/`take_event_rx`
-- `AsyncSpawnHook`（AfterTurn hook）— drain sub-agent 消息并注入 main agent 对话
-- `IdleWatcher` — bus 无在途事件时触发 `harness.continue_run()`
-- `AbortCascadeHook` — 级联取消所有 sub-agent（step abort 时）
+- `SpawnPlugin`（AfterTurn + AfterRun + OnAbort hook）— drain sub-agent 消息并注入 main agent 对话；bus 无在途事件时触发 `harness.continue_run()`；级联取消所有 sub-agent（abort 时）
 - `SubAgentMessageConverter` — 把 sub-agent 消息转为 LLM CustomMessage
 
 ---

@@ -158,19 +158,19 @@ Key Decisions、Next Steps 与 Critical Context，再把 compaction entry 写入
 
 1. [`pyskills.rs`](../../../src/runtime/pyskills.rs) 扫描 `SKILL.md` 并构造 Python `Skill`；
    [`pybuilder.rs`](../../../src/core/pybuilder.rs) 的 `.skills()` 把它们装进 builder。
-2. Runtime [`builder.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-runtime/src/builder.rs)
+2. Runtime [`builder.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-agent/src/builder.rs)
    在存在可见 Skill 时自动注册 `SkillReadTool`；
-   [`loop_driver.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-agent/src/harness/loop_driver.rs)
+   [`loop_driver.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-agent/src/harness/loop_driver.rs)
    在 run 开始时注入目录元数据。
-3. [`skills.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-agent/src/skills.rs) 展示目录 XML、正文读取、
+3. [`skills.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-agent/src/skills.rs) 展示目录 XML、正文读取、
    路径约束和 256 KiB 截断边界。
 4. [`pystatuspanel.rs`](../../../src/strategy/pystatuspanel.rs) 只是 Senza 工厂；真正的能力组合在
-   [`status_panel/plugin.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-strategy/src/status_panel/plugin.rs)，
+   [`status_panel/plugin.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-strategy/src/status_panel/plugin.rs)，
    上下文末尾注入逻辑在
-   [`status_panel/hook.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-strategy/src/status_panel/hook.rs)。
+   [`status_panel/hook.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-strategy/src/status_panel/hook.rs)。
 5. Python 的手工入口位于 [`pyharness.rs`](../../../src/core/pyharness.rs)；自动阈值、
    `before_compact` 决策、熔断和 Session 写入位于
-   [`compaction_ops.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-agent/src/harness/compaction_ops.rs)。
+   [`compaction_ops.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-agent/src/harness/compaction_ops.rs)。
 
 阅读时可以特别核对三个事实：StatusPanel 同时贡献 `todo_write`、`transform_context` 和
 `after_tool_call`；Skill catalog 不修改 system prompt；自动压缩默认关闭。

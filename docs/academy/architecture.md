@@ -25,7 +25,7 @@ call/result、上下文变换、压缩、下一轮准备、停止与最终答案
 
 ## 3. Hook 是固定生命周期，不是任意插桩
 
-当前 Core 定义 12 个 Hook：
+当前 Core 定义 13 个 Hook：
 
 ```text
 before_run
@@ -34,6 +34,7 @@ before_provider_request / after_provider_response
 before_tool_call / after_tool_call
 transform_context / before_compact / prepare_next_turn
 final_answer_validator
+after_run
 ```
 
 Hook 的“开放”是指在这些固定边界注册多个实现；Plugin 不能选择源码中的任意行作为

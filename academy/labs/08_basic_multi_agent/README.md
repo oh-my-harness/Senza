@@ -51,8 +51,8 @@ Runtime 的 spawn 协议定义了两侧共 7 个内建工具：
 源码依据：
 
 - [Senza `wire_spawn`](../../../src/runtime/pyspawn.rs)
-- [Runtime spawn tools](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-runtime/src/spawn/tools.rs)
-- [Runtime role 元数据](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-runtime/src/spawn/message_bus.rs)
+- [Runtime spawn tools](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-subagents/src/tools.rs)
+- [Runtime role 元数据](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-subagents/src/message_bus.rs)
 
 ## 运行
 

@@ -27,7 +27,7 @@ Senza 是 oh-my-harness Rust runtime 的 Python SDK，基于 PyO3 构建。面�
 
 ### 系统学习
 
-如果希望先理解 Agent Core、12 个 Hook、Plugin 装配和能力边界，再开始拼 API，可以按顺序阅读
+如果希望先理解 Agent Core、13 个 Hook、Plugin 装配和能力边界，再开始拼 API，可以按顺序阅读
 [《从 Agent 理论到 Senza 实践》](docs/academy/textbook/README.md)，并配合
 [Senza Academy 十个实验](academy/README.md)运行。教材使用《动手学 AI Agent》的理论问题作为
 学习坐标，但工程组件、源码导读和演示均替换为当前 Runtime/Senza 实现。

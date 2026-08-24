@@ -84,7 +84,7 @@ def test_academy_sources_do_not_reference_local_sibling_checkouts():
 
 def test_cross_repository_github_links_use_the_pinned_source_commits():
     expected_refs = {
-        "oh-my-harness/llm-harness-runtime": "c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9",
+        "oh-my-harness/llm-harness-runtime": "03aed0ce550aa0c95cb26d9667f6440bc3dd3349",
         "bojieli/ai-agent-book": "1d2e04ee733dde245af2eb718cfc92d2d0542b7e",
     }
     url_pattern = re.compile(

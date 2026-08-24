@@ -3,7 +3,7 @@
   "title": "Basic Multi-Agent：隔离上下文与受控生命周期",
   "maturity": "teaching",
   "theory": "《动手学 AI Agent》第10章：上下文共享/隔离、Manager 拓扑、消息总线与生命周期控制（https://github.com/bojieli/ai-agent-book/blob/1d2e04ee733dde245af2eb718cfc92d2d0542b7e/book/chapter10.md）",
-  "runtime_mapping": "Senza enable_spawn → Runtime MessageBus + HarnessSubAgentSpawner + AsyncSpawnHook; main-side control tools coordinate isolated child harnesses",
+  "runtime_mapping": "Senza enable_spawn → Runtime MessageBus + HarnessSubAgentSpawner + SpawnPlugin; main-side control tools coordinate isolated child harnesses",
   "claims": [
     "确定性状态模型证明两个子任务只看到各自显式任务包，定向消息不会泄漏到另一个子任务。",
     "主侧 5 个工具覆盖创建、消息、等待、查询和取消；终态限定为 done 或 aborted。",

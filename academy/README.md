@@ -61,7 +61,7 @@ python -m pytest live-tests/test_agent_layer.py
 | 课 | 问题 | 关键组件 | 成熟度 |
 | --- | --- | --- | --- |
 | 01 | 模型如何从回答走向行动？ | Agent Core、Tool、ReAct | stable |
-| 02 | 治理逻辑在循环的哪里发生？ | 12 fixed Hooks | stable |
+| 02 | 治理逻辑在循环的哪里发生？ | 13 fixed Hooks | stable |
 | 03 | 一个能力包如何复用和限定作用域？ | Plugin、allow/modify/deny | stable |
 | 04 | 上下文为什么不是一大段 Prompt？ | Skill、StatusPanel、Compaction | stable |
 | 05 | Coding Agent 如何形成可验证闭环？ | FS tools、Safety、Rules | stable |

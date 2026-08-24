@@ -16,7 +16,7 @@
 | --- | --- | --- |
 | 起步 | [序言：如何使用本教材](00-preface.md) | 建立四层架构、证据等级与运行方式 |
 | 构建 Agent | [01 ReAct 与 Tool Calling](01-react-tool-calling.md) | 理解模型、Core、Tool、Environment 的闭环 |
-| 构建 Agent | [02 12 个 Hook](02-hook-lifecycle.md) | 理解固定生命周期点与组合语义 |
+| 构建 Agent | [02 13 个 Hook](02-hook-lifecycle.md) | 理解固定生命周期点与组合语义 |
 | 构建 Agent | [03 Plugin 装配](03-plugin-composition.md) | 理解构建期能力包、作用域、依赖与冲突 |
 | 管理上下文 | [04 Context Layers](04-context-layers.md) | 理解 Skill、状态栏、轨迹和压缩 |
 | 构建应用 | [05 Coding Agent 与 Guardrails](05-coding-guardrails.md) | 形成观察、修改、测试、纠正闭环 |

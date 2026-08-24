@@ -59,7 +59,7 @@ def test_demo_defaults_to_recorded_mode(capsys):
     demo = _load_demo()
     assert demo.main([]) == 0
     output = capsys.readouterr().out
-    assert "12 个固定生命周期边界" in output
+    assert "13 个固定生命周期边界" in output
     assert "before_provider_request" in output
     assert "final_answer_validator" in output
 

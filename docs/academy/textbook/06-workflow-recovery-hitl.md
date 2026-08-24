@@ -201,23 +201,23 @@ Reviewer 提交 `approved=true`、身份和被批准内容的版本。业务接�
 
 建议沿着“定义 → 执行 → 持久化 → 恢复 → 外部事件”依次阅读：
 
-1. [`workflow/model.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-runtime/src/workflow/model.rs)
+1. [`workflow/model.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-workflow/src/workflow/model.rs)
    定义 Workflow、不同 Step、WorkflowState、StepRecord 与 Transition；
-   [`workflow/judge.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-runtime/src/workflow/judge.rs)
+   [`workflow/judge.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-workflow/src/workflow/judge.rs)
    定义 step 结果到 Transition 的判断接口。
-2. [`engine/runner.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-runtime/src/workflow/engine/runner.rs)
+2. [`engine/runner.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-workflow/src/workflow/engine/runner.rs)
    展示运行循环、step history 落盘、`restore_from_step()`、边界暂停、恢复和取消。这里的注释明确写出
    context 不回滚与 `rposition` 语义。
-3. [`task_store.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-runtime/src/lifecycle/task_store.rs)
+3. [`task_store.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-workflow/src/lifecycle/task_store.rs)
    是 TaskStore 合约和 JSONL 实现；持久化格式是恢复输入，因此加载后仍需校验 Workflow。
 4. Senza 的 [`pyworkflow.rs`](../../../src/runtime/pyworkflow.rs) 暴露 Python 构造、Executor/Judge 注册、
    restore、pause/resume/cancel 和 step history；`parse_transition()` 也可核对 `pause:<reason>`。
-5. [`event.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-runtime/src/lifecycle/event.rs) 实现
+5. [`event.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-workflow/src/lifecycle/event.rs) 实现
    `WaitForExternalEventTool` 的 event/timeout/abort 三路等待；
    [`pyeventstream.rs`](../../../src/core/pyeventstream.rs) 展示 Python channel 工厂为何使用
    `task_store=None`。
 6. 若要核对边界行为，阅读
-   [`engine/tests.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-runtime/src/workflow/engine/tests.rs) 中
+   [`engine/tests.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-workflow/src/workflow/engine/tests.rs) 中
    restore、context 不回滚、暂停与恢复的用例，不要只根据 live 示例输出推断完整契约。
 
 ## 配套实验

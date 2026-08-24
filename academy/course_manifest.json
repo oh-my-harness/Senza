@@ -2,8 +2,8 @@
   "schema_version": 1,
   "title": "Senza Academy：从 Agent 理论到 Runtime/Senza 实践",
   "source_pins": {
-    "runtime": "c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9",
-    "senza": "53cb8b5e71cf6c8ddf41397039adbdcfbfce2685",
+    "runtime": "03aed0ce550aa0c95cb26d9667f6440bc3dd3349",
+    "senza": "687104b850e058d01d5816a29974d26526c9a07a",
     "ai_agent_book": "1d2e04ee733dde245af2eb718cfc92d2d0542b7e"
   },
   "labs": [

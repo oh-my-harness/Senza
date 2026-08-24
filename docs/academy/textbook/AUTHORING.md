@@ -19,7 +19,7 @@
 ## 事实与措辞
 
 - 使用 **Agent Core** 指 Runtime 中稳定的 run/turn/model/tool 控制循环；
-- Hook 数量固定写作 **12 个 Hook 类型**，不得与 Plugin 数量混淆；
+- Hook 数量固定写作 **13 个 Hook 类型**，不得与 Plugin 数量混淆；
 - Plugin 写作**构建期能力包**，不得描述成 built Harness 上的热插拔模块；
 - Rust Plugin 可贡献 tools、hooks、skills、templates；Python `create_plugin()` 当前只开放
   tools 与 hooks；

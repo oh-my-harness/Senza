@@ -29,7 +29,7 @@ Harness”到“如何装配可靠 Developer Agent”的连续学习路径。
 
 | 来源 | 固定版本 | 用途 |
 | --- | --- | --- |
-| `oh-my-harness/llm-harness-runtime` | `c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9` | Agent Core、Hook、Plugin、Workflow 等底层契约 |
+| `oh-my-harness/llm-harness-runtime` | `03aed0ce550aa0c95cb26d9667f6440bc3dd3349` | Agent Core、Hook、Plugin、Workflow 等底层契约 |
 | `oh-my-harness/Senza` | `53cb8b5e71cf6c8ddf41397039adbdcfbfce2685` | Python 装配面、课程实验与用户 API |
 | `bojieli/ai-agent-book` | `1d2e04ee733dde245af2eb718cfc92d2d0542b7e` | 理论解释与概念出处；以当前 Markdown 为准 |
 
@@ -45,7 +45,7 @@ Developer Agent / Workflow 应用
               │
       Senza Python 装配面
               │
- Runtime Agent Core + 12 个固定 Hook + Plugin 协议
+ Runtime Agent Core + 13 个固定 Hook + Plugin 协议
               │
  Model Provider / Tool / Store / Knowledge / OS / MCP 等外部后端
 ```
@@ -72,7 +72,7 @@ Runtime 负责 Harness 中稳定、通用的控制循环和协议；Plugin 把�
 
 | 主题 | v1 可证明的现状 | 课程必须说明的边界 |
 | --- | --- | --- |
-| Hook | 12 个固定生命周期点；有短路、链式变换和聚合等组合语义 | Hook 位置由 Core 定义，不是任意代码注入点 |
+| Hook | 13 个固定生命周期点；有短路、链式变换和聚合等组合语义 | Hook 位置由 Core 定义，不是任意代码注入点 |
 | Plugin | 构建期安装；可安装到 Agent 或 Workflow step | 不是运行期热插拔；Python 自定义 Plugin 仅 tools + hooks |
 | Strategy | 10 个 Plugin 工厂 + 2 个 helper | 不统一宣传为“12 个 Plugin” |
 | Tool 冲突 | 正式 build 拒绝重名 Tool | 不宣传“后注册覆盖前注册” |
@@ -201,7 +201,7 @@ Senza/
 2. Agent = Model + Harness；
 3. Runtime/Senza 四层架构与职责边界；
 4. Agent Core：稳定的 Run–Turn–Tool 闭环；
-5. 12 个 Hook：治理逻辑进入 Core 的固定位置；
+5. 13 个 Hook：治理逻辑进入 Core 的固定位置；
 6. Plugin：为什么能力可以组合、复用和做消融；
 7. Senza：Python 如何装配 Agent 与 Workflow；
 8. Context、Knowledge、Memory、Store 分别解决什么；

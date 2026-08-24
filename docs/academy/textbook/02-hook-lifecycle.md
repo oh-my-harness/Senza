@@ -1,6 +1,6 @@
-# 第 2 章：12 个 Hook——在固定生命周期边界扩展 Agent Core
+# 第 2 章：13 个 Hook——在固定生命周期边界扩展 Agent Core
 
-> 成熟度：**stable**。Runtime 当前公开 12 个 Hook 类型，并为同类 Hook 定义了确定的组合语义。
+> 成熟度：**stable**。Runtime 当前公开 13 个 Hook 类型，并为同类 Hook 定义了确定的组合语义。
 > Academy recorded 图谱用于核对全部契约；当前 Python live example 只覆盖其中四类，不代表单次
 > 在线运行触发了全部 Hook。
 
@@ -10,7 +10,7 @@
 循环。Runtime 怎样让这些能力在正确时机生效？Plugin 是否能在源码任意一行插入逻辑？多个能力
 同时挂在一个位置时，谁先执行、谁能覆盖谁？
 
-答案是：Agent Core 预先声明 **12 个 Hook 类型**。Hook 的开放性体现在“同一个固定槽位可以注册
+答案是：Agent Core 预先声明 **13 个 Hook 类型**。Hook 的开放性体现在“同一个固定槽位可以注册
 不同实现”，而不是“扩展者可以随意选择代码位置”。每个槽位还有自己的输入、输出和组合代数；
 只有理解这些语义，才谈得上安全组合 Plugin。
 
@@ -18,7 +18,7 @@
 
 完成本章后，你应当能够：
 
-1. 准确列出 Runtime 的 12 个 Hook 类型，并说明它们的职责；
+1. 准确列出 Runtime 的 13 个 Hook 类型，并说明它们的职责；
 2. 区分通知、变换、门禁、合并和聚合等组合语义；
 3. 解释 Hook 位置为什么由 Agent Core 定义；
 4. 根据注册顺序预测两个同类 Hook 的结果；
@@ -66,9 +66,9 @@ Hook 数量推算 Plugin 数量。
 ## Runtime/Senza 架构映射
 
 Runtime 的
-[`HarnessHooks`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-agent/src/harness/state.rs)保存 12 个
+[`HarnessHooks`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-agent/src/harness/state.rs)保存 13 个
 Hook 向量。Builder 按注册顺序追加实现；构建后的 Harness 在运行时把同类实现包装成
-[`Composite*`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-loop/src/composite.rs)，再由 Core 在固定
+[`Composite*`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-loop/src/composite.rs)，再由 Core 在固定
 边界调用。
 
 Senza 把 Python callback 包装为对应的 Rust Hook trait。入口定义在
@@ -76,7 +76,7 @@ Senza 把 Python callback 包装为对应的 Rust Hook trait。入口定义在
 [`Senza/src/core/pyhooks.rs`](../../../src/core/pyhooks.rs)，`.hooks([...])` 的装配位于
 [`Senza/src/core/pybuilder.rs`](../../../src/core/pybuilder.rs)。
 
-## 12 个固定 Hook 类型
+## 13 个固定 Hook 类型
 
 下表中的“组合语义”不是建议，而是当前 Composite 实现的契约。
 
@@ -94,6 +94,7 @@ Senza 把 Python callback 包装为对应的 Rust Hook trait。入口定义在
 | `should_stop` | 模型自然停止后 | 返回是否停止 | 全部执行且不短路；任一 `true` 则聚合为停止 |
 | `before_compact` | 真正压缩前的条件分支 | `Proceed`、`Skip`、`Compact`、`Override` | 第一个非 `Proceed` 决策短路 |
 | `final_answer_validator` | 候选答案越过 committed boundary 前 | 接受或给出脱敏拒绝原因 | 按序校验；第一个拒绝短路 |
+| `after_run` | run 结束、Harness 回到 Idle 后 | spawn 等待 task、post-run 清理 | 全部按序执行，纯通知 |
 
 ### 五种组合代数
 
@@ -143,8 +144,8 @@ Senza 把 Python callback 包装为对应的 Rust Hook trait。入口定义在
 
 源码中 `transform_context` 在底层循环发出 `TurnStart` 之前执行；`AgentHarness` 消费
 `TurnStart` 时再分派 `before_turn`。这说明不要仅凭 Hook 名字猜测源代码的物理先后，重要时应
-沿 [`loop_fn.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-loop/src/loop_fn.rs) 与
-[`loop_driver.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-agent/src/harness/loop_driver.rs)
+沿 [`loop_fn.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-loop/src/loop_fn.rs) 与
+[`loop_driver.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-agent/src/harness/loop_driver.rs)
 核对实际控制流。
 
 ### Tool 前后：门禁、执行、结果治理
@@ -168,27 +169,27 @@ Modify 后的有效调用才进入 callback。callback 完成后，`after_tool_c
 模型给出候选最终回答后，`final_answer_validator` 按序校验。第一个拒绝会终止后续 validator，
 被拒答案不会作为已提交答案进入上下文或 Session。它检查的是“能否提交”，不是事后给日志打标。
 
-这条故事没有触发全部 12 个 Hook：压缩是条件分支，Tool Hook 只有发生 Tool Call 才出现，
-`should_stop` 只在模型自然停止时查询。12 表示**契约类型数**，不是每次 run 的固定回调次数。
+这条故事没有触发全部 13 个 Hook：压缩是条件分支，Tool Hook 只有发生 Tool Call 才出现，
+`should_stop` 只在模型自然停止时查询。13 表示**契约类型数**，不是每次 run 的固定回调次数。
 
 ## 源码导读：从槽位到控制流
 
 ### 1. 类型层：Hook 能看到什么、能返回什么
 
-[`llm-harness-types/src/hooks.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-types/src/hooks.rs)
+[`llm-harness-types/src/hooks.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-types/src/hooks.rs)
 定义各 Hook trait、上下文和决策类型。例如 `BeforeToolCallCtx` 提供 Tool 名、参数、turn index
 和 run 引用；返回值只能是 Allow、Modify 或 Deny。这个类型边界决定 Plugin 能做什么，而不是
 Python callback 自由返回任意对象。
 
-### 2. Harness 层：12 个固定向量
+### 2. Harness 层：13 个固定向量
 
-[`harness/state.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-agent/src/harness/state.rs) 中的
-`HarnessHooks` 明确列出 12 个字段。`none()` 构造全部为空的默认值。新增第 13 个生命周期类型需要
+[`harness/state.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-agent/src/harness/state.rs) 中的
+`HarnessHooks` 明确列出 13 个字段。`none()` 构造全部为空的默认值。新增第 14 个生命周期类型需要
 修改 Runtime 契约与控制流；普通 Plugin 不能在运行时“声明一个新槽位”让 Core 自动调用。
 
 ### 3. 组合层：同类 Hook 怎样合成
 
-[`composite.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-loop/src/composite.rs) 是本章最值得精读
+[`composite.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-loop/src/composite.rs) 是本章最值得精读
 的文件。建议对照以下实现：
 
 - `CompositeBeforeToolCallHook`：遇到首个非 Allow 立即返回；
@@ -203,14 +204,14 @@ should-stop 测试验证早期 `true` 不会跳过后续 Hook。
 
 ### 4. 运行层：Core 在哪里交出控制权
 
-[`loop_fn.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-loop/src/loop_fn.rs)负责 Provider、Context、
+[`loop_fn.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-loop/src/loop_fn.rs)负责 Provider、Context、
 Tool 与停止决策；
-[`loop_driver.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-agent/src/harness/loop_driver.rs)负责
+[`loop_driver.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-agent/src/harness/loop_driver.rs)负责
 run/turn 通知、Session 写入和 Harness 状态。Tool 前后 Hook 不是散落在 callback 内，而是在构建
 LoopConfig 时用 `HookedTool` 统一包住所有当前 Tool。
 
 `before_run` 和自动压缩的入口还可以在
-[`harness/core.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-agent/src/harness/core.rs)的
+[`harness/core.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-agent/src/harness/core.rs)的
 `run()` 中核对：自动压缩先处理，随后才是 `before_run`，最后进入 loop。
 
 ### 5. Python 层：callback 怎样变成 Hook
@@ -219,20 +220,20 @@ LoopConfig 时用 `HookedTool` 统一包住所有当前 Tool。
 `before_tool_call` 为例，Senza 把 ctx 转为 Python dict，再把字符串或 dict 返回值解析为 Rust
 决策；callback 异常会 fail-closed 为 Deny，而不是悄悄放行。
 
-`HookKind` 只包含这 12 类，`push_into()` 根据类型把实现放入对应向量。因此 Python API 虽然写起来
+`HookKind` 只包含这 13 类，`push_into()` 根据类型把实现放入对应向量。因此 Python API 虽然写起来
 像普通函数，实际仍受 Runtime 类型和槽位约束。
 
 ## 配套实验
 
 实验位于 [`academy/labs/02_hook_xray`](../../../academy/labs/02_hook_xray/)。
 
-### 第一步：查看 12 Hook 教学图谱
+### 第一步：查看 13 Hook 教学图谱
 
 ```powershell
 python academy/labs/02_hook_xray/demo.py
 ```
 
-输出把主路径、压缩分支和答案提交分支放在同一张图中，以便一次核对 12 个名称。请把它当作
+输出把主路径、压缩分支和答案提交分支放在同一张图中，以便一次核对 13 个名称。请把它当作
 **生命周期地图**，不要当作某次真实 run 的逐纳秒日志。
 
 建议把每项标为三类之一：纯观测、可变换、可阻断。然后再标注它的组合代数。你会发现“发生在
@@ -244,7 +245,7 @@ python academy/labs/02_hook_xray/demo.py
 python -m pytest academy/labs/02_hook_xray/test_demo.py -q
 ```
 
-测试确保 12 个名称各出现一次，并抽查四种不同组合语义：Tool 前短路、Context 链式变换、Stop
+测试确保 13 个名称各出现一次，并抽查四种不同组合语义：Tool 前短路、Context 链式变换、Stop
 全执行聚合、答案首拒短路。它仍然是教学契约测试，不会伪造 Provider 时序。
 
 ### 第三步：运行 Python live 覆盖
@@ -256,7 +257,7 @@ python academy/labs/02_hook_xray/demo.py --mode live
 live 模式委托
 [`live-tests/examples/07_hooks.py`](../../../live-tests/examples/07_hooks.py)，当前只注册
 `before_turn`、`after_turn`、`before_tool_call` 和 `after_tool_call`。检查 Tool 前后计数是否对称，
-并明确记录：这只能证明四类 Hook 的当前 Python 装配链路，不能外推为 12 类全部在线覆盖。
+并明确记录：这只能证明四类 Hook 的当前 Python 装配链路，不能外推为 13 类全部在线覆盖。
 
 ### 第四步：推演组合顺序
 
@@ -272,7 +273,7 @@ live 模式委托
 
 ### 误解一：Hook 可以挂在任意源码位置
 
-不可以。Core 只会调用 `HarnessHooks` 中声明的 12 类。Plugin 可以选择一个或多个现有槽位并注册
+不可以。Core 只会调用 `HarnessHooks` 中声明的 13 类。Plugin 可以选择一个或多个现有槽位并注册
 实现；若业务确实需要新的生命周期时机，应先修改 Runtime 契约、控制流和测试，再向上暴露 API。
 
 ### 误解二：同类 Hook 都会依次执行到底
@@ -298,8 +299,8 @@ Harness 上任意增删 Hook；“生命周期扩展点”不等于“运行时�
 
 ### 能力边界
 
-- Hook 类型固定为 12，数量不得与 Plugin 或 Senza 内置策略工厂数量混淆；
-- Python 当前暴露 12 类包装，但每个 live example 的覆盖面可能更小；
+- Hook 类型固定为 13，数量不得与 Plugin 或 Senza 内置策略工厂数量混淆；
+- Python 当前暴露 13 类包装，但每个 live example 的覆盖面可能更小；
 - Hook callback 能使用的 ctx 由 trait/Python 适配明确提供，不自动获得任意内部状态；
 - `before_provider_request` 当前直接作用于 Runtime 使用的部分 `StreamOptions`；其他传输字段是否
   生效还取决于 Provider adapter 支持，不能仅凭 Python dict 中出现字段就宣称已透传；
@@ -307,7 +308,7 @@ Harness 上任意增删 Hook；“生命周期扩展点”不等于“运行时�
 
 ## 小结
 
-12 个 Hook 把 Harness 的可变策略安放在稳定 Agent Core 周围。真正决定可组合性的，不只是“有一个
+13 个 Hook 把 Harness 的可变策略安放在稳定 Agent Core 周围。真正决定可组合性的，不只是“有一个
 Hook 点”，而是固定时机、类型化输入输出、注册顺序和 Composite 语义。Plugin 能轻松增加能力，
 正因为它复用这些协议；也正因为协议固定，扩展不会退化为任意代码注入。
 
@@ -325,8 +326,8 @@ Hook 点”，而是固定时机、类型化输入输出、注册顺序和 Compo
 
 - 理论坐标：[《动手学 AI Agent》第 1 章](https://github.com/bojieli/ai-agent-book/blob/1d2e04ee733dde245af2eb718cfc92d2d0542b7e/book/chapter1.md)中的 Harness
   工程、约束、验证与纠正；
-- Hook 权威类型：[`hooks.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-types/src/hooks.rs)；
-- 组合实现与回归测试：[`composite.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-loop/src/composite.rs)；
+- Hook 权威类型：[`hooks.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-types/src/hooks.rs)；
+- 组合实现与回归测试：[`composite.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-loop/src/composite.rs)；
 - Academy 图谱：[`Lab 02 README`](../../../academy/labs/02_hook_xray/README.md)；
 - Python live 示例：[`07_hooks.py`](../../../live-tests/examples/07_hooks.py)；
 - 下一章：[Plugin 装配](03-plugin-composition.md)，把 Tool 与 Hook 组合成可复用能力包。

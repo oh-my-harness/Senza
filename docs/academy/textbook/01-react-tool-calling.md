@@ -170,7 +170,7 @@ Schema，构造 `PyTool` 并返回 Python 可持有的包装对象。`create_syn
 
 ### 入口三：Runtime 维护循环
 
-[`llm-harness-loop/src/loop_fn.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-loop/src/loop_fn.rs)
+[`llm-harness-loop/src/loop_fn.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-loop/src/loop_fn.rs)
 中的 `agent_loop()`是 Model/Tool 控制循环。可以重点跟踪：
 
 1. 当前消息和 Tool definitions 被构造成 Provider 请求；
@@ -179,7 +179,7 @@ Schema，构造 `PyTool` 并返回 Python 可持有的包装对象。`create_syn
 4. Tool Result 追加到 `ctx.messages` 后进入下一 turn；
 5. 无 Tool Call 或命中最终答案边界时停止。
 
-[`llm-harness-agent/src/harness/loop_driver.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-agent/src/harness/loop_driver.rs)
+[`llm-harness-agent/src/harness/loop_driver.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-agent/src/harness/loop_driver.rs)
 则消费底层事件，维护 `pending_tool_calls`、Session 待写消息、SavePoint 和最终 settled/error
 状态。这种分层说明 Agent Core 不只是一个 `while`：它还负责可观察状态、持久轨迹边界和失败清理。
 
@@ -278,5 +278,5 @@ callback 连接真实 Environment。理解这条边界，后续才能把安全�
   ReAct 循环与 Model—Harness—Environment 边界；
 - 权威实验说明：[`Lab 01 README`](../../../academy/labs/01_react_tool_calling/README.md)；
 - Python 端到端示例：[`02_tool_calling.py`](../../../live-tests/examples/02_tool_calling.py)；
-- Runtime 控制循环：[`loop_fn.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/c1a82733593b6f1fb5ace2c805de83b4e8f3e3f9/crates/llm-harness-loop/src/loop_fn.rs)；
+- Runtime 控制循环：[`loop_fn.rs`](https://github.com/oh-my-harness/llm-harness-runtime/blob/03aed0ce550aa0c95cb26d9667f6440bc3dd3349/crates/llm-harness-loop/src/loop_fn.rs)；
 - Senza Tool 适配：[`pytool.rs`](../../../src/core/pytool.rs)。
