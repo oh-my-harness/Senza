@@ -1,0 +1,54 @@
+name: Examples Offline Contracts
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/examples-offline.yml"
+      - "academy/**"
+      - "live-tests/examples/**"
+      - "README.md"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/examples-offline.yml"
+      - "academy/**"
+      - "live-tests/examples/**"
+      - "README.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  catalog-and-recorded:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.13"]
+
+    steps:
+      - name: Checkout Senza
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install offline test dependency
+        run: python -m pip install pytest
+
+      - name: Validate the scenario catalog
+        run: |
+          python -m academy.scenarios list --json > scenario-catalog.json
+          python -m academy.scenarios list --course academy --json > academy-scenarios.json
+
+      - name: Smoke the unified recorded entrypoint
+        run: python -m academy.scenarios course 01 --mode recorded --json
+
+      - name: Run Academy and scenario contracts
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python -m pytest academy/tests academy/labs -q -p no:cacheprovider

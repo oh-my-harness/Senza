@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/oh-my-harness/Senza/blob/main/academy/scenarios/catalog.schema.json",
+  "title": "Senza Scenario Catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "scenarios"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "scenarios": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/scenario"}
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {"type": "string", "minLength": 1},
+    "uniqueStrings": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/nonEmptyString"},
+      "uniqueItems": true
+    },
+    "scenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "aliases",
+        "legacy_path",
+        "title",
+        "tier",
+        "maturity",
+        "status",
+        "requirements",
+        "proves",
+        "does_not_prove"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
+        },
+        "aliases": {
+          "allOf": [
+            {"$ref": "#/$defs/uniqueStrings"},
+            {"minItems": 1}
+          ]
+        },
+        "legacy_path": {
+          "type": "string",
+          "pattern": "^live-tests/examples/[0-9]{2}_[a-z0-9_]+\\.py$"
+        },
+        "title": {"$ref": "#/$defs/nonEmptyString"},
+        "tier": {"enum": ["core", "advanced", "external", "quarantined"]},
+        "maturity": {"enum": ["stable", "partial", "gap"]},
+        "status": {"enum": ["active", "needs-fix", "duplicate"]},
+        "duplicate_of": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 120
+        },
+        "requirements": {"$ref": "#/$defs/requirements"},
+        "proves": {
+          "allOf": [
+            {"$ref": "#/$defs/uniqueStrings"},
+            {"minItems": 1}
+          ]
+        },
+        "does_not_prove": {
+          "allOf": [
+            {"$ref": "#/$defs/uniqueStrings"},
+            {"minItems": 1}
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "duplicate"}}},
+          "then": {"required": ["duplicate_of"]},
+          "else": {"not": {"required": ["duplicate_of"]}}
+        }
+      ]
+    },
+    "requirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "env", "commands", "services", "platforms"],
+      "properties": {
+        "provider": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["required", "any_of_env"],
+          "properties": {
+            "required": {"type": "boolean"},
+            "any_of_env": {
+              "type": "array",
+              "items": {"type": "string", "pattern": "^[A-Z_][A-Z0-9_]*$"},
+              "uniqueItems": true
+            }
+          }
+        },
+        "env": {
+          "type": "array",
+          "items": {"type": "string", "pattern": "^[A-Z_][A-Z0-9_]*$"},
+          "uniqueItems": true
+        },
+        "commands": {"$ref": "#/$defs/uniqueStrings"},
+        "services": {"$ref": "#/$defs/uniqueStrings"},
+        "platforms": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"enum": ["any", "darwin", "linux", "win32"]}
+        }
+      }
+    }
+  }
+}

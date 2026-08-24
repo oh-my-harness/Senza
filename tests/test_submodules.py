@@ -25,6 +25,9 @@ def test_hooks_submodule_exists():
         "before_compact",
         "transform_context",
         "prepare_next_turn",
+        "final_answer_validator",
+        "after_run",
+        "on_abort",
     }
     for name in expected:
         assert hasattr(senza.hooks, name), f"hooks.{name} missing"
@@ -245,6 +248,8 @@ def test_removed_hook_names_not_top_level():
         "create_before_compact_hook",
         "create_transform_context_hook",
         "create_prepare_next_turn_hook",
+        "create_after_run_hook",
+        "create_on_abort_hook",
     ]:
         assert not hasattr(senza, name), f"{name} should be removed from top level"
 

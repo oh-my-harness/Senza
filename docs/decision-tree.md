@@ -24,8 +24,8 @@
 | 场景 | API |
 |------|-----|
 | 本地文档 RAG | `senza.knowledge.local_source()` + `senza.knowledge.plugin()` |
-| 长期记忆 | `senza.knowledge.memory_store()` + `senza.knowledge.memory_plugin()` |
-| 会话历史召回 | `senza.knowledge.sqlite_session_recall_index()` + `senza.knowledge.history_recall_plugin()` |
+| 记忆写入/删除（内置为进程内演示 store） | `senza.knowledge.memory_store()` + `senza.knowledge.memory_plugin()` |
+| 会话历史召回（需已填充索引） | `senza.knowledge.sqlite_session_recall_index()` + `senza.knowledge.history_recall_plugin()` |
 
 ### 需要预算管控？
 
@@ -46,7 +46,7 @@
 
 ### 需要 Hooks？
 
-→ `senza.hooks.*` (12 种 lifecycle hooks)
+→ `senza.hooks.*` (14 种 lifecycle hooks)
 
 ### 需要 Provider？
 

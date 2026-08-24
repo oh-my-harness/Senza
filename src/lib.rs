@@ -241,6 +241,8 @@ fn senza(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(create_transform_context_hook, m)?)?;
     m.add_function(wrap_pyfunction!(create_prepare_next_turn_hook, m)?)?;
     m.add_function(wrap_pyfunction!(create_final_answer_validator, m)?)?;
+    m.add_function(wrap_pyfunction!(create_after_run_hook, m)?)?;
+    m.add_function(wrap_pyfunction!(create_on_abort_hook, m)?)?;
     m.add_class::<crate::core::pybuilder::PyHarnessBuilder>()?;
     m.add_class::<crate::core::pybuilder::PyUsageLedger>()?;
     m.add_class::<crate::core::pyplugin::PyPluginWrapper>()?;
@@ -874,6 +876,46 @@ fn create_final_answer_validator<'py>(
         py,
         crate::core::pyhooks::PyHookWrapper {
             kind: crate::core::pyhooks::HookKind::FinalAnswerValidator(Arc::new(wrapper)),
+        },
+    )
+    .map(|p| p.into_bound(py))
+}
+
+/// 从 Python callable 创建一个 `AfterRunHook`。
+///
+/// callback 签名：`callback() -> None`
+/// 在 run 结束、Harness 回到 Idle 后调用。
+/// 若 callback 为 `async def`，其 coroutine 将在 `spawn_blocking` 线程上
+/// 通过 `asyncio.run()` 执行。
+#[pyfunction]
+fn create_after_run_hook<'py>(
+    py: Python<'py>,
+    callback: Py<PyAny>,
+) -> PyResult<Bound<'py, crate::core::pyhooks::PyHookWrapper>> {
+    let hook = crate::core::pyhooks::PyAfterRunHook::new(callback);
+    Py::new(
+        py,
+        crate::core::pyhooks::PyHookWrapper {
+            kind: crate::core::pyhooks::HookKind::AfterRun(Arc::new(hook)),
+        },
+    )
+    .map(|p| p.into_bound(py))
+}
+
+/// 从 Python callable 创建一个 `OnAbortHook`。
+///
+/// callback 签名：`callback() -> None`
+/// 在 `harness.abort()` 时同步调用。用于置标志或 cancel token，不阻塞。
+#[pyfunction]
+fn create_on_abort_hook<'py>(
+    py: Python<'py>,
+    callback: Py<PyAny>,
+) -> PyResult<Bound<'py, crate::core::pyhooks::PyHookWrapper>> {
+    let hook = crate::core::pyhooks::PyOnAbortHook::new(callback);
+    Py::new(
+        py,
+        crate::core::pyhooks::PyHookWrapper {
+            kind: crate::core::pyhooks::HookKind::OnAbort(Arc::new(hook)),
         },
     )
     .map(|p| p.into_bound(py))

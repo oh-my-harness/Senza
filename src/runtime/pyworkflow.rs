@@ -1412,6 +1412,8 @@ impl PyWorkflowEngine {
                 HookKind::FinalAnswerValidator(h) => {
                     harness_hooks.final_answer_validator.push(h.clone())
                 }
+                HookKind::AfterRun(h) => harness_hooks.after_run.push(h.clone()),
+                HookKind::OnAbort(h) => harness_hooks.on_abort.push(h.clone()),
             }
         }
 

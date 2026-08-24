@@ -59,8 +59,8 @@ cargo test
 src/                    # Rust PyO3 绑定层
 senza-pkg/senza/        # Python 包（.pyi stub + py.typed）
 tests/                  # Rust 集成测试 + Python 测试
-examples/               # 示例代码（agent/ + runtime/）
-skills/                 # 过程性知识（供 Codex 加载）
+live-tests/examples/    # 可运行示例（驱动真实 LLM）
+academy/                # 教材、实验、场景目录
 scripts/                # 构建、测试、校验脚本
 docs/                   # 文档
 ```

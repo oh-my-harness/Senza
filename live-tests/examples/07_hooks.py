@@ -3,6 +3,8 @@
 Mirrors runtime `07_Hooks.rs`. Demonstrates the before_turn / after_turn /
 before_tool_call / after_tool_call hooks via senza.hooks.*, including the
 symmetry invariant that every tool call has a matching before/after pair.
+Also registers after_run (post-run cleanup) and on_abort (abort signal) to
+show the full lifecycle bookends.
 
 Note: the runtime example also registers `before_run`, `should_stop` and the
 `prepare_next_turn` hook. In Senza's Python surface, `should_stop` returning
@@ -40,6 +42,14 @@ def after_tool_call(ctx):
     return "passthrough"
 
 
+def after_run():
+    counts["after_run"] += 1
+
+
+def on_abort():
+    counts["on_abort"] += 1
+
+
 def get_weather(args, ctx):
     city = args.get("city", "unknown")
     return {
@@ -72,6 +82,8 @@ def main() -> None:
                     senza.hooks.after_turn(after_turn),
                     senza.hooks.before_tool_call(before_tool_call),
                     senza.hooks.after_tool_call(after_tool_call),
+                    senza.hooks.after_run(after_run),
+                    senza.hooks.on_abort(on_abort),
                 ]
             )
         )

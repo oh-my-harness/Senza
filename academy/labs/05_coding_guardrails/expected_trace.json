@@ -1,0 +1,90 @@
+{
+  "lab": "05",
+  "title": "Coding Agent：定位、最小修改、验证与护栏",
+  "maturity": "stable",
+  "theory": "Coding Agent 通过观察代码、执行最小修改、运行验证并依据反馈纠错形成闭环。",
+  "runtime_mapping": "FsToolsPlugin 提供动作空间；Agent Core 保持循环；Rule/Safety/Tool Hook 在动作生效前治理。",
+  "claims": [
+    "离线 fixture 首次测试失败，修改一行后同一测试通过。",
+    "危险命令在执行前得到 deny 决策，演示器不会执行该命令。",
+    "验证结果是下一轮观察，而不是模型口头声称完成。"
+  ],
+  "boundaries": [
+    "recorded 场景证明教学闭环，不代替真实模型对代码的定位能力；live 示例用于验证 Senza 工具调用。",
+    "SafetyDefaults 是黑名单和路径防护；create_os_env 是工作目录约束，不是强 OS 沙箱。",
+    "14_rules_approval.py 当前因跨 part 共享计数被 Catalog 标为 quarantined；修复前只作诊断源码，不计入课程验收。"
+  ],
+  "live_examples": [
+    "22_fs_tools.py",
+    "14_rules_approval.py",
+    "15_safety_injection.py"
+  ],
+  "events": [
+    {
+      "seq": 1,
+      "kind": "user",
+      "actor": "Developer",
+      "summary": "要求修复 calculator.add 的失败测试，并用测试证明结果",
+      "status": "info"
+    },
+    {
+      "seq": 2,
+      "kind": "tool",
+      "actor": "read/grep",
+      "summary": "读取 calculator.py 与 calculator_spec.py，建立最小观察空间",
+      "status": "ok",
+      "lifecycle": "before_tool_call → after_tool_call"
+    },
+    {
+      "seq": 3,
+      "kind": "tool",
+      "actor": "test runner",
+      "summary": "首次运行测试，稳定复现 2 + 3 得到 -1 的失败",
+      "status": "failed"
+    },
+    {
+      "seq": 4,
+      "kind": "model",
+      "actor": "Developer Agent",
+      "summary": "根据失败证据提出一行最小修改：减号改为加号",
+      "status": "accepted"
+    },
+    {
+      "seq": 5,
+      "kind": "tool",
+      "actor": "edit",
+      "summary": "只修改 calculator.py 中的一行实现",
+      "status": "modified",
+      "lifecycle": "before_tool_call policy allows scoped edit"
+    },
+    {
+      "seq": 6,
+      "kind": "tool",
+      "actor": "test runner",
+      "summary": "重新运行同一测试并通过",
+      "status": "passed"
+    },
+    {
+      "seq": 7,
+      "kind": "tool",
+      "actor": "bash",
+      "summary": "候选危险命令 rm -rf / 在执行前进入策略判断",
+      "status": "info",
+      "lifecycle": "before_tool_call"
+    },
+    {
+      "seq": 8,
+      "kind": "hook",
+      "actor": "Safety policy",
+      "summary": "返回 deny；命令没有进入执行环境",
+      "status": "denied"
+    },
+    {
+      "seq": 9,
+      "kind": "agent",
+      "actor": "Agent Core",
+      "summary": "用测试证据和安全决策收敛本轮，不把口头判断当验证",
+      "status": "ok"
+    }
+  ]
+}

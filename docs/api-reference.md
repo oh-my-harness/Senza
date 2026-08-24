@@ -29,7 +29,11 @@ senza.providers.anthropic(api_key, base_url=None, messages_path=None)
 | `.thinking_level(level)` | 设置 thinking level |
 | `.auto_compact(b)` / `.compaction_reserve_tokens(n)` / `.compaction_keep_recent_tokens(n)` | Compaction 配置 |
 | `.compaction_model(model, context_window, max_tokens)` | 独立 compaction 模型 |
+| `.compaction_prompt(system_prompt=None, user_template=None)` | 自定义 compaction 提示词 |
+| `.compaction_query(query=None)` | 查询聚焦 compaction |
 | `.should_stop_hook(hook)` / `.hooks([hook, ...])` | 注册 ShouldStopHook / 批量 hooks |
+| `.after_turn_hook(hook)` | 注册 AfterTurn hook（便捷方法） |
+| `.final_answer_validator(hook)` | 注册最终回答校验 hook（提交前接受或拒绝） |
 | `.retry(max_retries, base_delay_ms)` | 瞬时错误重试配置 |
 | `.model_info(context_window, max_tokens)` | 模型元数据 |
 | `.final_answer_mode("heuristic"\|"tool")` | 最终回答判定模式 |
@@ -37,13 +41,19 @@ senza.providers.anthropic(api_key, base_url=None, messages_path=None)
 | `.queue_capacity(n)` | steer/follow-up 队列容量 |
 | `.budget(limit, exceeded_hook=None)` | 预算上限 + 超限回调 |
 | `.pricing(provider)` | 定价 provider（成本计算） |
+| `.usage_ledger(ledger)` | 共享 UsageLedger（多 Agent 成本汇总） |
 | `.skill(skill)` / `.skills([skill, ...])` | 注册 skill(s) |
 | `.disable_skill_read_tool()` | 关闭 SkillReadTool 自动注册 |
+| `.response_format(fmt)` | 设置 JSON response format（`create_json_object_format()` / `create_json_schema_format()`） |
+| `.knowledge_access(scope, principal, kind)` | 知识访问控制（scope/principal/kind） |
+| `.mcp_server(name, config)` | 注册 MCP server（stdio/HTTP/SSE） |
+| `.mcp_config_file(path)` | 从配置文件加载 MCP servers |
+| `.with_mcp_manager(manager)` | 注入预配置的 McpManager |
+| `.session_repo(repo, session_id=None)` | 设置会话持久化仓库 |
 | `.tool(tool)` / `.plugin(plugin)` | 注册工具/插件 |
 | `.tools([tool, ...])` | 批量注册工具（等价多次 `.tool()`） |
-| `.env(env)` | 设置执行环境（`create_os_env(...)`），启用 bash/read/write/edit 工具 |
-| `.enable_spawn(model, provider, session_dir)` | 启用子 Agent 派发（自动注册 MessageBus + 7 个 spawn 通信 tool） |
-| `.final_answer_validator(hook)` | 注册最终回答校验 hook（提交前拦截/修改/拒绝） |
+| `.env(env)` | 设置执行环境（`create_os_env(...)`），启用 bash/read/write/edit/grep/glob 工具 |
+| `.enable_spawn(model, provider, session_dir)` | 启用子 Agent 派发（主 Agent 注册 MessageBus + 5 个管理 tool；当前 `NoopPlugin` child 不自动挂载 Runtime 另定义的 2 个子侧通信 tool） |
 | `.build()` | 返回 `AgentHarness` |
 
 ### AgentHarness
@@ -54,21 +64,37 @@ senza.providers.anthropic(api_key, base_url=None, messages_path=None)
 | `.chat(text, timeout_ms=30000)` | 发送提示并返回拼接后的纯文本回复（`str`） |
 | `.chat_async(text, timeout_ms=30000)` | `chat()` 的非阻塞 async 版本（线程池执行） |
 | `.prompt(text)` | 发送提示（阻塞，需配合线程收集事件） |
+| `.prompt_async(text, timeout_ms=30000)` | `prompt_and_collect()` 的非阻塞 async 版本 |
 | `.collect_until_settled(timeout_ms=30000)` | 收集事件直到完成 |
 | `.events(timeout_ms=5000)` | 流式事件迭代器 |
-| `.set_model(model)` | 运行时切换模型 |
+| `.inspect()` | 返回 harness 内部状态快照（dict） |
+| `.set_model(model, context_window=None, max_tokens=None)` | 运行时切换模型 |
 | `.set_system_prompt(text)` | 修改系统提示 |
+| `.set_temperature(t)` | 修改温度 |
 | `.set_thinking_level("high")` | "off"/"minimal"/"low"/"medium"/"high"/"xhigh"/"budget:N" |
+| `.set_max_tokens(n)` | 修改最大输出 token 数 |
+| `.set_tools(tools)` | 替换工具集 |
+| `.set_active_tools(tools)` | 限定下一轮工具子集（传 `None` 恢复全部） |
 | `.steer(text)` / `.follow_up(text)` | 运行中注入消息 |
+| `.next_turn(text)` | 开启下一轮对话 |
+| `.continue_run()` | 继续运行（配合 steer/follow_up） |
+| `.compact()` | 手工触发 compaction，返回 `tokens_before` / `tokens_after` / `compressed_entries` |
 | `.usage()` | 查询成本统计 |
+| `.usage_ledger()` | 返回 UsageLedger 快照（dict） |
+| `.reset_usage()` | 重置成本统计 |
+| `.message_count()` | 当前消息数 |
+| `.phase()` | 当前阶段：`"idle"` / `"turning"` / `"compacting"` / `"branching"` |
 | `.get_messages()` | 获取完整对话历史 |
 | `.last_response()` | 获取最近一条 assistant 回复文本 |
 | `.abort()` | 取消当前提示 |
+| `.wait_for_idle()` / `.wait_for_settled()` | 阻塞等待 idle/settled |
+| `.clear_steering_queue()` / `.clear_follow_up_queue()` | 清空特定队列 |
 | `.clear_all_queues()` / `.has_queued_messages()` | 队列管理 |
-| `.set_active_tools(tools)` | 限定下一轮工具子集 |
 | `.fork_branch()` / `.list_branches()` / `.navigate_tree()` | 会话分支管理 |
 | `.read_active_path()` / `.read_all_entries()` | 读取会话历史 |
 | `.delete_branch()` / `.generate_branch_summary()` | 分支删除与摘要 |
+| `.shutdown()` | 释放底层资源 |
+| `__enter__` / `__exit__` | Context manager 支持 |
 
 ### 事件类型
 
@@ -119,7 +145,7 @@ tool = senza.create_tool(
 harness = (
     senza.HarnessBuilder("gpt-4o")
     .provider("*", provider)
-    .plugin(senza.create_fs_tools_plugin())  # bash/read/write/edit
+    .plugin(senza.create_fs_tools_plugin())  # bash/read/write/edit/grep/glob
     .env(senza.create_os_env("."))  # 真实文件系统 + shell
     .build()
 )
@@ -131,20 +157,32 @@ harness = (
 
 | 方法 | 说明 |
 |------|------|
-| `WorkflowEngine(workflow_dict, provider, model, judge, env=...)` | 构造引擎；`env` 可选，传 `create_os_env(...)` 以启用 shell 执行 |
-| `.with_tool(tool)` / `.with_executor(name, exec)` | 注册工具/执行器 |
+| `WorkflowEngine(workflow_dict, provider, model, judge, session_base_dir="sessions", env=None)` | 构造引擎；`env` 传 `create_os_env(...)` 以启用 shell 执行 |
+| `.with_tool(tool)` | 注册工具 |
+| `.with_external_tool(tool)` | 注册 WaitForExternalEventTool（人工介入） |
+| `.with_executor(name, exec)` | 注册命名执行器 |
 | `.with_hooks([hooks])` | 注册 hooks |
-| `.with_task_store(dir)` | 启用持久化 |
-| `.with_max_steps(n)` / `.with_max_retries(n)` | 总步数上限 / per-step 连续 Retry 上限（超限 → Failed） |
-| `.with_max_tokens(n)` / `.with_thinking_level(level)` | per-step LLM 参数（共享，所有 step） |
+| `.with_step_plugin(step_id, plugin)` | per-step 注入 plugin |
 | `.with_step_builder(step_id, customize)` | per-step builder 定制闭包（覆盖共享设置，如 system_prompt） |
+| `.with_task_store(dir)` | 启用持久化 |
+| `WorkflowEngine.list_tasks(task_store_dir)` | 类方法 — 列出已持久化的任务 |
+| `.with_max_tokens(n)` / `.with_thinking_level(level)` | per-step LLM 参数（共享，所有 step） |
+| `.with_max_steps(n)` / `.with_max_retries(n)` | 总步数上限 / per-step 连续 Retry 上限（超限 → Failed） |
+| `.with_pricing(provider)` | 定价 provider |
+| `.set_context_variable(key, value)` | 设置共享上下文变量 |
+| `.get_context_variable(key)` | 读取共享上下文变量 |
 | `.run()` | 执行（阻塞） |
+| `.run_async(timeout_ms=300000)` | 非阻塞 async 版本（线程池执行） |
 | `.state()` | "idle"/"running"/"paused"/"succeeded"/"failed"/"cancelled" |
 | `.current_step()` / `.step_history()` | 进度查询 |
+| `.task_id()` | 任务 ID（`"task-<uuid>"`） |
 | `.pause(reason)` / `.resume()` / `.cancel(reason)` | 流程控制 |
 | `WorkflowEngine.restore(store_dir, task_id, provider, model, judge)` | 类方法 — 崩溃恢复 |
+| `WorkflowEngine.restore_from_step(store_dir, task_id, step, provider, model, judge)` | 类方法 — 从指定 step 恢复 |
 | `.checkpoint(desc, payload)` / `.total_cost()` | 检查点 & 成本 |
+| `.inspect()` | 返回引擎内部状态快照（dict） |
 | `.subscribe(timeout_ms=5000)` | 事件流迭代器 |
+| `__enter__` / `__exit__` | Context manager 支持 |
 
 ### Workflow Dict Schema
 
@@ -247,7 +285,7 @@ senza.create_composite_judge()  # CompositeJudge（按节点注册独立路由�
 senza.create_executor(callback)  # Python 回调执行器
 senza.create_shell_executor(commands)  # Shell 命令执行器（命令白名单，需配合 create_os_env）
 senza.create_http_executor(allowed_hosts)  # HTTP 调用执行器（host 白名单）
-senza.create_fs_tools_plugin()  # bash/read/write/edit 四件套 Plugin（需配合 create_os_env）
+senza.create_fs_tools_plugin()  # bash/read/write/edit/grep/glob 六件套 Plugin（需配合 create_os_env）
 senza.create_os_env(working_dir=".")  # OS 文件系统 + shell 执行环境（传给 WorkflowEngine(env=...)）
 ```
 
@@ -275,7 +313,7 @@ def my_executor(ctx):
 | `cancelled` | `reason` |
 | `failed` | `error` |
 
-## Hooks（12 种）
+## Hooks（14 种）
 
 ```python
 senza.hooks.before_turn(cb)  # cb(ctx: dict) -> None
@@ -283,13 +321,15 @@ senza.hooks.after_turn(cb)  # cb(ctx: dict) -> None
 senza.hooks.before_run(cb)  # cb(ctx: dict) -> None
 senza.hooks.after_provider_response(cb)  # cb(ctx: dict) -> None
 senza.hooks.before_provider_request(cb)  # cb(ctx: dict) -> None
-senza.hooks.before_tool_call(cb)  # cb(ctx: dict) -> str | None
+senza.hooks.before_tool_call(cb)  # cb(ctx: dict) -> str | dict  # allow/modify/deny
 senza.hooks.after_tool_call(cb)  # cb(ctx: dict) -> str | dict
 senza.hooks.should_stop(cb)  # cb(ctx: dict) -> bool
 senza.hooks.before_compact(cb)  # cb(ctx: dict) -> Any
 senza.hooks.transform_context(cb)  # cb(ctx: dict) -> dict
 senza.hooks.prepare_next_turn(cb)  # cb(ctx: dict) -> Optional[dict]
-senza.hooks.final_answer_validator(cb)  # cb(ctx: dict) -> None | dict  # 提交最终回答前校验/拦截
+senza.hooks.final_answer_validator(cb)  # cb(ctx: dict) -> None | str | dict  # 提交前接受/拒绝
+senza.hooks.after_run(cb)  # cb() -> None  # run 结束后清理
+senza.hooks.on_abort(cb)  # cb() -> None  # abort 时同步执行
 ```
 
 ## Pricing
@@ -332,7 +372,7 @@ handle, wait_tool = senza.create_event_channel("review-task")
 handle.submit("approved", {"feedback": "Looks good!"})
 ```
 
-## Strategy Plugins（12）
+## Strategy（10 个 Plugin 工厂 + 2 个 helper）
 
 ```python
 senza.strategy.safety_defaults() -> Plugin
@@ -359,7 +399,7 @@ senza.strategy.tool_output_guard(
     env: ExecutionEnv, config: Optional[dict] = None,
 ) -> Plugin
 
-# Webhook 事件流（外部触发）
+# 辅助函数（不返回 Plugin）
 senza.strategy.webhook_stream(buffer: int) -> tuple[WebhookChannel, EventStream]
 senza.strategy.context_aware_compaction_prompt() -> tuple[str, str]
 ```
@@ -398,7 +438,7 @@ senza.knowledge.plugin(
     config: Optional[dict] = None,
 ) -> Plugin  # 注册 knowledge_search + knowledge_read 工具
 
-# 长期记忆
+# 记忆写入/删除（内置 store 是进程内演示实现）
 senza.knowledge.memory_store(read_source_id: str) -> MemoryStore
 senza.knowledge.secure_write_policy(config: Optional[dict] = None) -> MemoryWritePolicy
 senza.knowledge.allow_all_gate() -> MemoryMutationGate
@@ -423,22 +463,24 @@ senza.knowledge.history_recall_plugin(
 ) -> Plugin
 ```
 
-> **重要**：`senza.knowledge.local_source` 的 `source_id` 必须与 `senza.knowledge.memory_store` 的 `read_source_id` 一致，否则写入的记忆无法被读回。
+> **Memory 边界**：`memory_plugin(..., gate=None)` 中 gate 可选，缺省使用完全放行的 `AllowAllGate`；生产环境应显式提供审批门禁。`local_source.source_id` 必须与 `memory_store.read_source_id` 一致，但当前内置 store 只将字节保留在进程内，不持久化，也不会自动同步到 `local_source`。
+>
+> **Recall 边界**：Python 已暴露 repo/index/source/plugin 的装配工厂；当前未暴露 projector/索引写入入口，因此使用 `history_recall_plugin` 前需要确保索引已由其他途径填充。
 
 | 函数 | 说明 |
 |------|------|
 | `senza.knowledge.local_source(path, source_id, ...)` | 本地文档知识源 |
 | `senza.knowledge.plugin(sources, config=None)` | `knowledge_search` + `knowledge_read` 工具 |
-| `senza.knowledge.memory_store(read_source_id)` | 可写内存存储 |
+| `senza.knowledge.memory_store(read_source_id)` | 可写的进程内演示 store（`Mutex<Vec>`，不持久化） |
 | `senza.knowledge.secure_write_policy(config=None)` | 注入安全写策略 |
 | `senza.knowledge.allow_all_gate()` | 完全放行写门控 |
-| `senza.knowledge.memory_plugin(source, store, policy, gate=None)` | `memory_write` + `memory_forget` 工具 |
+| `senza.knowledge.memory_plugin(source, store, policy, gate=None)` | `memory_write` + `memory_forget` 工具；gate 缺省为 `AllowAllGate` |
 | `senza.knowledge.in_memory_session_recall_index()` | 内存会话索引 |
 | `senza.knowledge.sqlite_session_recall_index(path)` | SQLite 持久化会话索引 |
 | `senza.knowledge.in_memory_session_repo()` | 内存会话仓库 |
 | `senza.knowledge.jsonl_session_repo(path)` | JSONL 持久化会话仓库 |
 | `senza.knowledge.session_recall_knowledge_source(repo, index)` | 会话召回知识源 |
-| `senza.knowledge.history_recall_plugin(source, config=None)` | 自动注入历史会话上下文 |
+| `senza.knowledge.history_recall_plugin(source, config=None)` | 从已填充的召回索引检索并注入历史会话上下文 |
 
 ## Infra（审计 / Trace / 沙箱）
 
@@ -460,6 +502,112 @@ senza.infra.bwrap_sandbox(config: Optional[dict] = None) -> Sandbox     # Linux
 | `InMemoryTraceExporter` | 内存 trace 导出器，测试用 |
 | `senza.infra.seatbelt_sandbox(config=None)` | macOS Seatbelt 沙箱 |
 | `senza.infra.bwrap_sandbox(config=None)` | Linux Bubblewrap 沙箱 |
+
+## CompositeJudge
+
+```python
+cj = senza.create_composite_judge()
+cj.on("step_id", callback)    # 为指定 step 注册独立 judge
+cj.fallback(callback)         # 注册兜底 judge（无匹配 on 时调用）
+```
+
+CompositeJudge 允许为不同 step 注册独立路由逻辑，避免在单个 judge 函数中写 if-else 链。
+传入 `WorkflowEngine(workflow, provider, model, cj)` 即可使用。
+
+## ResponseFormat
+
+```python
+senza.create_json_object_format()  # JSON object mode
+senza.create_json_schema_format(
+    name: str, schema: dict, strict: Optional[bool] = None,
+) -> ResponseFormat
+```
+
+通过 `.response_format(fmt)` 注册到 HarnessBuilder，让 LLM 输出结构化 JSON。
+
+## UsageLedger
+
+```python
+ledger = senza.UsageLedger()
+harness = senza.HarnessBuilder("gpt-4o").provider("*", provider).usage_ledger(ledger).build()
+
+snapshot = ledger.snapshot()  # dict: total cost, by_model, by_provider
+```
+
+多个 harness 共享同一 ledger 时，`snapshot()` 返回聚合成本。`harness.usage_ledger()` 返回当前快照（dict）。
+
+## Event Streams（定时器 / 心跳 / Shell 监控）
+
+```python
+# 定时器：每隔 interval_ms 触发一次事件
+timer_tool = senza.create_timer_stream(interval_ms=10000)
+
+# 心跳：调用 handle.tick() 重置看门狗，超时触发事件
+handle, heartbeat_tool = senza.create_heartbeat_stream(timeout_ms=30000)
+
+# Shell 监控：启动子进程，超时或结束后触发事件
+handle, shell_tool = senza.create_shell_monitor_stream(
+    command, timeout_ms=30000, cwd=None,
+)
+```
+
+返回的 tool 是 `WaitForExternalEventTool`，通过 `.with_external_tool(tool)` 注册到 WorkflowEngine。
+LLM 调用对应的 wait 工具时暂停，直到事件触发。
+
+## MCP（Model Context Protocol）
+
+```python
+# stdio 方式
+config = senza.McpServerConfig.stdio(
+    command: str, args: list[str] = ..., env: dict = ...,
+)
+
+# HTTP 方式
+config = senza.McpServerConfig.http(
+    url: str, headers: dict = ...,
+)
+
+# SSE 方式
+config = senza.McpServerConfig.sse(
+    url: str, headers: dict = ...,
+)
+
+# 注册到 builder
+harness = (
+    senza.HarnessBuilder("gpt-4o")
+    .provider("*", provider)
+    .mcp_server("db", config)
+    .build()
+)
+
+# 或从配置文件加载
+harness = (
+    senza.HarnessBuilder("gpt-4o")
+    .provider("*", provider)
+    .mcp_config_file("mcp_servers.json")
+    .build()
+)
+
+# 或注入预配置的 manager
+manager = senza.McpManager()
+manager.add_server("db", config)
+harness = (
+    senza.HarnessBuilder("gpt-4o")
+    .provider("*", provider)
+    .with_mcp_manager(manager)
+    .build()
+)
+```
+
+| 类/函数 | 说明 |
+|----------|------|
+| `McpServerConfig.stdio(command, args, env)` | stdio 传输 |
+| `McpServerConfig.http(url, headers)` | HTTP 传输 |
+| `McpServerConfig.sse(url, headers)` | SSE 传输 |
+| `McpManager` | 多 server 生命周期管理器 |
+| `.mcp_server(name, config)` | 注册单个 MCP server |
+| `.mcp_config_file(path)` | 从 JSON 文件批量加载 |
+| `.with_mcp_manager(manager)` | 注入预配置 manager |
 
 ## Session Viewer
 

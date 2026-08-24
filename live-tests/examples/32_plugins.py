@@ -16,11 +16,11 @@ especially when the same tool+hook combination is reused across agents
 or workflow steps.
 
 Scenario: a ``db-safety`` plugin that bundles a ``run_query`` tool with a
-``before_tool_call`` hook that logs every query. The runtime example's hook
-also *blocks* destructive SQL (DROP/DELETE without WHERE) by returning a
-deny result dict — in Senza's Python surface ``before_tool_call`` callbacks
-return only ``Optional[str]`` (``"allow"``), so the nearest analog here logs
-the statement and flags destructive SQL without the deny capability.
+``before_tool_call`` hook that makes all three supported decisions:
+``"allow"`` for unrelated safe tools, ``{"action": "modify"}`` to add a row
+limit to an unbounded SELECT, and ``{"action": "deny"}`` to prevent non-SELECT
+SQL from reaching the executor. The SQL check is deliberately small and
+illustrative; production policy should use a real parser or database controls.
 
 Run:
   source ~/.omp_llm_env && python live-tests/examples/32_plugins.py
@@ -35,11 +35,15 @@ from _common import live_model, make_example_harness, require_provider
 
 # ── Plugin definition ────────────────────────────────────────────────────────
 
+executed_queries: list[str] = []
+guard_decisions: list[tuple[str, str]] = []
+
 
 # A sync tool (create_sync_tool is an explicit alias for create_tool;
 # create_tool auto-detects async def callbacks — use whichever reads best).
 def run_query(args, ctx):
     sql = args.get("sql", "")
+    executed_queries.append(sql)
     return {
         "content": [{"type": "text", "text": f"Executed: {sql}\n(rows affected: 42)"}],
         "terminate": False,
@@ -80,20 +84,44 @@ status_tool = senza.create_tool(
 
 
 def query_guard(ctx):
-    """BeforeToolCall hook: log queries and flag destructive SQL."""
+    """BeforeToolCall hook: allow, modify, or deny before execution."""
     tool_name = ctx.get("tool_name", "?")
     args = ctx.get("args", {})
     sql = args.get("sql", "")
 
     print(f"  [plugin hook] {tool_name} called with sql={sql!r}")
 
-    if tool_name == "run_query":
-        upper = sql.upper().strip()
-        if re.search(r"\b(DROP|TRUNCATE)\b", upper) or (
-            re.search(r"\bDELETE\b", upper) and "WHERE" not in upper
-        ):
-            print("  [plugin hook] FLAGGED potentially destructive statement")
+    if tool_name != "run_query":
+        guard_decisions.append((tool_name, "allow"))
+        print("  [plugin hook] ALLOW non-query tool")
+        return "allow"
 
+    if not re.match(r"^\s*SELECT\b", sql, flags=re.IGNORECASE):
+        guard_decisions.append((tool_name, "deny"))
+        print("  [plugin hook] DENY non-read-only SQL")
+        return {
+            "action": "deny",
+            "result": {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "Query denied by db-safety: only SELECT is permitted.",
+                    }
+                ],
+                "details": {"reason": "non_read_only_sql", "sql": sql},
+            },
+        }
+
+    if not re.search(r"\bLIMIT\s+\d+\b", sql, flags=re.IGNORECASE):
+        limited_sql = f"{sql.rstrip().rstrip(';')} LIMIT 100"
+        modified_args = dict(args)
+        modified_args["sql"] = limited_sql
+        guard_decisions.append((tool_name, "modify"))
+        print(f"  [plugin hook] MODIFY query to {limited_sql!r}")
+        return {"action": "modify", "args": modified_args}
+
+    guard_decisions.append((tool_name, "allow"))
+    print("  [plugin hook] ALLOW bounded SELECT")
     return "allow"
 
 
@@ -121,7 +149,9 @@ def demo_agent_layer():
         lambda b: (
             b.system_prompt(
                 "You are a database assistant. Use run_query for SQL and "
-                "check_db_status for health checks."
+                "check_db_status for health checks. For this safety demo, pass "
+                "the user's requested SQL to run_query exactly as written; the "
+                "installed plugin is solely responsible for policy enforcement."
             )
             .plugin(make_db_safety_plugin())
             .max_tokens(512)
@@ -133,6 +163,24 @@ def demo_agent_layer():
     print("\nAsking the model to check DB status (async tool)...")
     events = harness.prompt_and_collect("Check the database status for me.", timeout_ms=60_000)
     _print_events(events)
+
+    print("\nAsking for an unbounded SELECT (hook should modify it)...")
+    events = harness.prompt_and_collect(
+        "Call run_query exactly once with this SQL: SELECT * FROM users",
+        timeout_ms=60_000,
+    )
+    _print_events(events)
+    print(f"Executor received: {executed_queries[-1] if executed_queries else '<nothing>'}")
+
+    print("\nAsking for a DROP (hook should deny before execution)...")
+    executed_before = len(executed_queries)
+    events = harness.prompt_and_collect(
+        "Call run_query exactly once with this SQL: DROP TABLE users",
+        timeout_ms=60_000,
+    )
+    _print_events(events)
+    print(f"Executor ran denied query: {len(executed_queries) != executed_before}")
+    print(f"Hook decisions observed: {guard_decisions}")
 
 
 # ── Workflow-layer usage ─────────────────────────────────────────────────────

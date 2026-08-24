@@ -1,4 +1,4 @@
-//! 11 个 hook trait 的 Python 回调包装（5 个通知 + 4 个决策 + 2 个变换）。
+//! 14 个 hook trait 的 Python 回调包装（5 个通知 + 4 个决策 + 2 个变换 + 1 个验证 + 1 个 run 结束 + 1 个 abort）。
 //!
 //! 统一模式：`Arc<Py<PyAny>>` 持有 callback，`spawn_blocking` +
 //! `Python::attach` + `call1` 调用 Python 函数。
@@ -18,15 +18,15 @@ use std::sync::Arc;
 
 use futures::future::BoxFuture;
 use llm_harness_types::{
-    AfterProviderResponseCtx, AfterProviderResponseHook, AfterToolCallCtx, AfterToolCallDecision,
-    AfterToolCallHook, AfterTurnCtx, AfterTurnHook, AgentContext, AgentError, AgentMessage,
-    AssistantMessage, BeforeCompactCtx, BeforeCompactDecision, BeforeCompactHook,
-    BeforeProviderRequestCtx, BeforeProviderRequestHook, BeforeRunCtx, BeforeRunHook,
-    BeforeRunResult, BeforeToolCallCtx, BeforeToolCallDecision, BeforeToolCallHook, BeforeTurnCtx,
-    BeforeTurnHook, CompactionResult, DataBlock, FinalAnswerValidationCtx,
-    FinalAnswerValidationError, FinalAnswerValidator, NextTurnDirective, PrepareNextTurnCtx,
-    PrepareNextTurnHook, RunContext, ShouldStopCtx, ShouldStopHook, StopReason, ToolError,
-    ToolFailure, ToolResult, TransformContextCtx, TransformContextHook,
+    AfterProviderResponseCtx, AfterProviderResponseHook, AfterRunHook, AfterToolCallCtx,
+    AfterToolCallDecision, AfterToolCallHook, AfterTurnCtx, AfterTurnHook, AgentContext,
+    AgentError, AgentMessage, AssistantMessage, BeforeCompactCtx, BeforeCompactDecision,
+    BeforeCompactHook, BeforeProviderRequestCtx, BeforeProviderRequestHook, BeforeRunCtx,
+    BeforeRunHook, BeforeRunResult, BeforeToolCallCtx, BeforeToolCallDecision, BeforeToolCallHook,
+    BeforeTurnCtx, BeforeTurnHook, CompactionResult, DataBlock, FinalAnswerValidationCtx,
+    FinalAnswerValidationError, FinalAnswerValidator, NextTurnDirective, OnAbortHook,
+    PrepareNextTurnCtx, PrepareNextTurnHook, RunContext, ShouldStopCtx, ShouldStopHook, StopReason,
+    ToolError, ToolFailure, ToolResult, TransformContextCtx, TransformContextHook,
 };
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
@@ -1350,6 +1350,85 @@ impl FinalAnswerValidator for PyFinalAnswerValidatorWrapper {
     }
 }
 
+// ── AfterRunHook ────────────────────────────────────────────────────────────
+
+/// Python callable 包装为 `AfterRunHook`。
+///
+/// callback 签名：`callback() -> None`
+/// 若 callback 为 `async def`，其 coroutine 将在 `spawn_blocking` 线程上
+/// 通过 `asyncio.run()` 执行。
+pub struct PyAfterRunHook {
+    callback: Arc<Py<PyAny>>,
+    is_async: bool,
+}
+
+impl PyAfterRunHook {
+    pub fn new(callback: Py<PyAny>) -> Self {
+        let is_async = detect_async(&callback);
+        Self {
+            callback: Arc::new(callback),
+            is_async,
+        }
+    }
+}
+
+impl AfterRunHook for PyAfterRunHook {
+    fn after_run(&self) -> BoxFuture<'_, ()> {
+        let cb = Arc::clone(&self.callback);
+        let is_async = self.is_async;
+
+        Box::pin(async move {
+            let result = tokio::task::spawn_blocking(move || {
+                Python::attach(|py| {
+                    call_callback_with_mode(py, &cb, (), is_async)?;
+                    Ok::<_, PyErr>(())
+                })
+            })
+            .await;
+            if let Err(e) = result {
+                tracing::warn!("AfterRunHook error: {e}");
+            }
+        })
+    }
+}
+
+// ── OnAbortHook ─────────────────────────────────────────────────────────────
+
+/// Python callable 包装为 `OnAbortHook`。
+///
+/// callback 签名：`callback() -> None`
+/// 同步调用：在 abort 路径上直接执行，不经过 `spawn_blocking`。
+/// 若 callback 为 `async def`，其 coroutine 将通过 `pyloop::run_coro`
+/// 在当前线程上阻塞执行（与 AfterRunHook 的 async 调度一致）。
+pub struct PyOnAbortHook {
+    callback: Arc<Py<PyAny>>,
+    is_async: bool,
+}
+
+impl PyOnAbortHook {
+    pub fn new(callback: Py<PyAny>) -> Self {
+        let is_async = detect_async(&callback);
+        Self {
+            callback: Arc::new(callback),
+            is_async,
+        }
+    }
+}
+
+impl OnAbortHook for PyOnAbortHook {
+    fn on_abort(&self) {
+        let cb = Arc::clone(&self.callback);
+        let is_async = self.is_async;
+        let result = Python::attach(|py| {
+            call_callback_with_mode(py, &cb, (), is_async)?;
+            Ok::<_, PyErr>(())
+        });
+        if let Err(e) = result {
+            tracing::warn!("OnAbortHook error: {e}");
+        }
+    }
+}
+
 // ── Python 包装类 ───────────────────────────────────────────────────────────
 
 /// 所有 hook trait 的枚举包装。
@@ -1367,6 +1446,8 @@ pub enum HookKind {
     TransformContext(Arc<dyn TransformContextHook>),
     PrepareNextTurn(Arc<dyn PrepareNextTurnHook>),
     FinalAnswerValidator(Arc<dyn FinalAnswerValidator>),
+    AfterRun(Arc<dyn AfterRunHook>),
+    OnAbort(Arc<dyn OnAbortHook>),
 }
 
 /// 持有任意 hook trait 对象的不透明 Python 包装。
@@ -1416,6 +1497,8 @@ impl PyHookWrapper {
             HookKind::TransformContext(h) => hooks.transform_context.push(h.clone()),
             HookKind::PrepareNextTurn(h) => hooks.prepare_next_turn.push(h.clone()),
             HookKind::FinalAnswerValidator(h) => hooks.final_answer_validator.push(h.clone()),
+            HookKind::AfterRun(h) => hooks.after_run.push(h.clone()),
+            HookKind::OnAbort(h) => hooks.on_abort.push(h.clone()),
         }
     }
 }
@@ -1436,6 +1519,8 @@ impl HookKind {
             HookKind::TransformContext(_) => "TransformContext",
             HookKind::PrepareNextTurn(_) => "PrepareNextTurn",
             HookKind::FinalAnswerValidator(_) => "FinalAnswerValidator",
+            HookKind::AfterRun(_) => "AfterRun",
+            HookKind::OnAbort(_) => "OnAbort",
         }
     }
 }

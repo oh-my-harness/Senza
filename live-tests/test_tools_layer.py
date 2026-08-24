@@ -33,15 +33,83 @@ def test_grep_glob():
         assert_tool_called(ev, "glob")
 
 
+def _tool_result_texts(events) -> list[str]:
+    """Extract text from all tool_execution_end events.
+
+    `tool_execution_end` carries a nested `result` dict with a `text` field
+    (the flat ToolResult). This helper unwraps it.
+    """
+    texts = []
+    for e in events:
+        if e.get("type") != "tool_execution_end":
+            continue
+        result = e.get("result")
+        if isinstance(result, dict):
+            texts.append(result.get("text", ""))
+        elif not e.get("ok", True):
+            texts.append(e.get("error", ""))
+    return texts
+
+
 def test_knowledge_memory():
+    """knowledge_search must succeed from Python (not return 'unauthorized').
+
+    Regression test: before KnowledgeAccessContext injection, every
+    knowledge tool call from Python returned 'unauthorized' because the
+    run request carried no access extension. This test verifies the
+    default trusted context is injected on every run.
+    """
     with tempfile.TemporaryDirectory() as d:
         with open(os.path.join(d, "guide.md"), "w") as f:
             f.write("Senza is an agent runtime. The deployment command is `senza deploy`.")
         source = senza.knowledge.local_source(path=d, source_id="guide")
         plugin = senza.knowledge.plugin(sources=[source])
-        h = make_harness(provider_or_skip(), lambda b: b.plugin(plugin))
+        h = make_harness(
+            provider_or_skip(),
+            lambda b: b.system_prompt(
+                "Use the knowledge_search tool to find information, then answer."
+            ).plugin(plugin),
+        )
         ev = run_prompt(h, "Search the knowledge source for the deployment command.")
         assert_settled(ev)
+        assert_tool_called(ev, "knowledge_search")
+        # The tool must not have returned 'unauthorized' — the bug fixed by
+        # KnowledgeAccessContext injection.
+        tool_texts = _tool_result_texts(ev)
+        joined = " ".join(tool_texts).lower()
+        assert "unauthorized" not in joined, (
+            f"knowledge_search returned 'unauthorized' — access context not injected: {tool_texts}"
+        )
+
+
+def test_knowledge_access_configurable():
+    """knowledge_access(scope, principal, kind) must propagate to the run.
+
+    Verifies that a custom access context set via HarnessBuilder does not
+    break the knowledge_search path — the custom principal/scope is accepted
+    by the runtime's authorization layer and the tool still succeeds.
+    """
+    with tempfile.TemporaryDirectory() as d:
+        with open(os.path.join(d, "guide.md"), "w") as f:
+            f.write("The deployment command is `senza deploy --env prod`.")
+        source = senza.knowledge.local_source(path=d, source_id="guide")
+        plugin = senza.knowledge.plugin(sources=[source])
+        h = make_harness(
+            provider_or_skip(),
+            lambda b: b.system_prompt(
+                "Use the knowledge_search tool to find information, then answer."
+            )
+            .knowledge_access(scope="myapp", principal="test-user", kind="user")
+            .plugin(plugin),
+        )
+        ev = run_prompt(h, "Search the knowledge source for the deployment command.")
+        assert_settled(ev)
+        assert_tool_called(ev, "knowledge_search")
+        tool_texts = _tool_result_texts(ev)
+        joined = " ".join(tool_texts).lower()
+        assert "unauthorized" not in joined, (
+            f"knowledge_search returned 'unauthorized' with custom access context: {tool_texts}"
+        )
 
 
 def test_session_recall():

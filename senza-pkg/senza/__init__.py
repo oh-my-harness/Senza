@@ -526,6 +526,8 @@ _hooks = _SimpleNamespace(
     transform_context=create_transform_context_hook,
     prepare_next_turn=create_prepare_next_turn_hook,
     final_answer_validator=create_final_answer_validator,
+    after_run=create_after_run_hook,
+    on_abort=create_on_abort_hook,
 )
 
 _strategy = _SimpleNamespace(
@@ -594,6 +596,8 @@ del create_before_compact_hook
 del create_transform_context_hook
 del create_prepare_next_turn_hook
 del create_final_answer_validator
+del create_after_run_hook
+del create_on_abort_hook
 del create_safety_defaults_plugin
 del create_loop_safety_plugin
 del create_status_panel_plugin

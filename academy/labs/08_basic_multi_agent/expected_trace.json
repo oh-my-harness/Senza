@@ -1,0 +1,119 @@
+{
+  "lab": "08",
+  "title": "Basic Multi-Agent：隔离上下文与受控生命周期",
+  "maturity": "teaching",
+  "theory": "《动手学 AI Agent》第10章：上下文共享/隔离、Manager 拓扑、消息总线与生命周期控制（https://github.com/bojieli/ai-agent-book/blob/1d2e04ee733dde245af2eb718cfc92d2d0542b7e/book/chapter10.md）",
+  "runtime_mapping": "Senza enable_spawn → Runtime MessageBus + HarnessSubAgentSpawner + SpawnPlugin; main-side control tools coordinate isolated child harnesses",
+  "claims": [
+    "确定性状态模型证明两个子任务只看到各自显式任务包，定向消息不会泄漏到另一个子任务。",
+    "主侧 5 个工具覆盖创建、消息、等待、查询和取消；终态限定为 done 或 aborted。",
+    "Runtime 另定义 message_main 与 await_main_message 两个 child-side 通信工具，但当前 Senza NoopPlugin 不会自动把它们挂到 child harness。",
+    "role 与 description 只出现在状态快照中，不改变 prompt、工具、权限或状态转换。"
+  ],
+  "boundaries": [
+    "这是 Academy 的 teaching 状态模型，不证明真实 Provider 并发、成本、调度公平性或取消传播延迟。",
+    "当前 Senza Python 没有 child profile、专属 tool 或专属 plugin 配置；NoopPlugin 也阻止递归 spawn。",
+    "两个 child 是纯推理隔离任务，不是拥有专业 Coding/Research 工具和权限的 Agent 团队。",
+    "live example 11 实际调用 spawn、await、query；message 与 abort 虽已挂载但未在该示例中调用。"
+  ],
+  "live_examples": [
+    "11_spawn_subagent.py"
+  ],
+  "tool_surface": {
+    "main_side": [
+      "spawn_agent",
+      "message_subagent",
+      "await_subagent_reply",
+      "query_subagent",
+      "abort_subagent"
+    ],
+    "runtime_child_side": [
+      "message_main",
+      "await_main_message"
+    ],
+    "senza_child_plugin": "NoopPlugin",
+    "senza_default_child_tools": []
+  },
+  "events": [
+    {
+      "seq": 1,
+      "kind": "tool",
+      "actor": "main",
+      "summary": "创建 sub-1：只注入 canary 任务包；role=reasoner-a 仅作展示元数据",
+      "status": "accepted",
+      "lifecycle": "spawn_agent"
+    },
+    {
+      "seq": 2,
+      "kind": "tool",
+      "actor": "main",
+      "summary": "创建 sub-2：只注入 blue-green 任务包，与 sub-1 及 Main 私有上下文隔离",
+      "status": "accepted",
+      "lifecycle": "spawn_agent"
+    },
+    {
+      "seq": 3,
+      "kind": "tool",
+      "actor": "main",
+      "summary": "非阻塞查询两个子任务：running / running",
+      "status": "info",
+      "lifecycle": "query_subagent"
+    },
+    {
+      "seq": 4,
+      "kind": "tool",
+      "actor": "main",
+      "summary": "只向 sub-1 追加 rollback signal 要求；sub-2 的 inbox 保持为空",
+      "status": "accepted",
+      "lifecycle": "message_subagent"
+    },
+    {
+      "seq": 5,
+      "kind": "agent",
+      "actor": "sub-1",
+      "summary": "纯推理任务完成并产生一个显式结果；私有轨迹不复制给 Main",
+      "status": "passed",
+      "lifecycle": "child running → done"
+    },
+    {
+      "seq": 6,
+      "kind": "tool",
+      "actor": "main",
+      "summary": "等待并收取 sub-1 完成事件：status=done",
+      "status": "ok",
+      "lifecycle": "await_subagent_reply"
+    },
+    {
+      "seq": 7,
+      "kind": "tool",
+      "actor": "main",
+      "summary": "再次查询 sub-2：status=running，决定停止不再需要的分支",
+      "status": "info",
+      "lifecycle": "query_subagent"
+    },
+    {
+      "seq": 8,
+      "kind": "tool",
+      "actor": "main",
+      "summary": "取消 sub-2，使状态从 running 转为 aborted",
+      "status": "accepted",
+      "lifecycle": "abort_subagent"
+    },
+    {
+      "seq": 9,
+      "kind": "tool",
+      "actor": "main",
+      "summary": "收取 sub-2 终止事件：status=aborted，没有伪造结果",
+      "status": "ok",
+      "lifecycle": "await_subagent_reply"
+    },
+    {
+      "seq": 10,
+      "kind": "context",
+      "actor": "main",
+      "summary": "Main 只合入 sub-1 的显式结果；两个子 Agent 的私有 context 仍未暴露",
+      "status": "passed",
+      "lifecycle": "manager synthesis"
+    }
+  ]
+}

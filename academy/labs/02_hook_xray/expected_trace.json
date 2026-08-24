@@ -1,0 +1,150 @@
+{
+  "lab": "02",
+  "title": "Hook X 光片：14 个固定生命周期边界",
+  "maturity": "stable",
+  "theory": "《动手学 AI Agent》第1章：Agent = Model + Harness；Harness = 上下文管理 + 工具接口 + 约束 + 验证 + 纠正（https://github.com/bojieli/ai-agent-book/blob/1d2e04ee733dde245af2eb718cfc92d2d0542b7e/book/chapter1.md）",
+  "runtime_mapping": "Runtime Agent Core owns 14 fixed HarnessHooks slots; Plugins register implementations into those slots at build time",
+  "claims": [
+    "HarnessHooks 定义 14 个固定挂载点，Plugin 选择槽位而不是选择任意源码位置。",
+    "同类 Hook 的组合并非统一广播：Runtime 分别使用全执行、短路、链式变换、字段合并和聚合语义。",
+    "压缩与最终答案校验是条件分支，因此一次普通 tool-calling run 不必触发全部 14 个 Hook。"
+  ],
+  "boundaries": [
+    "这是把主路径、压缩分支和答案提交分支合并展示的教学图谱，不是一条单次 live run 的完整时序证明。",
+    "Python 07_hooks.py 当前只在线证明六个 turn/tool/lifecycle Hook，不能据此声称单次 live 覆盖 14 个。",
+    "Hook 在构建期注册到 Core 声明的槽位，不代表 built harness 支持任意热插拔或任意代码注入。"
+  ],
+  "live_examples": [
+    "07_hooks.py"
+  ],
+  "composition": {
+    "before_run": "all execute; messages accumulate; last non-null system prompt wins",
+    "before_turn": "all execute in registration order",
+    "transform_context": "chain; each hook receives the prior transformed context",
+    "before_provider_request": "all execute; each mutates the shared StreamOptions in order",
+    "after_provider_response": "all execute in registration order",
+    "before_tool_call": "first non-Allow (Modify or Deny) short-circuits",
+    "after_tool_call": "chain; each Replace becomes the next hook's input",
+    "after_turn": "all execute in registration order",
+    "prepare_next_turn": "all execute; last non-null value wins independently per field",
+    "should_stop": "all execute without short-circuit; any true means stop",
+    "before_compact": "first non-Proceed decision short-circuits",
+    "final_answer_validator": "validators run in order; first rejection short-circuits",
+    "after_run": "all execute in registration order; pure notification (post-run cleanup)",
+    "on_abort": "all execute synchronously on abort signal; pure side-effect (set flags / cancel tokens)"
+  },
+  "events": [
+    {
+      "seq": 1,
+      "kind": "hook",
+      "actor": "agent-core",
+      "summary": "[主路径] run 开始：注入额外消息或覆盖 system prompt",
+      "status": "modified",
+      "lifecycle": "before_run"
+    },
+    {
+      "seq": 2,
+      "kind": "hook",
+      "actor": "agent-core",
+      "summary": "[主路径] turn 开始：向观测 Hook 发布配置快照",
+      "status": "info",
+      "lifecycle": "before_turn"
+    },
+    {
+      "seq": 3,
+      "kind": "hook",
+      "actor": "context-policy",
+      "summary": "[主路径] 模型调用前按注册顺序变换结构化上下文",
+      "status": "modified",
+      "lifecycle": "transform_context"
+    },
+    {
+      "seq": 4,
+      "kind": "hook",
+      "actor": "provider-policy",
+      "summary": "[主路径] Provider 请求前依次调整 StreamOptions",
+      "status": "modified",
+      "lifecycle": "before_provider_request"
+    },
+    {
+      "seq": 5,
+      "kind": "hook",
+      "actor": "usage-observer",
+      "summary": "[主路径] Provider 响应后记录延迟、模型与可用 usage",
+      "status": "info",
+      "lifecycle": "after_provider_response"
+    },
+    {
+      "seq": 6,
+      "kind": "hook",
+      "actor": "tool-policy",
+      "summary": "[主路径] 工具执行前返回 Allow；首个 Modify 或 Deny 会短路后续同类 Hook",
+      "status": "accepted",
+      "lifecycle": "before_tool_call"
+    },
+    {
+      "seq": 7,
+      "kind": "hook",
+      "actor": "result-policy",
+      "summary": "[主路径] 工具执行后链式处理结果，后一个 Hook 看到前一个 Replace",
+      "status": "modified",
+      "lifecycle": "after_tool_call"
+    },
+    {
+      "seq": 8,
+      "kind": "hook",
+      "actor": "turn-observer",
+      "summary": "[主路径] turn 结束后全部观察者按注册顺序执行",
+      "status": "info",
+      "lifecycle": "after_turn"
+    },
+    {
+      "seq": 9,
+      "kind": "hook",
+      "actor": "next-turn-policy",
+      "summary": "[主路径] 合并下一轮 model、temperature、tools 与 context 等字段",
+      "status": "modified",
+      "lifecycle": "prepare_next_turn"
+    },
+    {
+      "seq": 10,
+      "kind": "hook",
+      "actor": "stop-policy",
+      "summary": "[主路径] 所有停止查询都执行，任一为 true 才聚合为停止",
+      "status": "accepted",
+      "lifecycle": "should_stop"
+    },
+    {
+      "seq": 11,
+      "kind": "hook",
+      "actor": "compaction-policy",
+      "summary": "[压缩分支] 真正压缩前选择 Proceed、Skip、Compact 或 Override",
+      "status": "accepted",
+      "lifecycle": "before_compact"
+    },
+    {
+      "seq": 12,
+      "kind": "hook",
+      "actor": "answer-validator",
+      "summary": "[答案提交分支] 候选答案越过 committed boundary 前依次校验",
+      "status": "passed",
+      "lifecycle": "final_answer_validator"
+    },
+    {
+      "seq": 13,
+      "kind": "hook",
+      "actor": "run-observer",
+      "summary": "[run 结束] run 结束、Harness 回到 Idle 后全部观察者按注册顺序执行",
+      "status": "info",
+      "lifecycle": "after_run"
+    },
+    {
+      "seq": 14,
+      "kind": "hook",
+      "actor": "abort-handler",
+      "summary": "[中止分支] abort 信号触发时同步执行；用于置标志或 cancel token",
+      "status": "info",
+      "lifecycle": "on_abort"
+    }
+  ]
+}

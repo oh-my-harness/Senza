@@ -114,14 +114,14 @@ source .venv/bin/activate
 | `fmt` | `cargo fmt --check` | Rust 代码格式 |
 | `clippy` | `cargo clippy --all-targets -- -D warnings` | Rust lint |
 | `test` | `cargo test --all -- --ignored` | 5 个 Rust 集成测试（PyJudge/PyExecutor/async tool，需嵌入式 Python） |
-| `pytest` | `pytest tests/ -q` | 225 个 Python 测试（API、stubs、issue 回归、workflow engine） |
+| `pytest` | `pytest tests/ -q` | ~500 个 Python 测试（API、stubs、issue 回归、workflow engine、academy） |
 
 ### 运行示例
 
 ```bash
-export OPENAI_API_KEY=sk-...
-python examples/agent/01_basic_prompt.py
-python examples/runtime/01_linear_workflow.py
+source ~/.omp_llm_env   # 或 export OPENAI_API_KEY=sk-...
+python live-tests/examples/30_basic_prompt.py
+python live-tests/examples/08_workflow.py
 ```
 
 ## 发布版本
@@ -151,7 +151,7 @@ echo -n "<新SHA>" > senza-pkg/runtime.lock
 
 - 对齐参数名和默认值到 runtime 的 `__text_signature__`
 - 保持 docstring、分组注释、类型注解的手工风格
-- 同步检查 README.md 和 skills/ 中的签名是否漂移
+- 同步检查 README.md 和 docs/api-reference.md 中的签名是否漂移
 
 ## 用本地 runtime 改动测试
 

@@ -391,3 +391,51 @@ def test_create_prepare_next_turn_hook_accepts_async_callback():
 
     hook = senza.hooks.prepare_next_turn(my_async_hook)
     assert hook is not None
+
+
+# ── create_after_run_hook tests ──────────────────────────────────────────────
+
+
+def test_create_after_run_hook():
+    """after_run returns a non-None Hook object."""
+
+    def my_hook():
+        pass
+
+    hook = senza.hooks.after_run(my_hook)
+    assert hook is not None
+
+
+def test_create_after_run_hook_returns_hook_instance():
+    """The returned object is an instance of the Hook class."""
+    hook = senza.hooks.after_run(lambda: None)
+    assert isinstance(hook, senza.Hook)
+
+
+def test_create_after_run_hook_accepts_async_callback():
+    """after_run accepts an async def callback."""
+
+    async def my_async_hook():
+        pass
+
+    hook = senza.hooks.after_run(my_async_hook)
+    assert hook is not None
+
+
+# ── create_on_abort_hook tests ───────────────────────────────────────────────
+
+
+def test_create_on_abort_hook():
+    """on_abort returns a non-None Hook object."""
+
+    def my_hook():
+        pass
+
+    hook = senza.hooks.on_abort(my_hook)
+    assert hook is not None
+
+
+def test_create_on_abort_hook_returns_hook_instance():
+    """The returned object is an instance of the Hook class."""
+    hook = senza.hooks.on_abort(lambda: None)
+    assert isinstance(hook, senza.Hook)

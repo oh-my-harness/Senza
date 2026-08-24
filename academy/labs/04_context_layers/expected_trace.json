@@ -1,0 +1,80 @@
+{
+  "lab": "04",
+  "title": "Context Layers：稳定前缀、Skill、Status、Trajectory 与 Compaction",
+  "maturity": "stable",
+  "theory": "《动手学 AI Agent》第二章：上下文应显式分层；稳定前缀利于缓存，Skills 渐进披露，状态栏提炼动态状态，压缩提高旧轨迹的信息密度。",
+  "runtime_mapping": "Senza system/tools + load_skills/skill_read + status_panel() + session trajectory + auto/manual Harness.compact()。",
+  "claims": [
+    "recorded 快照的 stable_prefix 在所有阶段保持一致。",
+    "Skill 正文按需出现，Status 在轨迹尾部显式呈现动态状态，Trajectory 随交互增长。",
+    "recorded compaction 用结构化摘要替换旧历史，使 trajectory 变短而不改写 stable_prefix。"
+  ],
+  "boundaries": [
+    "recorded 快照是标准库实现的教学模型，不是 Provider 请求抓包，也不证明 Prompt Cache 命中或模型注意力效果。",
+    "Skill catalog 的具体消息角色与包装方式由 Harness 决定；本课展示概念层，不把它固化成跨运行时协议。",
+    "Status 是原始轨迹的有损投影，不能无条件替代原始证据。",
+    "Senza 已有 manual Harness.compact()，但 recorded 不调用模型，因此不证明真实摘要质量。"
+  ],
+  "live_examples": [
+    "06_skills_model_switch.py",
+    "16_status_panel.py",
+    "21_context_aware_compact.py"
+  ],
+  "events": [
+    {
+      "seq": 1,
+      "kind": "context",
+      "actor": "ContextBuilder",
+      "summary": "稳定 system 指令与核心 tool schemas 组成 stable_prefix",
+      "status": "info",
+      "lifecycle": "before_provider_request"
+    },
+    {
+      "seq": 2,
+      "kind": "context",
+      "actor": "SkillCatalog",
+      "summary": "仅暴露 code-review 的名称与路由描述",
+      "status": "accepted",
+      "lifecycle": "progressive_disclosure"
+    },
+    {
+      "seq": 3,
+      "kind": "tool",
+      "actor": "skill_read",
+      "summary": "任务命中后才加载 code-review 完整正文",
+      "status": "ok"
+    },
+    {
+      "seq": 4,
+      "kind": "model",
+      "actor": "Trajectory",
+      "summary": "User、Assistant、skill_read 与 read_file 结果按顺序追加",
+      "status": "info",
+      "lifecycle": "turn"
+    },
+    {
+      "seq": 5,
+      "kind": "hook",
+      "actor": "StatusBarHook",
+      "summary": "在上下文尾部注入当前 TODO 与工具调用计数",
+      "status": "ok",
+      "lifecycle": "transform_context"
+    },
+    {
+      "seq": 6,
+      "kind": "context",
+      "actor": "Harness.compact",
+      "summary": "手工压缩把旧轨迹提炼为 Goal、Progress、Decisions、Next Steps 与 Critical Context",
+      "status": "modified",
+      "lifecycle": "manual_compact"
+    },
+    {
+      "seq": 7,
+      "kind": "context",
+      "actor": "ContextBuilder",
+      "summary": "下一次请求复用 stable_prefix，只携带近期 trajectory、最新 status 与 compaction 摘要",
+      "status": "ok",
+      "lifecycle": "before_provider_request"
+    }
+  ]
+}

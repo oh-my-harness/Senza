@@ -608,9 +608,10 @@ impl PyHarnessBuilder {
 
     /// Enable sub-agent spawn infrastructure.
     ///
-    /// Wires `MessageBus`, `HarnessSubAgentSpawner`, `AsyncSpawnHook`,
-    /// `IdleWatcher`, and the three spawn tools (`spawn_agent`,
-    /// `await_subagent_reply`, `query_subagent`) into the harness at build time.
+    /// Wires `MessageBus`, `HarnessSubAgentSpawner`, `SpawnPlugin`,
+    /// and the five main-agent spawn tools (`spawn_agent`,
+    /// `message_subagent`, `await_subagent_reply`, `query_subagent`,
+    /// `abort_subagent`) into the harness at build time.
     ///
     /// Args:
     ///     model: Default model name for sub-agents.
