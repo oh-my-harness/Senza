@@ -10,20 +10,20 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use futures::future::BoxFuture;
+use llm_harness_agent::HarnessBuilder;
 use llm_harness_agent::{HarnessHooks, Plugin};
-use llm_harness_runtime::builder::HarnessBuilder;
-use llm_harness_runtime::lifecycle::task::TaskId;
-use llm_harness_runtime::lifecycle::task_store::{JsonlTaskStore, TaskStore, TaskSummary};
-use llm_harness_runtime::spawn::spawner::{EnvFactory, JsonlSessionFactory};
-use llm_harness_runtime::workflow::engine::{WorkflowEngine, WorkflowEngineConfig, WorkflowEvent};
-use llm_harness_runtime::workflow::error::WorkflowError;
-use llm_harness_runtime::workflow::executor::{ExecutorCtx, StepExecutor};
-use llm_harness_runtime::workflow::judge::{EdgeConditionJudge, StepCtx, StepTransitionJudge};
-use llm_harness_runtime::workflow::model::{
+use llm_harness_subagents::{EnvFactory, spawner::JsonlSessionFactory};
+use llm_harness_types::{AgentError, CostAggregate, ExecutionEnv, Tool, UnsupportedEnv};
+use llm_harness_workflow::lifecycle::task::TaskId;
+use llm_harness_workflow::lifecycle::task_store::{JsonlTaskStore, TaskStore, TaskSummary};
+use llm_harness_workflow::workflow::engine::{WorkflowEngine, WorkflowEngineConfig, WorkflowEvent};
+use llm_harness_workflow::workflow::error::WorkflowError;
+use llm_harness_workflow::workflow::executor::{ExecutorCtx, StepExecutor};
+use llm_harness_workflow::workflow::judge::{EdgeConditionJudge, StepCtx, StepTransitionJudge};
+use llm_harness_workflow::workflow::model::{
     Edge, EdgeCondition, LoopConfig, Step, StepExecutionPolicy, StepRecord, StepResult, Transition,
     Workflow, WorkflowStatus,
 };
-use llm_harness_types::{AgentError, CostAggregate, ExecutionEnv, Tool, UnsupportedEnv};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use serde_json::Value;
@@ -400,7 +400,7 @@ async fn call_python_judge(
     step_id: &str,
     output: &str,
     structured: &Option<Value>,
-    structured_status: &llm_harness_runtime::workflow::model::StructuredStatus,
+    structured_status: &llm_harness_workflow::workflow::model::StructuredStatus,
     step_count: usize,
     retry_count: usize,
     tool_calls_count: u32,
@@ -785,7 +785,7 @@ fn stages_to_workflow(dict: &Bound<'_, PyDict>) -> PyResult<Workflow> {
 /// 每个 dict 包含 `"type"` 字段标识事件类型。
 /// 镜像 `blender-scene-generator/src/server/events.rs` 的序列化逻辑。
 fn workflow_event_to_dict(py: Python<'_>, event: &WorkflowEvent) -> PyResult<Py<PyAny>> {
-    use llm_harness_runtime::workflow::engine::StepProgress;
+    use llm_harness_workflow::workflow::engine::StepProgress;
 
     match event {
         WorkflowEvent::StepStarted { step_id, step_name } => {
@@ -1088,9 +1088,9 @@ fn step_result_to_dict(py: Python<'_>, r: &StepResult) -> PyResult<Py<PyAny>> {
 /// 泄漏到 Python 侧。与 README 文档一致：
 /// `"not_required"` / `"ok"` / `"failed"`。
 fn structured_status_str(
-    s: &llm_harness_runtime::workflow::model::StructuredStatus,
+    s: &llm_harness_workflow::workflow::model::StructuredStatus,
 ) -> &'static str {
-    use llm_harness_runtime::workflow::model::StructuredStatus;
+    use llm_harness_workflow::workflow::model::StructuredStatus;
     match s {
         StructuredStatus::NotRequired => "not_required",
         StructuredStatus::Ok => "ok",
@@ -2078,7 +2078,7 @@ impl PyWorkflowEventIterator {
 #[cfg(test)]
 mod tests {
     use super::{dict_to_workflow, parse_step_policy};
-    use llm_harness_runtime::workflow::model::{Step, StepExecutionPolicy, Workflow};
+    use llm_harness_workflow::workflow::model::{Step, StepExecutionPolicy, Workflow};
     use pyo3::types::PyDictMethods;
     use pyo3::{Py, Python};
 

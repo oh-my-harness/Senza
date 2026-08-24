@@ -10,13 +10,13 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use llm_harness_agent::HarnessBuilder;
 use llm_harness_agent::{CompactionPromptSpec, ModelInfo};
 use llm_harness_agent::{Plugin, Skill};
+use llm_harness_knowledge::{KnowledgeAccessContext, KnowledgeScope, PrincipalRef};
 use llm_harness_loop::config::RetryConfig;
 use llm_harness_loop::final_answer::FinalAnswerMode;
-use llm_harness_runtime::builder::HarnessBuilder;
-use llm_harness_runtime_knowledge::{KnowledgeAccessContext, KnowledgeScope, PrincipalRef};
-use llm_harness_runtime_mcp::builder::HarnessBuilderMcpExt;
+use llm_harness_mcp::builder::HarnessBuilderMcpExt;
 use llm_harness_types::{ExecutionEnv, StreamOptions, Tool, UnsupportedEnv};
 use pyo3::prelude::*;
 
@@ -45,11 +45,11 @@ pub struct PyHarnessBuilder {
     /// 可选执行环境；`build()` 时注入。`None` → `UnsupportedEnv`（默认）。
     env: Option<Arc<dyn ExecutionEnv>>,
     /// MCP server 配置列表（name, config），在 build() 时提升为 McpHarnessBuilder。
-    mcp_servers: Vec<(String, llm_harness_runtime_mcp::config::McpServerConfig)>,
+    mcp_servers: Vec<(String, llm_harness_mcp::config::McpServerConfig)>,
     /// MCP 配置文件路径列表，在 build() 时异步读取。
     mcp_config_files: Vec<PathBuf>,
     /// 外部 McpManager（高级 API），在 build() 时注入。
-    mcp_manager: Option<Arc<llm_harness_runtime_mcp::manager::McpManager>>,
+    mcp_manager: Option<Arc<llm_harness_mcp::manager::McpManager>>,
     /// Spawn 配置（model, client, session_dir），在 build() 时完成 spawn 基础设施粘合。
     spawn_config: Option<SpawnConfig>,
     /// Optional session repo for persistent sessions.
@@ -562,7 +562,7 @@ impl PyHarnessBuilder {
         exceeded_hook: Option<&Bound<'_, PyBudgetExceededHook>>,
     ) -> PyRefMut<'a, Self> {
         if let Some(b) = slf.builder.take() {
-            let ledger = llm_harness_runtime::control::cost::UsageLedger::default();
+            let ledger = llm_harness_agent::UsageLedger::default();
             let cost_state = ledger.shared_state();
             let hook = exceeded_hook.map(|h| h.borrow().hook.clone());
             let adapter = llm_harness_strategy::BudgetControlAdapter::new(cost_state, limit, hook);
@@ -723,10 +723,13 @@ impl PyHarnessBuilder {
                 wiring.post_build(&harness);
             }
 
-            return Py::new(py, match knowledge_access.clone() {
-                Some(acc) => PyAgentHarness::new_base_with_access(harness, acc),
-                None => PyAgentHarness::new_base(harness),
-            });
+            return Py::new(
+                py,
+                match knowledge_access.clone() {
+                    Some(acc) => PyAgentHarness::new_base_with_access(harness, acc),
+                    None => PyAgentHarness::new_base(harness),
+                },
+            );
         }
 
         if has_mcp {
@@ -745,10 +748,13 @@ impl PyHarnessBuilder {
             let mcp_harness = crate::shared::pyerror::detach_catch_panic_result(py, move || {
                 rt.block_on(async move { mcp_builder.build(env).await })
             })?;
-            Py::new(py, match knowledge_access.clone() {
-                Some(acc) => PyAgentHarness::new_mcp_with_access(Arc::new(mcp_harness), acc),
-                None => PyAgentHarness::new_mcp(Arc::new(mcp_harness)),
-            })
+            Py::new(
+                py,
+                match knowledge_access.clone() {
+                    Some(acc) => PyAgentHarness::new_mcp_with_access(Arc::new(mcp_harness), acc),
+                    None => PyAgentHarness::new_mcp(Arc::new(mcp_harness)),
+                },
+            )
         } else {
             // If spawn is enabled, wire spawn infrastructure into the builder
             // before build, and set post-build hooks after.
@@ -766,10 +772,13 @@ impl PyHarnessBuilder {
                 wiring.post_build(&harness);
             }
 
-            Py::new(py, match knowledge_access.clone() {
-                Some(acc) => PyAgentHarness::new_base_with_access(harness, acc),
-                None => PyAgentHarness::new_base(harness),
-            })
+            Py::new(
+                py,
+                match knowledge_access.clone() {
+                    Some(acc) => PyAgentHarness::new_base_with_access(harness, acc),
+                    None => PyAgentHarness::new_base(harness),
+                },
+            )
         }
     }
 }
@@ -834,14 +843,14 @@ impl Plugin for MultiSkillPlugin {
 
 /// Caller-owned usage accounting state, shareable across multiple harnesses.
 ///
-/// Wraps `llm_harness_runtime::control::cost::UsageLedger`, which holds an
+/// Wraps `llm_harness_agent::UsageLedger`, which holds an
 /// `Arc<Mutex<CostAggregate>>`. Because the inner state is `Arc`-shared,
 /// cloning the ledger (as `usage_ledger()` does) shares the same accumulator —
 /// cost recorded by any harness is visible via `snapshot()` on this object.
 #[pyclass(name = "UsageLedger", skip_from_py_object)]
 #[derive(Clone)]
 pub struct PyUsageLedger {
-    pub(crate) ledger: llm_harness_runtime::control::cost::UsageLedger,
+    pub(crate) ledger: llm_harness_agent::UsageLedger,
 }
 
 #[pymethods]
@@ -849,7 +858,7 @@ impl PyUsageLedger {
     #[new]
     fn new() -> Self {
         Self {
-            ledger: llm_harness_runtime::control::cost::UsageLedger::default(),
+            ledger: llm_harness_agent::UsageLedger::default(),
         }
     }
 

@@ -21,19 +21,19 @@ pub fn create_knowledge_plugin<'py>(
     config: Option<&Bound<'_, PyDict>>,
 ) -> PyResult<Bound<'py, PyPluginWrapper>> {
     // Build access control with AllowAllAuthorizer (trusted single-user Python SDK)
-    let access_control = Arc::new(llm_harness_runtime_knowledge::KnowledgeAccessControl::new(
-        Arc::new(llm_harness_runtime_knowledge::AllowAllAuthorizer),
+    let access_control = Arc::new(llm_harness_knowledge::KnowledgeAccessControl::new(
+        Arc::new(llm_harness_knowledge::AllowAllAuthorizer),
     ));
 
     // Extract Arc<dyn KnowledgeSource> from each PyKnowledgeSource and build registry
-    let mut builder = llm_harness_runtime_knowledge::KnowledgeRegistry::builder(access_control);
+    let mut builder = llm_harness_knowledge::KnowledgeRegistry::builder(access_control);
     for src in &sources {
         let borrowed = src.borrow();
         builder = builder.source(borrowed.source.clone());
     }
 
     // Build tool config from optional dict
-    let mut tools = llm_harness_runtime_knowledge::KnowledgeToolConfig::default();
+    let mut tools = llm_harness_knowledge::KnowledgeToolConfig::default();
     if let Some(cfg) = config {
         if let Some(v) = cfg
             .get_item("max_search_results")?
@@ -49,9 +49,9 @@ pub fn create_knowledge_plugin<'py>(
         }
     }
 
-    let plugin_config = llm_harness_runtime_knowledge::KnowledgePluginConfig {
+    let plugin_config = llm_harness_knowledge::KnowledgePluginConfig {
         tools,
-        citation_policy: llm_harness_runtime_knowledge::KnowledgeCitationPolicy::default(),
+        citation_policy: llm_harness_knowledge::KnowledgeCitationPolicy::default(),
     };
 
     // Build registry
@@ -63,14 +63,14 @@ pub fn create_knowledge_plugin<'py>(
 
     // Create EvidenceAuthority with a deterministic secret
     let secret: Vec<u8> = (0..32).map(|i| i as u8).collect();
-    let provider_id = llm_harness_runtime_knowledge::EvidenceProviderId("local".to_string());
+    let provider_id = llm_harness_knowledge::EvidenceProviderId("local".to_string());
     let authority = Arc::new(
-        llm_harness_runtime_knowledge::EvidenceAuthority::new(secret, [provider_id.clone()])
+        llm_harness_knowledge::EvidenceAuthority::new(secret, [provider_id.clone()])
             .map_err(pyo3::exceptions::PyValueError::new_err)?,
     );
 
     // Create KnowledgePlugin
-    let plugin = llm_harness_runtime_knowledge::KnowledgePlugin::new(
+    let plugin = llm_harness_knowledge::KnowledgePlugin::new(
         registry,
         authority,
         provider_id,

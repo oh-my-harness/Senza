@@ -19,9 +19,7 @@ pub fn create_audit_plugin<'py>(
     trace_id: Option<String>,
     task_id: Option<String>,
 ) -> PyResult<Bound<'py, PyPluginWrapper>> {
-    let sink = Arc::new(llm_harness_runtime_audit_jsonl::JsonlAuditSink::new(
-        sink_path,
-    ));
+    let sink = Arc::new(llm_harness_audit_jsonl::JsonlAuditSink::new(sink_path));
     let mut plugin = llm_harness_strategy::AuditPlugin::new(sink);
     if let Some(tid) = trace_id {
         plugin = plugin.with_trace_id(tid);

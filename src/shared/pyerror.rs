@@ -145,9 +145,9 @@ pub fn detach_catch_panic_pyresult<R: Ungil + Send>(
 
 // ── 错误映射函数 ─────────────────────────────────────────────────────────────
 
-use llm_harness_runtime::lifecycle::task::TaskError;
-use llm_harness_runtime::workflow::error::WorkflowError as RustWorkflowError;
 use llm_harness_types::{AgentError, HarnessError, ProviderErrorKind, ToolError as RustToolError};
+use llm_harness_workflow::lifecycle::task::TaskError;
+use llm_harness_workflow::workflow::error::WorkflowError as RustWorkflowError;
 
 /// 在 PyErr 异常实例上设置属性。
 fn set_attr_str(py: Python<'_>, exc: &PyErr, name: &str, value: String) {

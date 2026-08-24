@@ -1,8 +1,8 @@
 use std::sync::{Arc, Mutex};
 
 use futures::future::BoxFuture;
-use llm_harness_runtime_knowledge::{KnowledgeError, KnowledgeRef, KnowledgeRequestContext};
-use llm_harness_runtime_memory::{
+use llm_harness_knowledge::{KnowledgeError, KnowledgeRef, KnowledgeRequestContext};
+use llm_harness_memory::{
     MemoryConsistency, MemoryDeleteReceipt, MemoryMutationGate, MemoryMutationGateError,
     MemoryMutationRequest, MemoryStore, MemoryStoreDescriptor, MemoryVisibility, MemoryWrite,
     MemoryWritePolicy, MemoryWriteReceipt, SecureMemoryWritePolicy, SecureMemoryWritePolicyConfig,
@@ -46,8 +46,7 @@ impl MemoryStore for InMemoryStore {
     ) -> BoxFuture<'a, Result<MemoryWriteReceipt, KnowledgeError>> {
         Box::pin(async move {
             let item_id = format!("mem-{}", write.idempotency_key);
-            let revision =
-                llm_harness_runtime_knowledge_local::content_revision(write.content.as_bytes());
+            let revision = llm_harness_knowledge_local::content_revision(write.content.as_bytes());
             let reference = KnowledgeRef {
                 source_id: self.descriptor.read_source_id.clone(),
                 item_id,
@@ -213,11 +212,11 @@ pub fn create_memory_plugin<'py>(
         Arc::new(AllowAllGate)
     };
 
-    let access_control = Arc::new(llm_harness_runtime_knowledge::KnowledgeAccessControl::new(
-        Arc::new(llm_harness_runtime_knowledge::AllowAllAuthorizer),
+    let access_control = Arc::new(llm_harness_knowledge::KnowledgeAccessControl::new(
+        Arc::new(llm_harness_knowledge::AllowAllAuthorizer),
     ));
 
-    let service = llm_harness_runtime_memory::MemoryService::new(
+    let service = llm_harness_memory::MemoryService::new(
         access_control,
         src_arc,
         store_arc,
@@ -226,8 +225,7 @@ pub fn create_memory_plugin<'py>(
     )
     .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
 
-    let plugin: Arc<dyn llm_harness_agent::Plugin> = Arc::new(
-        llm_harness_runtime_memory::MemoryPlugin::new(Arc::new(service)),
-    );
+    let plugin: Arc<dyn llm_harness_agent::Plugin> =
+        Arc::new(llm_harness_memory::MemoryPlugin::new(Arc::new(service)));
     Py::new(py, PyPluginWrapper::new(plugin)).map(|p| p.into_bound(py))
 }

@@ -7,8 +7,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use llm_harness_runtime_mcp::config::{McpConfigFile, McpServerConfig};
-use llm_harness_runtime_mcp::manager::{ConnectionStatus, McpManager};
+use llm_harness_mcp::config::{McpConfigFile, McpServerConfig};
+use llm_harness_mcp::manager::{ConnectionStatus, McpManager};
 use pyo3::prelude::*;
 
 use crate::core::pyagent::runtime;
