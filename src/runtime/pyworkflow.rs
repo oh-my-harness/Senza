@@ -882,6 +882,20 @@ fn workflow_event_to_dict(py: Python<'_>, event: &WorkflowEvent) -> PyResult<Py<
             dict.set_item("progress", prog_dict)?;
             Ok(dict.into_any().unbind())
         }
+        WorkflowEvent::TextDelta { step_id, text } => {
+            let dict = PyDict::new(py);
+            dict.set_item("type", "text_delta")?;
+            dict.set_item("step_id", step_id.clone())?;
+            dict.set_item("text", text.clone())?;
+            Ok(dict.into_any().unbind())
+        }
+        WorkflowEvent::ThinkingDelta { step_id, thinking } => {
+            let dict = PyDict::new(py);
+            dict.set_item("type", "thinking_delta")?;
+            dict.set_item("step_id", step_id.clone())?;
+            dict.set_item("thinking", thinking.clone())?;
+            Ok(dict.into_any().unbind())
+        }
     }
 }
 
