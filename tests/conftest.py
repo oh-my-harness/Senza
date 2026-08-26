@@ -26,6 +26,7 @@ _TEST_UTILS_MODULES = {
     "test_async_tool",
     "test_async_stream",
     "test_event_loop_bridge",
+    "test_issue_29",
 }
 
 

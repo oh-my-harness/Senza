@@ -16,6 +16,8 @@ use llm_harness_agent::Agent;
 use llm_harness_agent::AgentOptions;
 #[cfg(feature = "test-utils")]
 use llm_harness_loop::test_utils::{MockLlmClient, MockResponse};
+#[cfg(feature = "test-utils")]
+use llm_harness_types::Tool;
 use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
 
@@ -61,18 +63,44 @@ impl PyAgent {
     /// 创建一个使用 `MockLlmClient` 的 Agent（仅供测试）。
     ///
     /// `model` 参数仅用于标识，不影响 mock 响应。
+    /// `responses` 为可选的自定义响应列表，每个元素是 dict：
+    ///   - {"type": "text", "text": "..."}
+    ///   - {"type": "tool_use", "id": "...", "name": "...", "args": "..."}
+    ///   - {"type": "tool_use_end_turn", "id": "...", "name": "...", "args": "..."}
+    /// `tools` 为可选的 Tool 列表（来自 `create_tool`）。
+    /// 不传 `responses` 时使用默认的 4 条 "hello from mock" 文本响应。
     /// 生产环境请使用 `HarnessBuilder` 构建真实 provider 的 Agent。
     #[cfg(feature = "test-utils")]
     #[new]
-    #[pyo3(signature = (model="mock-model"))]
-    fn new(model: &str) -> PyResult<Self> {
-        let client = Arc::new(MockLlmClient::new(vec![
-            MockResponse::text("hello from mock"),
-            MockResponse::text("hello from mock"),
-            MockResponse::text("hello from mock"),
-            MockResponse::text("hello from mock"),
-        ]));
-        let opts = AgentOptions::new(model.to_string());
+    #[pyo3(signature = (model="mock-model", responses=None, tools=None))]
+    fn new(
+        model: &str,
+        responses: Option<Vec<Bound<'_, PyAny>>>,
+        tools: Option<Vec<Bound<'_, crate::core::pytool::PyToolWrapper>>>,
+    ) -> PyResult<Self> {
+        let mock_responses: Vec<MockResponse> = match responses {
+            Some(list) => list
+                .iter()
+                .map(mock_response_from_py)
+                .collect::<PyResult<Vec<_>>>()?,
+            None => vec![
+                MockResponse::text("hello from mock"),
+                MockResponse::text("hello from mock"),
+                MockResponse::text("hello from mock"),
+                MockResponse::text("hello from mock"),
+            ],
+        };
+        let client = Arc::new(MockLlmClient::new(mock_responses));
+        let mut opts = AgentOptions::new(model.to_string());
+        if let Some(tool_list) = tools {
+            opts.tools = tool_list
+                .iter()
+                .map(|t| {
+                    let wrapper = t.extract::<PyRef<'_, crate::core::pytool::PyToolWrapper>>()?;
+                    Ok::<Arc<dyn Tool>, PyErr>(wrapper.tool.clone())
+                })
+                .collect::<PyResult<Vec<Arc<dyn Tool>>>>()?;
+        }
         let agent = Arc::new(Agent::new(client, opts));
         Ok(Self { agent })
     }
@@ -146,5 +174,64 @@ impl PyAgent {
     /// 取消当前正在运行的 prompt（如果有）。不阻塞。
     fn abort(&self) {
         self.agent.abort();
+    }
+
+    /// 返回最近一次运行的错误消息（如果有）。
+    #[getter]
+    fn error_message(&self) -> Option<String> {
+        self.agent.state().error_message.clone()
+    }
+}
+
+/// Convert a Python dict describing a mock response into a `MockResponse`.
+#[cfg(feature = "test-utils")]
+fn mock_response_from_py(obj: &Bound<'_, PyAny>) -> PyResult<MockResponse> {
+    use pyo3::types::PyDict;
+    let dict = obj.cast::<PyDict>()?;
+    let rtype: String = dict
+        .get_item("type")?
+        .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("missing 'type' key"))?
+        .extract()?;
+    match rtype.as_str() {
+        "text" => {
+            let text: String = dict
+                .get_item("text")?
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("missing 'text' key"))?
+                .extract()?;
+            Ok(MockResponse::text(&text))
+        }
+        "tool_use" => {
+            let id: String = dict
+                .get_item("id")?
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("missing 'id' key"))?
+                .extract()?;
+            let name: String = dict
+                .get_item("name")?
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("missing 'name' key"))?
+                .extract()?;
+            let args: String = dict
+                .get_item("args")?
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("missing 'args' key"))?
+                .extract()?;
+            Ok(MockResponse::tool_use(&id, &name, &args))
+        }
+        "tool_use_end_turn" => {
+            let id: String = dict
+                .get_item("id")?
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("missing 'id' key"))?
+                .extract()?;
+            let name: String = dict
+                .get_item("name")?
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("missing 'name' key"))?
+                .extract()?;
+            let args: String = dict
+                .get_item("args")?
+                .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("missing 'args' key"))?
+                .extract()?;
+            Ok(MockResponse::tool_use_end_turn(&id, &name, &args))
+        }
+        other => Err(pyo3::exceptions::PyValueError::new_err(format!(
+            "unknown mock response type: {other}"
+        ))),
     }
 }
