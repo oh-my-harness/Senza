@@ -135,9 +135,28 @@ tool = senza.create_tool(
 ```
 
 - `parameters` / `parameters_schema`: JSON Schema，接受 dict 或 JSON 字符串。`parameters` 是推荐名称。
-- `callback`: `(args: dict, ctx: ToolContext) -> dict`。`ctx` 可选——函数接受 2 参时传 `ctx`，1 参时只传 `args`。
-- 返回 dict: `{"content": [ContentBlock...], "terminate": bool}`。`terminate=True` 停止 agent 循环。
+- `callback`: `(args: dict, ctx: ToolContext) -> dict`。`args` 是**完整的参数字典**（如 `{"query": "cats"}`），回调内自行用 `args["query"]` 取值。`ctx` 可选——函数接受 2 参时传 `ctx`，1 参时只传 `args`。
+  - ⚠️ **回调签名不是独立参数**：`def search(query: str)` 是**错误**的——`query` 会收到整个 dict 而非字符串。正确写法是 `def search(args: dict, ctx=None)` 然后内部 `args["query"]`，或使用下面的 `@senza.tool` 装饰器。
+- 返回 dict: `{"content": [ContentBlock...], "terminate": bool}`。`terminate=True` 停止 agent 循环。也接受纯字符串（自动包装为 text content）或不含 `content` 键的 dict（整体 JSON 序列化为 text）。
 - **Async 工具**: 传 `async def` 回调，通过 `asyncio.run()` 在阻塞线程上运行。
+
+#### `@senza.tool` 装饰器（便捷方式）
+
+用类型提示自动生成 JSON Schema，回调按独立参数接收值：
+
+```python
+@senza.tool
+def search(query: str, limit: int = 10) -> str:
+    """Search the web."""
+    return f"Results for {query} (top {limit})"
+
+# 等价于 create_tool + 自动 schema + 自动 kwargs 解包
+```
+
+- 类型提示 → JSON Schema（`str→string`, `int→integer`, `float→number`, `bool→boolean`）
+- 无默认值的参数自动标记为 `required`
+- 支持 `async def`
+- docstring 自动作为工具描述
 
 ### 内置 fs 工具
 
