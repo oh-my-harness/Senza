@@ -69,6 +69,7 @@ async def stream_prompt(
     obj: Any,
     text: str,
     timeout_ms: int = 5000,
+    max_consecutive_timeouts: int = 1,
 ) -> AsyncGenerator[dict, None]:
     """Send a prompt and yield events as they arrive (Agent / AgentHarness).
 
@@ -76,12 +77,33 @@ async def stream_prompt(
     until a terminal event (``agent_end``, ``settled``, ``aborted``,
     ``error``) is received or the stream is exhausted.
 
+    Args:
+        obj: An Agent, AgentHarness, or any object with ``prompt()`` and
+            ``events()`` (or ``subscribe()``) methods.
+        text: The prompt text to send.
+        timeout_ms: Per-poll timeout in milliseconds. Each call to
+            ``next(event_iterator)`` blocks for at most this long before
+            returning (with or without an event).
+        max_consecutive_timeouts: Maximum number of consecutive empty polls
+            before the stream is considered exhausted. Set to a large value
+            (e.g. ``999999``) when tools may block for a long time — e.g.
+            ``ask_user`` waiting for human input. Default ``1`` for backward
+            compatibility.
+
     Usage::
 
         async for event in senza.stream_prompt(agent, "hello"):
             print(event)
+
+    With long-blocking tools::
+
+        async for event in senza.stream_prompt(
+            harness, "ask the user", timeout_ms=30000,
+            max_consecutive_timeouts=999999,
+        ):
+            print(event)
     """
-    it = _get_event_iterator(obj, timeout_ms, 1)
+    it = _get_event_iterator(obj, timeout_ms, max_consecutive_timeouts)
 
     done = _threading.Event()
     errors: list = []
@@ -115,15 +137,23 @@ async def stream_prompt(
 async def stream_run(
     engine: Any,
     timeout_ms: int = 5000,
+    max_consecutive_timeouts: int = 1,
 ) -> AsyncGenerator[dict, None]:
     """Start ``engine.run()`` on a background thread and yield workflow events.
+
+    Args:
+        engine: A WorkflowEngine or any object with ``run()`` and
+            ``events()`` (or ``subscribe()``) methods.
+        timeout_ms: Per-poll timeout in milliseconds.
+        max_consecutive_timeouts: Maximum consecutive empty polls before the
+            stream is considered exhausted. See :func:`stream_prompt`.
 
     Usage::
 
         async for event in senza.stream_run(engine):
             print(event["type"])
     """
-    it = _get_event_iterator(engine, timeout_ms, 1)
+    it = _get_event_iterator(engine, timeout_ms, max_consecutive_timeouts)
 
     done = _threading.Event()
     errors: list = []
