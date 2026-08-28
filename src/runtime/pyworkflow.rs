@@ -672,22 +672,6 @@ fn stages_to_workflow(dict: &Bound<'_, PyDict>) -> PyResult<Workflow> {
         .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("missing 'stages'"))?;
     let stages_seq = stages_val.cast::<pyo3::types::PyList>()?;
 
-    // Reserved keys in a stage dict that are not route keys.
-    let reserved: std::collections::HashSet<&str> = [
-        "name",
-        "type",
-        "tool",
-        "prompt_template",
-        "output_key",
-        "outputs",
-        "message",
-        "exit_code",
-        "executor",
-        "loop",
-    ]
-    .into_iter()
-    .collect();
-
     let mut steps = Vec::new();
     let mut edges = Vec::new();
     let mut entry_step: Option<String> = None;
@@ -768,13 +752,19 @@ fn stages_to_workflow(dict: &Bound<'_, PyDict>) -> PyResult<Workflow> {
 
         steps.push(step);
 
-        // Collect next_on_* routes as edges.
+        // Collect next_on_* routes as edges. Matched by explicit prefix, not
+        // by excluding a hand-maintained list of "known non-route" keys —
+        // Studio adds per-step metadata fields over time (ui, component, ...)
+        // and an exclusion list silently breaks (or, worse, misroutes) every
+        // time a new one is added and forgotten here. "ui" being a dict
+        // previously crashed this loop with a dict-is-not-a-str TypeError
+        // the moment any step had UI config set, precisely because it wasn't
+        // in the old exclusion list.
         for key in stage_dict.keys().iter() {
             let key_str: String = key.extract()?;
-            if reserved.contains(key_str.as_str()) {
+            let Some(label) = key_str.strip_prefix("next_on_") else {
                 continue;
-            }
-            // This is a next_on_* route key.
+            };
             let target: String = stage_dict
                 .get_item(&key_str)?
                 .ok_or_else(|| {
@@ -783,9 +773,6 @@ fn stages_to_workflow(dict: &Bound<'_, PyDict>) -> PyResult<Workflow> {
                     ))
                 })?
                 .extract()?;
-
-            // Strip "next_on_" prefix to get the route label.
-            let label = key_str.strip_prefix("next_on_").unwrap_or(&key_str);
 
             edges.push(Edge {
                 from: name.clone(),
@@ -2121,7 +2108,9 @@ impl PyWorkflowEventIterator {
 #[cfg(test)]
 mod tests {
     use super::{dict_to_workflow, parse_step_policy};
-    use llm_harness_workflow::workflow::model::{Step, StepExecutionPolicy, Workflow};
+    use llm_harness_workflow::workflow::model::{
+        EdgeCondition, Step, StepExecutionPolicy, Workflow,
+    };
     use pyo3::types::PyDictMethods;
     use pyo3::{Py, Python};
 
@@ -2299,5 +2288,71 @@ mod tests {
         assert_eq!(policy.max_attempts, Some(2));
         assert_eq!(policy.timeout_ms, None);
         assert_eq!(policy.retry_backoff_ms, None);
+    }
+
+    // ── stages_to_workflow: non-route step metadata ──────────────────────
+    //
+    // Regression coverage for a bug where the route-collection loop treated
+    // ANY key not on a hand-maintained exclusion list as a next_on_* route,
+    // rather than checking the "next_on_" prefix directly. A step with a
+    // "ui" field (a dict, not a route-target string — set by senza-studio's
+    // Inspector/set_ui_config) crashed with a dict-is-not-a-str TypeError.
+
+    #[test]
+    fn stages_to_workflow_ignores_ui_field() {
+        let wf = parse_workflow(
+            r#"d = {
+                "stages": [
+                    {"name": "step1", "type": "agent", "prompt_template": "hi",
+                     "ui": {"display": "chat", "fields": ["a", "b"]},
+                     "next_on_success": "step2"},
+                    {"name": "step2", "type": "terminal", "message": "done"},
+                ]
+            }"#,
+        );
+        assert_eq!(wf.entry_step, "step1");
+        assert_eq!(wf.edges.len(), 1);
+        assert_eq!(wf.edges[0].from, "step1");
+        assert_eq!(wf.edges[0].to, "step2");
+    }
+
+    #[test]
+    fn stages_to_workflow_ignores_component_field() {
+        let wf = parse_workflow(
+            r#"d = {
+                "stages": [
+                    {"name": "step1", "type": "agent", "component": "approval_flow",
+                     "next_on_success": "step2"},
+                    {"name": "step2", "type": "terminal"},
+                ]
+            }"#,
+        );
+        assert_eq!(wf.edges.len(), 1);
+        assert_eq!(wf.edges[0].to, "step2");
+    }
+
+    #[test]
+    fn stages_to_workflow_still_routes_next_on_fields() {
+        let wf = parse_workflow(
+            r#"d = {
+                "stages": [
+                    {"name": "check", "type": "checker",
+                     "next_on_pass": "ok", "next_on_fail": "bad"},
+                    {"name": "ok", "type": "terminal"},
+                    {"name": "bad", "type": "terminal"},
+                ]
+            }"#,
+        );
+        assert_eq!(wf.edges.len(), 2);
+        let labels: std::collections::HashSet<_> = wf
+            .edges
+            .iter()
+            .map(|e| match &e.condition {
+                Some(EdgeCondition::Label(l)) => l.as_str(),
+                _ => "",
+            })
+            .collect();
+        assert!(labels.contains("pass"));
+        assert!(labels.contains("fail"));
     }
 }
