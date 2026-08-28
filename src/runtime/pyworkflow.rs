@@ -133,6 +133,26 @@ fn count_consecutive_retries(history: &[StepRecord], step_id: &str) -> usize {
 
 // ── PyExecutor ──────────────────────────────────────────────────────────────
 
+/// 传给 executor 回调 `ctx["emit"]` 的事件发射器。callback 在返回最终结果前
+/// 可多次调用 `.text_delta(text)`，用于把 LLM streaming token 实时推送到
+/// engine 的事件广播（`WorkflowEngine.subscribe()`），而不必等 callback 整体
+/// 执行完毕才有输出。
+#[pyclass(name = "ExecutorEmitter")]
+pub struct PyExecutorEmitter {
+    event_tx: tokio::sync::broadcast::Sender<WorkflowEvent>,
+    step_id: String,
+}
+
+#[pymethods]
+impl PyExecutorEmitter {
+    fn text_delta(&self, text: String) {
+        let _ = self.event_tx.send(WorkflowEvent::TextDelta {
+            step_id: self.step_id.clone(),
+            text,
+        });
+    }
+}
+
 /// Python callable 包装为 `StepExecutor`。
 ///
 /// callback 签名：`callback(ctx: dict) -> dict`
@@ -160,6 +180,7 @@ impl StepExecutor for PyExecutor {
         let prev_output = ctx.prev_result.map(|r| r.output.clone());
         // clone Arc<Mutex<WorkflowContext>>，在 async 上下文里 lock
         let context = ctx.context.clone();
+        let event_tx = ctx.event_tx.clone();
 
         Box::pin(async move {
             // 在进入 spawn_blocking 前读取 context 快照，避免 GIL 下 .await 死锁
@@ -190,6 +211,12 @@ impl StepExecutor for PyExecutor {
                         ctx_dict.set_item(k, value_to_pyobject(py, v)?)?;
                     }
                     dict.set_item("context", ctx_dict)?;
+
+                    let emitter = PyExecutorEmitter {
+                        event_tx: event_tx.clone(),
+                        step_id: step_id.clone(),
+                    };
+                    dict.set_item("emit", Py::new(py, emitter)?)?;
 
                     let raw = cb.call1((dict,))?;
                     let result_dict = raw.cast::<PyDict>()?;
