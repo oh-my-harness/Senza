@@ -152,6 +152,7 @@ fn senza(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<crate::core::pyhooks::PyHookWrapper>()?;
     m.add_class::<crate::core::pytool::PyToolWrapper>()?;
     m.add_class::<crate::core::pytool::PyToolContext>()?;
+    m.add_class::<crate::core::pytool::PyAttachment>()?;
     m.add_function(wrap_pyfunction!(create_sync_tool, m)?)?;
     m.add_function(wrap_pyfunction!(create_tool, m)?)?;
     m.add_function(wrap_pyfunction!(create_judge, m)?)?;
@@ -452,7 +453,7 @@ fn create_sync_tool<'py>(
     parameters_schema: &Bound<'py, PyAny>,
     callback: Py<PyAny>,
 ) -> PyResult<Bound<'py, crate::core::pytool::PyToolWrapper>> {
-    create_tool(py, name, description, parameters_schema, callback)
+    create_tool(py, name, description, parameters_schema, callback, false)
 }
 
 /// 从 Python callable 创建一个 `Tool`（统一入口，支持 sync 与 async 回调）。
@@ -460,13 +461,14 @@ fn create_sync_tool<'py>(
 /// 若 `callback` 是 `async def`，其 coroutine 将在 `spawn_blocking` 线程上
 /// 通过 `asyncio.run()` 执行——`select()` 内部释放 GIL，无需独立事件循环线程。
 #[pyfunction]
-#[pyo3(text_signature = "(name, description, parameters_schema, callback)")]
+#[pyo3(signature = (name, description, parameters_schema, callback, report_duration=false))]
 fn create_tool<'py>(
     py: Python<'py>,
     name: &str,
     description: &str,
     parameters_schema: &Bound<'py, PyAny>,
     callback: Py<PyAny>,
+    report_duration: bool,
 ) -> PyResult<Bound<'py, crate::core::pytool::PyToolWrapper>> {
     // Accept dict or str for parameters_schema.
     // If dict, convert to serde_json::Value directly via pyobject_to_value.
@@ -484,6 +486,7 @@ fn create_tool<'py>(
         description.to_string(),
         schema,
         callback,
+        report_duration,
     );
     let wrapper = crate::core::pytool::PyToolWrapper {
         tool: Arc::new(tool),

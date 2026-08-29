@@ -257,7 +257,7 @@ def _wrap_tool_callback(callback):
     return callback
 
 
-def create_tool(name, description, parameters=None, parameters_schema=None, callback=None):
+def create_tool(name, description, parameters=None, parameters_schema=None, callback=None, report_duration=False):
     """Create a Tool from a callback.
 
     Args:
@@ -268,7 +268,12 @@ def create_tool(name, description, parameters=None, parameters_schema=None, call
             When used positionally as the 4th arg, accepts the callback
             for backward compatibility with the old Rust signature.
         callback: Callable with signature ``(args, ctx)`` or ``(args)``.
-            Async callables are supported.
+            Async callables are supported. May return a str, a dict, an
+            ``Attachment``, or a list of str/``Attachment``.
+        report_duration: When True, the agent loop appends an execution
+            duration annotation (e.g. ``[duration: 812ms]``) to the tool
+            result fed back to the model. Only takes effect when hooks
+            wrap the tool (the agent loop wraps automatically).
     """
     # Backward compat: old Rust signature was create_tool(name, desc, schema, callback).
     # When called positionally, the 4th arg lands in parameters_schema and callback is None.
@@ -282,7 +287,7 @@ def create_tool(name, description, parameters=None, parameters_schema=None, call
     if callback is None:
         raise TypeError("create_tool() missing required argument: 'callback'")
     wrapped = _wrap_tool_callback(callback)
-    return _create_tool_rust(name, description, schema, wrapped)
+    return _create_tool_rust(name, description, schema, wrapped, report_duration)
 
 
 # ── @senza.tool decorator ────────────────────────────────────────────
@@ -410,6 +415,61 @@ def tool(*args, **kwargs):
     return create_tool(name, description, parameters, callback)
 
 
+# ── Multimodal attachments ───────────────────────────────────────────
+
+import base64 as _base64
+import os as _os
+
+
+_DOCUMENT_MEDIA_TYPES = {".pdf": "application/pdf", ".txt": "text/plain"}
+_RustAttachment = Attachment  # pyo3 class re-exported from the Rust module
+
+
+def image_url(url: str):
+    """Create an image attachment from a public URL."""
+    return _RustAttachment("image_url", url, None, None)
+
+
+def image_base64(data: bytes, mime_type: str = "image/png"):
+    """Create an inline image attachment from raw bytes (base64-encoded here)."""
+    return _RustAttachment("image_base64", _base64.b64encode(data).decode("ascii"), None, mime_type)
+
+
+def document_url(url: str, name: str | None = None):
+    """Create a document attachment from a URL. Endpoint must support document input.
+
+    Media type is inferred from the URL extension (.pdf -> application/pdf,
+    .txt -> text/plain); unknown extensions raise ValueError.
+    """
+    from urllib.parse import urlparse as _urlparse
+
+    ext = _os.path.splitext(_urlparse(url).path)[1].lower()
+    media = _DOCUMENT_MEDIA_TYPES.get(ext)
+    if media is None:
+        raise ValueError(f"unsupported document extension in URL: {ext!r}")
+    return _RustAttachment("document_url", url, name, media)
+
+
+def document_file(path: str, name: str | None = None):
+    """Create a document attachment from a local file.
+
+    Media type is inferred from the extension (.pdf -> application/pdf,
+    .txt -> text/plain); unknown extensions raise ValueError.
+    """
+    ext = _os.path.splitext(path)[1].lower()
+    media = _DOCUMENT_MEDIA_TYPES.get(ext)
+    if media is None:
+        raise ValueError(f"unsupported document extension: {ext!r}")
+    with open(path, "rb") as f:
+        payload = f.read()
+    return _RustAttachment(
+        "document_base64",
+        _base64.b64encode(payload).decode("ascii"),
+        name or _os.path.basename(path),
+        media,
+    )
+
+
 # ── Async wrappers for blocking methods ──────────────────────────────
 
 
@@ -422,34 +482,34 @@ async def _workflow_run_async(self, timeout_ms: int = 300000):
     return await _asyncio.to_thread(self.run)
 
 
-async def _harness_prompt_async(self, text: str, timeout_ms: int = 30000):
+async def _harness_prompt_async(self, text: str, timeout_ms: int = 30000, attachments=None):
     """Async version of prompt_and_collect(). Does not block the event loop.
 
-    Runs ``self.prompt_and_collect(text, timeout_ms)`` in a thread pool
-    via ``asyncio.to_thread``. For streaming async usage, prefer
+    Runs ``self.prompt_and_collect(text, timeout_ms, attachments)`` in a
+    thread pool via ``asyncio.to_thread``. For streaming async usage, prefer
     ``senza.stream_prompt(harness, text)``.
     """
-    return await _asyncio.to_thread(self.prompt_and_collect, text, timeout_ms)
+    return await _asyncio.to_thread(self.prompt_and_collect, text, timeout_ms, attachments)
 
 
 WorkflowEngine.run_async = _workflow_run_async
 AgentHarness.prompt_async = _harness_prompt_async
 
 
-def _harness_chat(self, text: str, timeout_ms: int = 30000) -> str:
+def _harness_chat(self, text: str, timeout_ms: int = 30000, attachments=None) -> str:
     """Send a prompt and return the concatenated text response.
 
     Convenience wrapper around ``extract_text(prompt_and_collect(text))``.
     For streaming or event-level access, use ``prompt_and_collect()`` or
     ``stream_prompt()`` instead.
     """
-    events = self.prompt_and_collect(text, timeout_ms)
+    events = self.prompt_and_collect(text, timeout_ms, attachments)
     return extract_text(events)
 
 
-async def _harness_chat_async(self, text: str, timeout_ms: int = 30000) -> str:
+async def _harness_chat_async(self, text: str, timeout_ms: int = 30000, attachments=None) -> str:
     """Async version of chat(). Does not block the event loop."""
-    events = await _asyncio.to_thread(self.prompt_and_collect, text, timeout_ms)
+    events = await _asyncio.to_thread(self.prompt_and_collect, text, timeout_ms, attachments)
     return extract_text(events)
 
 
@@ -676,6 +736,7 @@ rules = _rules
 # ── Public API whitelist ─────────────────────────────────────────────
 __all__ = [
     # Classes
+    "Attachment",
     "HarnessBuilder",
     "AgentHarness",
     "WorkflowEngine",
@@ -720,6 +781,10 @@ __all__ = [
     "MemoryDefensePluginBuilder",
     # Factory functions (top-level)
     "create_tool",
+    "image_url",
+    "image_base64",
+    "document_url",
+    "document_file",
     "create_sync_tool",
     "create_judge",
     "create_composite_judge",

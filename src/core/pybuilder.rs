@@ -65,6 +65,8 @@ pub(crate) struct SpawnConfig {
     pub(crate) model: String,
     pub(crate) client: Arc<dyn llm_harness_loop::LlmClient>,
     pub(crate) session_dir: PathBuf,
+    /// 并发 sub-agent 上限；`None` = 不限（runtime 默认）。
+    pub(crate) max_concurrent: Option<usize>,
 }
 #[pymethods]
 impl PyHarnessBuilder {
@@ -636,17 +638,19 @@ impl PyHarnessBuilder {
     ///     model: Default model name for sub-agents.
     ///     provider: LLM provider for sub-agents (same as main agent's provider).
     ///     session_dir: Directory for sub-agent session JSONL files.
-    #[pyo3(text_signature = "($self, model, provider, session_dir)")]
+    #[pyo3(signature = (model, provider, session_dir, max_concurrent=None))]
     fn enable_spawn<'a>(
         mut slf: PyRefMut<'a, Self>,
         model: &str,
         provider: &Bound<'_, PyProvider>,
         session_dir: &str,
+        max_concurrent: Option<usize>,
     ) -> PyRefMut<'a, Self> {
         slf.spawn_config = Some(SpawnConfig {
             model: model.to_string(),
             client: provider.borrow().client.clone(),
             session_dir: PathBuf::from(session_dir),
+            max_concurrent,
         });
         slf
     }
