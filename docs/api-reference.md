@@ -53,18 +53,18 @@ senza.providers.anthropic(api_key, base_url=None, messages_path=None)
 | `.tool(tool)` / `.plugin(plugin)` | 注册工具/插件 |
 | `.tools([tool, ...])` | 批量注册工具（等价多次 `.tool()`） |
 | `.env(env)` | 设置执行环境（`create_os_env(...)`），启用 bash/read/write/edit/grep/glob 工具 |
-| `.enable_spawn(model, provider, session_dir)` | 启用子 Agent 派发（主 Agent 注册 MessageBus + 5 个管理 tool；当前 `NoopPlugin` child 不自动挂载 Runtime 另定义的 2 个子侧通信 tool） |
+| `.enable_spawn(model, provider, session_dir, max_concurrent=None)` | 启用子 Agent 派发（主 Agent 注册 MessageBus + 5 个管理 tool；`max_concurrent` 限制并发子 Agent 数，`None` 不限） |
 | `.build()` | 返回 `AgentHarness` |
 
 ### AgentHarness
 
 | 方法 | 说明 |
 |------|------|
-| `.prompt_and_collect(text, timeout_ms=30000)` | 发送提示并收集事件（推荐） |
-| `.chat(text, timeout_ms=30000)` | 发送提示并返回拼接后的纯文本回复（`str`） |
-| `.chat_async(text, timeout_ms=30000)` | `chat()` 的非阻塞 async 版本（线程池执行） |
-| `.prompt(text)` | 发送提示（阻塞，需配合线程收集事件） |
-| `.prompt_async(text, timeout_ms=30000)` | `prompt_and_collect()` 的非阻塞 async 版本 |
+| `.prompt_and_collect(text, timeout_ms=30000, attachments=None)` | 发送提示并收集事件（推荐）；`attachments` 为多模态附件列表（1.2.4+） |
+| `.chat(text, timeout_ms=30000, attachments=None)` | 发送提示并返回拼接后的纯文本回复（`str`） |
+| `.chat_async(text, timeout_ms=30000, attachments=None)` | `chat()` 的非阻塞 async 版本（线程池执行） |
+| `.prompt(text, attachments=None)` | 发送提示（阻塞，需配合线程收集事件） |
+| `.prompt_async(text, timeout_ms=30000, attachments=None)` | `prompt_and_collect()` 的非阻塞 async 版本 |
 | `.collect_until_settled(timeout_ms=30000)` | 收集事件直到完成 |
 | `.events(timeout_ms=5000)` | 流式事件迭代器 |
 | `.inspect()` | 返回 harness 内部状态快照（dict） |
@@ -75,10 +75,11 @@ senza.providers.anthropic(api_key, base_url=None, messages_path=None)
 | `.set_max_tokens(n)` | 修改最大输出 token 数 |
 | `.set_tools(tools)` | 替换工具集 |
 | `.set_active_tools(tools)` | 限定下一轮工具子集（传 `None` 恢复全部） |
-| `.steer(text)` / `.follow_up(text)` | 运行中注入消息 |
-| `.next_turn(text)` | 开启下一轮对话 |
+| `.steer(text, attachments=None)` / `.follow_up(text, attachments=None)` | 运行中注入消息（可带多模态附件；Idle 阶段静默丢失） |
+| `.next_turn(text, attachments=None)` | 开启下一轮对话 |
 | `.continue_run()` | 继续运行（配合 steer/follow_up） |
 | `.compact()` | 手工触发 compaction，返回 `tokens_before` / `tokens_after` / `compressed_entries` |
+| `.session_metadata()` | 会话元数据 dict（`id` / `name` / `created_at` / `updated_at` / `model` / ...） |
 | `.usage()` | 查询成本统计 |
 | `.usage_ledger()` | 返回 UsageLedger 快照（dict） |
 | `.reset_usage()` | 重置成本统计 |
@@ -138,7 +139,8 @@ tool = senza.create_tool(
 - `callback`: `(args: dict, ctx: ToolContext) -> dict`。`args` 是**完整的参数字典**（如 `{"query": "cats"}`），回调内自行用 `args["query"]` 取值。`ctx` 可选——函数接受 2 参时传 `ctx`，1 参时只传 `args`。
   - ⚠️ **回调签名不是独立参数**：`def search(query: str)` 是**错误**的——`query` 会收到整个 dict 而非字符串。正确写法是 `def search(args: dict, ctx=None)` 然后内部 `args["query"]`，或使用下面的 `@senza.tool` 装饰器。
 - 返回 dict: `{"content": [ContentBlock...], "terminate": bool}`。`terminate=True` 停止 agent 循环。也接受纯字符串（自动包装为 text content）或不含 `content` 键的 dict（整体 JSON 序列化为 text）。
-- **Async 工具**: 传 `async def` 回调，通过 `asyncio.run()` 在阻塞线程上运行。
+- **多模态返回（1.2.4+）**：回调可返回 `Attachment`（裸值）、含 `Attachment` 的 list/tuple（元素为 `Attachment` 或 str）、或在 `content` 列表中混入 `Attachment`——自动转为 image/document 内容块，多模态模型可直接消费。
+- `create_tool(..., report_duration=True)`（1.2.4+）：在回传 LLM 的结果末尾附加执行耗时标注（如 `[duration: 812ms]`），让模型感知慢操作。默认关闭；仅当工具经 agent loop 的 HookedTool 包装时生效。
 
 #### `@senza.tool` 装饰器（便捷方式）
 
@@ -157,6 +159,32 @@ def search(query: str, limit: int = 10) -> str:
 - 无默认值的参数自动标记为 `required`
 - 支持 `async def`
 - docstring 自动作为工具描述
+
+### 多模态附件（1.2.4+）
+
+```python
+a1 = senza.image_url("https://example.com/i.png")
+a2 = senza.image_base64(raw_bytes, mime_type="image/jpeg")  # bytes 自动 base64
+a3 = senza.document_url("https://example.com/d.pdf")        # 按扩展名推断 media_type
+a4 = senza.document_file("./report.pdf", name=None)         # 读本地文件
+
+harness.chat("描述这张图", attachments=[a1])
+```
+
+| 构造函数 | 说明 |
+|---------|------|
+| `senza.image_url(url)` | 公网图片 URL |
+| `senza.image_base64(data, mime_type="image/png")` | 内联图片，`bytes` 自动编码 |
+| `senza.document_url(url, name=None)` | 文档 URL（media_type 按扩展名推断，未知扩展名报错） |
+| `senza.document_file(path, name=None)` | 本地文档（`.pdf`/`.txt`，读入内存） |
+
+端点需支持对应模态，否则 provider 返回 400。`Attachment` 对用户不透明；
+可作为工具回调返回值（见上）。`AgentHarness.get_messages()` 返回的 content
+含完整的 `{"type": "image"/"document", ...}` 块。
+
+> ⚠️ `senza.Agent`（test-utils mock）的 `prompt(attachments=...)` 带附件时
+> **替换整个 transcript**（底层 `prompt_with_messages`）；不带附件时追加。
+> 生产路径 `AgentHarness.prompt()` 始终追加。带附件多轮对话用 `AgentHarness`。
 
 ### 内置 fs 工具
 
