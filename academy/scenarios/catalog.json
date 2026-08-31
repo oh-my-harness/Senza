@@ -495,6 +495,30 @@
         "The transform executor runs; no workflow step currently references it.",
         "The current shared-context and structured-output assumptions execute correctly end to end."
       ]
+    },
+    {
+      "id": "inspector.interactive",
+      "aliases": ["47", "47_inspector_interact", "inspector.interactive-human-loop"],
+      "legacy_path": "live-tests/examples/47_inspector_interact.py",
+      "title": "Inspector interactive human-in-the-loop",
+      "tier": "core",
+      "maturity": "stable",
+      "status": "active",
+      "requirements": {"provider": {"required": true, "any_of_env": ["OPENAI_API_KEY", "ANTHROPIC_API_KEY"]}, "env": [], "commands": [], "services": [], "platforms": ["any"]},
+      "proves": ["The Inspector Web UI serves interactive endpoints (inject, abort, usage, skills) while an agent runs, and streams events over WebSocket."],
+      "does_not_prove": ["Multi-user concurrency or browser-side UI correctness under load."]
+    },
+    {
+      "id": "tools.web_code_tools",
+      "aliases": ["48", "48_web_code_tools", "tools.web-code-tools"],
+      "legacy_path": "live-tests/examples/48_web_code_tools.py",
+      "title": "Web and code execution tools",
+      "tier": "core",
+      "maturity": "stable",
+      "status": "active",
+      "requirements": {"provider": {"required": true, "any_of_env": ["OPENAI_API_KEY", "ANTHROPIC_API_KEY"]}, "env": [], "commands": [], "services": [], "platforms": ["any"]},
+      "proves": ["create_web_tools_plugin (web_search + web_fetch) and create_code_exec_tool are discoverable and callable by the model in one run."],
+      "does_not_prove": ["Web search result quality or code-exec sandboxing guarantees."]
     }
   ]
 }

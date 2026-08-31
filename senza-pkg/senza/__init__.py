@@ -1,5 +1,7 @@
 """Senza — Python SDK for llm-harness runtime."""
 
+from __future__ import annotations
+
 from .senza import *  # noqa: F401, F403
 
 import asyncio as _asyncio
