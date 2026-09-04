@@ -189,6 +189,14 @@ fn senza(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
         m
     )?)?;
     m.add_function(wrap_pyfunction!(
+        strategy::pyvision::create_vision_degrade_hook,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        strategy::pyvision::create_observation_shielding_hook,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
         strategy::pystatuspanel::create_status_panel_plugin,
         m
     )?)?;
@@ -249,6 +257,17 @@ fn senza(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
         crate::core::pyeventstream::create_event_channel,
         m
     )?)?;
+    m.add_class::<crate::core::pyeventstream::PyHumanResponseHandle>()?;
+    m.add_class::<crate::core::pyeventstream::PyHumanApprovalTool>()?;
+    m.add_class::<crate::core::pyeventstream::PyHumanInputTool>()?;
+    m.add_function(wrap_pyfunction!(
+        crate::core::pyeventstream::create_human_approval_channel,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        crate::core::pyeventstream::create_human_input_channel,
+        m
+    )?)?;
     m.add_function(wrap_pyfunction!(create_after_turn_hook, m)?)?;
     m.add_function(wrap_pyfunction!(create_before_run_hook, m)?)?;
     m.add_function(wrap_pyfunction!(create_after_provider_response_hook, m)?)?;
@@ -262,6 +281,7 @@ fn senza(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(create_final_answer_validator, m)?)?;
     m.add_function(wrap_pyfunction!(create_after_run_hook, m)?)?;
     m.add_function(wrap_pyfunction!(create_on_abort_hook, m)?)?;
+    m.add_function(wrap_pyfunction!(create_provider_error_hook, m)?)?;
     m.add_class::<crate::core::pybuilder::PyHarnessBuilder>()?;
     m.add_class::<crate::core::pybuilder::PyUsageLedger>()?;
     m.add_class::<crate::core::pyplugin::PyPluginWrapper>()?;
@@ -937,6 +957,26 @@ fn create_on_abort_hook<'py>(
         py,
         crate::core::pyhooks::PyHookWrapper {
             kind: crate::core::pyhooks::HookKind::OnAbort(Arc::new(hook)),
+        },
+    )
+    .map(|p| p.into_bound(py))
+}
+
+/// 从 Python callable 创建一个 `ProviderErrorHook`。
+///
+/// callback 签名：`callback(ctx: dict) -> str | None`
+/// 返回 `"retry"`（同轮重试）/ `"surface"` / `None`（默认原样上抛）。
+/// ctx 中的 `context` / `new_messages` 为只读快照。
+#[pyfunction]
+fn create_provider_error_hook<'py>(
+    py: Python<'py>,
+    callback: Py<PyAny>,
+) -> PyResult<Bound<'py, crate::core::pyhooks::PyHookWrapper>> {
+    let hook = crate::core::pyhooks::PyProviderErrorHook::new(callback);
+    Py::new(
+        py,
+        crate::core::pyhooks::PyHookWrapper {
+            kind: crate::core::pyhooks::HookKind::ProviderError(Arc::new(hook)),
         },
     )
     .map(|p| p.into_bound(py))

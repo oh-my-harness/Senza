@@ -464,6 +464,10 @@ class strategy:
     def webhook_stream(buffer: int) -> tuple[WebhookChannel, EventStream]: ...
     @staticmethod
     def context_aware_compaction_prompt() -> tuple[str, str]: ...
+    @staticmethod
+    def vision_degrade() -> Hook: ...
+    @staticmethod
+    def observation_shielding(config: Optional[dict] = None) -> Hook: ...
 
 # ── Webhook event stream ──────────────────────────────────────────────────────
 
@@ -504,13 +508,13 @@ def create_shell_monitor_stream(
     task_id: str,
 ) -> tuple[ShellMonitorHandle, WaitForExternalEventTool]: ...
 
-# ── Hook (14 types) ──────────────────────────────────────────────────────────
+# ── Hook (15 types) ──────────────────────────────────────────────────────────
 
 class Hook:
     """Opaque hook wrapper."""
 
 class hooks:
-    """Submodule: hook factories (14 lifecycle hooks)."""
+    """Submodule: hook factories (15 lifecycle hooks)."""
     @staticmethod
     def before_turn(callback: Callable[[dict], None]) -> Hook: ...
     @staticmethod
@@ -541,6 +545,8 @@ class hooks:
     def after_run(callback: Callable[[], None]) -> Hook: ...
     @staticmethod
     def on_abort(callback: Callable[[], None]) -> Hook: ...
+    @staticmethod
+    def provider_error(callback: Callable[[dict], Optional[str]]) -> Hook: ...
 
 # ── Event channel (human-in-the-loop) ────────────────────────────────────────
 
@@ -553,9 +559,37 @@ class WaitForExternalEventTool:
     """Tool that pauses the LLM to wait for an external event."""
 
     def name(self) -> str: ...
+def create_event_channel(task_id: str) -> tuple[EventStreamHandle, WaitForExternalEventTool]: ...
+
+class HumanResponseHandle:
+    """Handle for submitting human responses (auto request_id)."""
+
+    def submit(self, content: str, details: dict) -> None: ...
+
+class HumanApprovalTool:
+    """Tool that requests human approval (approve/deny, with fail-safe default)."""
+
+    def name(self) -> str: ...
     def description(self) -> str: ...
 
-def create_event_channel(task_id: str) -> tuple[EventStreamHandle, WaitForExternalEventTool]: ...
+class HumanInputTool:
+    """Tool that requests human input (free-form value, with default)."""
+
+    def name(self) -> str: ...
+    def description(self) -> str: ...
+
+def create_human_approval_channel(
+    task_id: str,
+    timeout_seconds: float = ...,
+    default: str = ...,
+) -> tuple[HumanResponseHandle, HumanApprovalTool]: ...
+
+def create_human_input_channel(
+    task_id: str,
+    timeout_seconds: float = ...,
+    default: Any = ...,
+) -> tuple[HumanResponseHandle, HumanInputTool]: ...
+
 
 # ── Judge ────────────────────────────────────────────────────────────────────
 

@@ -296,6 +296,23 @@ impl PyHarnessBuilder {
         Ok(slf)
     }
 
+    /// 注册一个 `ProviderErrorHook`（无需包装在 Plugin 中）。
+    ///
+    /// provider 非瞬态错误（重试耗尽后仍失败）上抛前调用；hook 返回
+    /// `"retry"` 则同轮重试，返回 `"surface"` / `None` 则原样上抛。
+    /// 多次调用累积多个 hook——按注册顺序执行，首个 retry 生效。
+    #[pyo3(text_signature = "($self, hook)")]
+    fn provider_error_hook<'a>(
+        mut slf: PyRefMut<'a, Self>,
+        hook: &Bound<'_, PyHookWrapper>,
+    ) -> PyResult<PyRefMut<'a, Self>> {
+        if let Some(b) = slf.builder.take() {
+            let h = hook.borrow().as_provider_error_hook()?;
+            slf.builder = Some(b.provider_error_hook(h));
+        }
+        Ok(slf)
+    }
+
     /// 设置 response format，用于要求模型输出结构化 JSON。
     ///
     /// 传入 `create_json_object_format()` 或 `create_json_schema_format(...)` 创建的 format。

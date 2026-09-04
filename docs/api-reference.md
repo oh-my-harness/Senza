@@ -360,7 +360,7 @@ def my_executor(ctx):
 | `cancelled` | `reason` |
 | `failed` | `error` |
 
-## Hooks（14 种）
+## Hooks（15 种）
 
 ```python
 senza.hooks.before_turn(cb)  # cb(ctx: dict) -> None
@@ -377,7 +377,18 @@ senza.hooks.prepare_next_turn(cb)  # cb(ctx: dict) -> Optional[dict]
 senza.hooks.final_answer_validator(cb)  # cb(ctx: dict) -> None | str | dict  # 提交前接受/拒绝
 senza.hooks.after_run(cb)  # cb() -> None  # run 结束后清理
 senza.hooks.on_abort(cb)  # cb() -> None  # abort 时同步执行
+senza.hooks.provider_error(cb)  # cb(ctx: dict) -> "retry" | "surface" | None
 ```
+
+### provider_error hook
+
+provider 非瞬态错误（重试耗尽后仍失败，如 text-only provider 拒绝含图片的
+请求）上抛前调用。返回 `"retry"` 则同轮重试，返回 `"surface"` / `None`
+则原样上抛。ctx 含 `run_id` / `started_at` / `turn_index` / `error` /
+`context`（只读快照）/ `new_messages`（只读快照）。注册方式：
+`builder.provider_error_hook(hook)`；多个 hook 按注册顺序执行，首个
+retry 生效。Python 回调不回写历史——需要修复历史时用 preset hook
+（`senza.strategy.vision_degrade()`）。
 
 ## Pricing
 
@@ -417,9 +428,27 @@ handle, wait_tool = senza.create_event_channel("review-task")
 # wait_tool 注册到 WorkflowEngine.with_external_tool(wait_tool)
 # LLM 调用 wait_for_external_event 时暂停，直到 handle.submit() 被调用
 handle.submit("approved", {"feedback": "Looks good!"})
+
+# 审批门：approve/deny 语义 + 超时回落默认值（fail-safe）
+handle, approval_tool = senza.create_human_approval_channel(
+    "deploy-gate", timeout_seconds=300.0, default="deny",
+)
+# LLM 调用 request_human_approval 时暂停；应答只需提供 decision：
+handle.submit("approve", {"decision": "approve"})
+
+# 自由输入：LLM 提问，人给任意 JSON 值，超时返回默认值
+handle, input_tool = senza.create_human_input_channel(
+    "clarify-1", timeout_seconds=300.0, default=None,
+)
+handle.submit("42", {"value": 42})
 ```
 
-## Strategy（10 个 Plugin 工厂 + 2 个 helper）
+说明：human channel 的 `handle.submit` 自动注入当前挂起请求的
+`request_id`（调用方无需关心 `tool_use_id`）；tool 尚未发起请求时
+submit 抛 `RuntimeError`。每个 channel 同一时刻支持一个挂起请求
+（human-in-the-loop 的典型形态），不支持多并发挂起。
+
+## Strategy（10 个 Plugin 工厂 + 2 个 preset hook + 2 个 helper）
 
 ```python
 senza.strategy.safety_defaults() -> Plugin
@@ -446,6 +475,13 @@ senza.strategy.tool_output_guard(
     env: ExecutionEnv, config: Optional[dict] = None,
 ) -> Plugin
 
+# preset hooks（返回 Hook，不是 Plugin）
+senza.strategy.vision_degrade() -> Hook  # 注册到 builder.provider_error_hook()
+senza.strategy.observation_shielding(config: Optional[dict] = None) -> Hook
+# observation_shielding 注册到 builder.hooks([...])；config 键：
+#   retained_turns: int = 5（保留最近 N 个 assistant turn 的观测）
+#   placeholder: str（旧观测的替换文本）
+
 # 辅助函数（不返回 Plugin）
 senza.strategy.webhook_stream(buffer: int) -> tuple[WebhookChannel, EventStream]
 senza.strategy.context_aware_compaction_prompt() -> tuple[str, str]
@@ -460,6 +496,8 @@ senza.strategy.context_aware_compaction_prompt() -> tuple[str, str]
 | `MemoryDefensePluginBuilder` | 自定义文件集的记忆防御构建器 |
 | `senza.strategy.injection_filter(patterns=None)` | 提示注入检测 |
 | `senza.strategy.source_tag(entries)` | 外部内容 `<source>` 标签包裹 |
+| `senza.strategy.vision_degrade()` | 视觉降级自愈（provider_error hook preset，issue #145） |
+| `senza.strategy.observation_shielding(config=None)` | 隐藏旧 tool observation（transform_context hook preset） |
 | `senza.strategy.project_instruction(env, config=None)` | 自动注入 CLAUDE.md 等项目指令 |
 | `senza.strategy.audit(sink_path, trace_id=None, task_id=None)` | 工具调用审计日志（JSONL） |
 | `senza.strategy.notify()` | LLM 主动通知用户 |
@@ -538,7 +576,9 @@ senza.JsonlAuditSink  # 类: append(record), validate(path) -> int
 # 内存 trace 导出器（测试用）
 senza.InMemoryTraceExporter  # 类: exported_span_count() -> int
 
-# 沙箱
+# 沙箱 config 键：fs_allowlist / fs_denylist / work_dir / max_memory_mb /
+# max_cpus / max_disk_mb / timeout_seconds / max_processes
+# （max_processes 仅 Linux bwrap 生效——cgroup v2 进程数限制；seatbelt 忽略）
 senza.infra.seatbelt_sandbox(config: Optional[dict] = None) -> Sandbox  # macOS
 senza.infra.bwrap_sandbox(config: Optional[dict] = None) -> Sandbox     # Linux
 ```

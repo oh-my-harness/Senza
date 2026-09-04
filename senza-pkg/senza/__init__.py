@@ -620,11 +620,15 @@ _hooks = _SimpleNamespace(
     final_answer_validator=create_final_answer_validator,
     after_run=create_after_run_hook,
     on_abort=create_on_abort_hook,
+    provider_error=create_provider_error_hook,
 )
 
 _strategy = _SimpleNamespace(
     safety_defaults=create_safety_defaults_plugin,
     loop_safety=create_loop_safety_plugin,
+    tool_output_guard=create_tool_output_guard_plugin,
+    vision_degrade=create_vision_degrade_hook,
+    observation_shielding=create_observation_shielding_hook,
     status_panel=create_status_panel_plugin,
     memory_defense=create_memory_defense_plugin,
     injection_filter=create_injection_filter_plugin,
@@ -632,7 +636,6 @@ _strategy = _SimpleNamespace(
     project_instruction=create_project_instruction_plugin,
     audit=create_audit_plugin,
     notify=create_notify_plugin,
-    tool_output_guard=create_tool_output_guard_plugin,
     webhook_stream=create_webhook_stream,
     context_aware_compaction_prompt=create_context_aware_compaction_prompt,
 )
@@ -690,6 +693,7 @@ del create_prepare_next_turn_hook
 del create_final_answer_validator
 del create_after_run_hook
 del create_on_abort_hook
+del create_provider_error_hook
 del create_safety_defaults_plugin
 del create_loop_safety_plugin
 del create_status_panel_plugin
@@ -700,6 +704,8 @@ del create_project_instruction_plugin
 del create_audit_plugin
 del create_notify_plugin
 del create_tool_output_guard_plugin
+del create_vision_degrade_hook
+del create_observation_shielding_hook
 del create_webhook_stream
 del create_context_aware_compaction_prompt
 del create_local_knowledge_source
@@ -794,6 +800,8 @@ __all__ = [
     "create_fs_tools_plugin",
     "create_os_env",
     "create_event_channel",
+    "create_human_approval_channel",
+    "create_human_input_channel",
     "create_executor",
     "create_shell_executor",
     "create_http_executor",
