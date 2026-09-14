@@ -81,7 +81,7 @@ async def main() -> None:
             print(f"\n  [tool: {name}]", flush=True)
         elif etype in ("settled", "aborted", "error"):
             if etype == "error":
-                print(f"\n  [ERROR] {event.get('error', '?')}")
+                print(f"\n  [ERROR] {event.get('message', event.get('error', '?'))} (error_type={event.get('error_type', '?')})")
             break
 
     print("\n\n--- Summary ---")
