@@ -745,7 +745,16 @@ fn stages_to_workflow(dict: &Bound<'_, PyDict>) -> PyResult<Workflow> {
             policy.r#loop = Some(LoopConfig {
                 max_iterations,
                 target_stage,
-                exit_route: None, // resolved from next_on_* edges below
+                // Preserved verbatim from the loop dict; the engine strips an
+                // optional "next_on_" prefix before matching the Label edge
+                // produced by the next_on_* collection below. "done" and
+                // "next_on_done" therefore both resolve to Label("done").
+                exit_route: loop_dict
+                    .get_item("exit_route")?
+                    .filter(|v| !v.is_none())
+                    .map(|v: Bound<'_, PyAny>| v.extract::<String>())
+                    .transpose()?
+                    .map(|route| route.strip_prefix("next_on_").unwrap_or(&route).to_string()),
             });
             step = step.with_policy(policy);
         }
@@ -2365,5 +2374,80 @@ mod tests {
             .collect();
         assert!(labels.contains("pass"));
         assert!(labels.contains("fail"));
+    }
+
+    /// LoopConfig.exit_route must survive stages_to_workflow: a stage-level
+    /// "loop": {..., "exit_route": "done"} lands in the parsed LoopConfig
+    /// (normalized: optional "next_on_" prefix stripped), so the runtime's
+    /// exhausted-loop branch can match the Label edge produced by
+    /// "next_on_done". Regression: the conversion hard-coded exit_route to
+    /// None, silently discarding the field and making loop exhaustion fall
+    /// through to max_retries instead of the declarative exit edge.
+    #[test]
+    fn stages_to_workflow_preserves_loop_exit_route() {
+        let wf = parse_workflow(
+            r#"d = {
+                "stages": [
+                    {"name": "check", "type": "checker",
+                     "loop": {"max_iterations": 2, "target_stage": "run",
+                              "exit_route": "done"},
+                     "next_on_done": "done"},
+                    {"name": "run", "type": "agent"},
+                    {"name": "done", "type": "terminal"},
+                ]
+            }"#,
+        );
+        let check = wf.steps.iter().find(|s| s.id() == "check").expect("check");
+        let policy = policy_of(check).expect("policy with loop");
+        let loop_cfg = policy.r#loop.as_ref().expect("loop config");
+        assert_eq!(loop_cfg.max_iterations, 2);
+        assert_eq!(loop_cfg.target_stage.as_deref(), Some("run"));
+        // The fix under test: exit_route preserved (not hard-coded None) and
+        // normalized to the bare route label.
+        assert_eq!(
+            loop_cfg.exit_route.as_deref(),
+            Some("done"),
+            "exit_route must survive the stages conversion"
+        );
+        // And it corresponds to the edge generated from next_on_done.
+        let exit_edge = wf
+            .edges
+            .iter()
+            .find(|e| e.from == "check" && e.to == "done")
+            .expect("next_on_done edge");
+        assert_eq!(
+            exit_edge.condition,
+            Some(EdgeCondition::Label("done".into())),
+            "exit_route must match the next_on_done label edge"
+        );
+    }
+
+    /// The engine strips an optional "next_on_" prefix from exit_route before
+    /// matching, so the alias form must normalize to the same bare label.
+    #[test]
+    fn stages_to_workflow_exit_route_strips_next_on_prefix() {
+        let wf = parse_workflow(
+            r#"d = {
+                "stages": [
+                    {"name": "check", "type": "checker",
+                     "loop": {"max_iterations": 2, "target_stage": "run",
+                              "exit_route": "next_on_done"},
+                     "next_on_done": "done"},
+                    {"name": "run", "type": "agent"},
+                    {"name": "done", "type": "terminal"},
+                ]
+            }"#,
+        );
+        let check = wf.steps.iter().find(|s| s.id() == "check").expect("check");
+        let loop_cfg = policy_of(check)
+            .expect("policy")
+            .r#loop
+            .as_ref()
+            .expect("loop config");
+        assert_eq!(
+            loop_cfg.exit_route.as_deref(),
+            Some("done"),
+            "'next_on_done' and 'done' must resolve to the same route label"
+        );
     }
 }
