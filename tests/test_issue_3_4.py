@@ -269,32 +269,26 @@ def _two_step_engine(judge):
     """2-step shell workflow (edges required so the judge drives transitions;
     free tasks short-circuit the judge)."""
     env = senza.create_os_env(working_dir=".")
-    return (
-        senza.WorkflowEngine(
-            _two_step_shell_workflow(),
-            senza.providers.openai(api_key="test-key"),
-            "gpt-4o",
-            judge,
-            env=env,
-        )
-        .with_executor("shell", senza.create_shell_executor(["echo"]))
-    )
+    return senza.WorkflowEngine(
+        _two_step_shell_workflow(),
+        senza.providers.openai(api_key="test-key"),
+        "gpt-4o",
+        judge,
+        env=env,
+    ).with_executor("shell", senza.create_shell_executor(["echo"]))
 
 
 def test_cancel_after_succeeded_remains_succeeded():
     """Runtime terminal-safety through the Python binding: cancel after a
     successful run must be a no-op, preserving Succeeded and the result."""
     engine = _two_step_shell_workflow()
-    engine = (
-        senza.WorkflowEngine(
-            _two_step_shell_workflow(),
-            senza.providers.openai(api_key="test-key"),
-            "gpt-4o",
-            senza.create_judge(lambda ctx: "abort:done"),
-            env=senza.create_os_env(working_dir="."),
-        )
-        .with_executor("shell", senza.create_shell_executor(["echo"]))
-    )
+    engine = senza.WorkflowEngine(
+        _two_step_shell_workflow(),
+        senza.providers.openai(api_key="test-key"),
+        "gpt-4o",
+        senza.create_judge(lambda ctx: "abort:done"),
+        env=senza.create_os_env(working_dir="."),
+    ).with_executor("shell", senza.create_shell_executor(["echo"]))
     engine.run()
     assert engine.state() == "succeeded"
     history_before = engine.step_history()
@@ -328,10 +322,7 @@ def test_cancel_after_failed_preserves_error():
 def _chain_workflow(n_steps):
     """Linear chain of n_exec executor steps (no terminal stage — the judge
     aborts at the last one, matching Studio's abort-at-done routing)."""
-    steps = [
-        {"id": f"s{i}", "name": f"S{i}", "executor": "noop_exec"}
-        for i in range(n_steps)
-    ]
+    steps = [{"id": f"s{i}", "name": f"S{i}", "executor": "noop_exec"} for i in range(n_steps)]
     edges = [{"from": steps[i]["id"], "to": steps[i + 1]["id"]} for i in range(n_steps - 1)]
     return {"entry_step": "s0", "steps": steps, "edges": edges}
 
@@ -350,7 +341,9 @@ def _chain_engine(n_steps, cap):
             senza.create_judge(judge),
             env=env,
         )
-        .with_executor("noop_exec", senza.create_executor(lambda ctx: {"output": "ok", "structured": {}}))
+        .with_executor(
+            "noop_exec", senza.create_executor(lambda ctx: {"output": "ok", "structured": {}})
+        )
         .with_max_steps(cap)
     )
 
