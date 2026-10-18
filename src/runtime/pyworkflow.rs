@@ -16,7 +16,9 @@ use llm_harness_subagents::{EnvFactory, spawner::JsonlSessionFactory};
 use llm_harness_types::{AgentError, CostAggregate, ExecutionEnv, Tool, UnsupportedEnv};
 use llm_harness_workflow::lifecycle::task::TaskId;
 use llm_harness_workflow::lifecycle::task_store::{JsonlTaskStore, TaskStore, TaskSummary};
-use llm_harness_workflow::workflow::engine::{WorkflowEngine, WorkflowEngineConfig, WorkflowEvent};
+use llm_harness_workflow::workflow::engine::{
+    StepProgress, WorkflowEngine, WorkflowEngineConfig, WorkflowEvent,
+};
 use llm_harness_workflow::workflow::error::WorkflowError;
 use llm_harness_workflow::workflow::executor::{ExecutorCtx, StepExecutor};
 use llm_harness_workflow::workflow::judge::{EdgeConditionJudge, StepCtx, StepTransitionJudge};
@@ -149,6 +151,82 @@ impl PyExecutorEmitter {
         let _ = self.event_tx.send(WorkflowEvent::TextDelta {
             step_id: self.step_id.clone(),
             text,
+        });
+    }
+
+    /// LLM 开始请求调用某个工具。
+    fn tool_call_start(&self, tool_use_id: String, name: String) {
+        let _ = self.event_tx.send(WorkflowEvent::StepProgress {
+            step_id: self.step_id.clone(),
+            progress: StepProgress::ToolCallStart { tool_use_id, name },
+        });
+    }
+
+    /// LLM 工具调用参数完整到达；`args` 是 JSON 字符串，解析失败报 `PyErr`。
+    fn tool_call_end(&self, tool_use_id: String, args: String) -> PyResult<()> {
+        let args: Value = serde_json::from_str(&args).map_err(|e| {
+            pyo3::exceptions::PyValueError::new_err(format!(
+                "tool_call_end args is not valid JSON: {e}"
+            ))
+        })?;
+        let _ = self.event_tx.send(WorkflowEvent::StepProgress {
+            step_id: self.step_id.clone(),
+            progress: StepProgress::ToolCallEnd { tool_use_id, args },
+        });
+        Ok(())
+    }
+
+    /// Tool 开始执行（Python executor 层面）。
+    fn tool_execution_start(&self, tool_use_id: String, tool_name: String) {
+        let _ = self.event_tx.send(WorkflowEvent::StepProgress {
+            step_id: self.step_id.clone(),
+            progress: StepProgress::ToolExecutionStart {
+                tool_use_id,
+                tool_name,
+            },
+        });
+    }
+
+    /// Tool 执行完毕。
+    fn tool_execution_end(&self, tool_use_id: String, ok: bool, error: Option<String>) {
+        let _ = self.event_tx.send(WorkflowEvent::StepProgress {
+            step_id: self.step_id.clone(),
+            progress: StepProgress::ToolExecutionEnd {
+                tool_use_id,
+                ok,
+                error,
+            },
+        });
+    }
+
+    /// 一次 turn 开始——请求即将发往 LLM，首 token 前是"等待模型"窗口。
+    fn turn_start(&self, index: u32) {
+        let _ = self.event_tx.send(WorkflowEvent::StepProgress {
+            step_id: self.step_id.clone(),
+            progress: StepProgress::TurnStart { index },
+        });
+    }
+
+    /// 上下文压缩开始。
+    fn compaction_start(&self) {
+        let _ = self.event_tx.send(WorkflowEvent::StepProgress {
+            step_id: self.step_id.clone(),
+            progress: StepProgress::CompactionStart,
+        });
+    }
+
+    /// 上下文压缩结束。
+    fn compaction_end(&self) {
+        let _ = self.event_tx.send(WorkflowEvent::StepProgress {
+            step_id: self.step_id.clone(),
+            progress: StepProgress::CompactionEnd,
+        });
+    }
+
+    fn turn_end(&self, index: u32) {
+        let _ = self.event_tx.send(WorkflowEvent::StepProgress {
+            step_id: self.step_id.clone(),
+            progress: StepProgress::TurnEnd { index },
         });
     }
 }
@@ -856,53 +934,59 @@ fn workflow_event_to_dict(py: Python<'_>, event: &WorkflowEvent) -> PyResult<Py<
         }
         WorkflowEvent::StepProgress { step_id, progress } => {
             let dict = PyDict::new(py);
-            dict.set_item("type", "step_progress")?;
-            dict.set_item("step_id", step_id.clone())?;
-
-            let prog_dict = PyDict::new(py);
             match progress {
                 StepProgress::ToolCallStart { tool_use_id, name } => {
-                    prog_dict.set_item("type", "tool_call_start")?;
-                    prog_dict.set_item("tool_use_id", tool_use_id.clone())?;
-                    prog_dict.set_item("name", name.clone())?;
+                    dict.set_item("type", "tool_call_start")?;
+                    dict.set_item("tool_use_id", tool_use_id.clone())?;
+                    dict.set_item("name", name.clone())?;
                 }
                 StepProgress::ToolCallEnd { tool_use_id, args } => {
-                    prog_dict.set_item("type", "tool_call_end")?;
-                    prog_dict.set_item("tool_use_id", tool_use_id.clone())?;
-                    prog_dict.set_item("args", args.to_string())?;
+                    dict.set_item("type", "tool_call_end")?;
+                    dict.set_item("tool_use_id", tool_use_id.clone())?;
+                    dict.set_item("args", args.to_string())?;
                 }
                 StepProgress::ToolExecutionStart {
                     tool_use_id,
                     tool_name,
                 } => {
-                    prog_dict.set_item("type", "tool_execution_start")?;
-                    prog_dict.set_item("tool_use_id", tool_use_id.clone())?;
-                    prog_dict.set_item("tool_name", tool_name.clone())?;
+                    dict.set_item("type", "tool_execution_start")?;
+                    dict.set_item("tool_use_id", tool_use_id.clone())?;
+                    dict.set_item("tool_name", tool_name.clone())?;
                 }
                 StepProgress::ToolExecutionEnd {
                     tool_use_id,
                     ok,
                     error,
                 } => {
-                    prog_dict.set_item("type", "tool_execution_end")?;
-                    prog_dict.set_item("tool_use_id", tool_use_id.clone())?;
-                    prog_dict.set_item("ok", *ok)?;
+                    dict.set_item("type", "tool_execution_end")?;
+                    dict.set_item("tool_use_id", tool_use_id.clone())?;
+                    dict.set_item("ok", *ok)?;
                     match error {
-                        Some(e) => prog_dict.set_item("error", e.clone())?,
-                        None => prog_dict.set_item("error", py.None())?,
+                        Some(e) => dict.set_item("error", e.clone())?,
+                        None => dict.set_item("error", py.None())?,
                     }
                 }
+                StepProgress::TurnStart { index } => {
+                    dict.set_item("type", "turn_start")?;
+                    dict.set_item("index", *index)?;
+                }
+                StepProgress::CompactionStart => {
+                    dict.set_item("type", "compaction_start")?;
+                }
+                StepProgress::CompactionEnd => {
+                    dict.set_item("type", "compaction_end")?;
+                }
                 StepProgress::TurnEnd { index } => {
-                    prog_dict.set_item("type", "turn_end")?;
-                    prog_dict.set_item("index", *index)?;
+                    dict.set_item("type", "turn_end")?;
+                    dict.set_item("index", *index)?;
                 }
                 StepProgress::MessageEnd { message_id, kind } => {
-                    prog_dict.set_item("type", "message_end")?;
-                    prog_dict.set_item("message_id", message_id.clone())?;
-                    prog_dict.set_item("kind", format!("{kind:?}"))?;
+                    dict.set_item("type", "message_end")?;
+                    dict.set_item("message_id", message_id.clone())?;
+                    dict.set_item("kind", format!("{kind:?}"))?;
                 }
             }
-            dict.set_item("progress", prog_dict)?;
+            dict.set_item("step_id", step_id.clone())?;
             Ok(dict.into_any().unbind())
         }
         WorkflowEvent::TextDelta { step_id, text } => {
@@ -2131,7 +2215,7 @@ mod tests {
     use llm_harness_workflow::workflow::model::{
         EdgeCondition, Step, StepExecutionPolicy, Workflow,
     };
-    use pyo3::types::PyDictMethods;
+    use pyo3::types::{PyAnyMethods, PyDictMethods};
     use pyo3::{Py, Python};
 
     /// Build an owned Python dict via inline source.
@@ -2449,5 +2533,325 @@ mod tests {
             Some("done"),
             "'next_on_done' and 'done' must resolve to the same route label"
         );
+    }
+
+    // ── PyExecutorEmitter / workflow_event_to_dict: StepProgress ────────
+
+    use super::{PyExecutorEmitter, workflow_event_to_dict};
+    use llm_harness_types::AssistantMessageKind;
+    use llm_harness_workflow::workflow::engine::{StepProgress, WorkflowEvent};
+
+    /// Fetch a string field from a serialized event dict; panics if missing.
+    fn get_str(dict: &pyo3::Bound<'_, pyo3::types::PyDict>, key: &str) -> String {
+        dict.get_item(key)
+            .unwrap()
+            .expect(&format!("missing key '{key}'"))
+            .to_string()
+    }
+
+    fn to_dict<'py>(
+        py: Python<'py>,
+        event: &WorkflowEvent,
+    ) -> pyo3::Bound<'py, pyo3::types::PyDict> {
+        let obj = workflow_event_to_dict(py, event).unwrap();
+        obj.bind(py)
+            .cast::<pyo3::types::PyDict>()
+            .expect("event must serialize to a dict")
+            .clone()
+    }
+
+    #[test]
+    fn step_progress_tool_call_start_serializes_flat() {
+        Python::attach(|py| {
+            let dict = to_dict(
+                py,
+                &WorkflowEvent::StepProgress {
+                    step_id: "s3".into(),
+                    progress: StepProgress::ToolCallStart {
+                        tool_use_id: "tu_1".into(),
+                        name: "search".into(),
+                    },
+                },
+            );
+            assert_eq!(get_str(&dict, "type"), "tool_call_start");
+            assert_eq!(get_str(&dict, "step_id"), "s3");
+            assert_eq!(get_str(&dict, "tool_use_id"), "tu_1");
+            assert_eq!(get_str(&dict, "name"), "search");
+            assert!(dict.get_item("progress").unwrap().is_none());
+        });
+    }
+
+    #[test]
+    fn step_progress_tool_call_end_serializes_args_as_json_string() {
+        Python::attach(|py| {
+            let dict = to_dict(
+                py,
+                &WorkflowEvent::StepProgress {
+                    step_id: "s3".into(),
+                    progress: StepProgress::ToolCallEnd {
+                        tool_use_id: "tu_1".into(),
+                        args: serde_json::json!({"city": "Boston", "n": 2}),
+                    },
+                },
+            );
+            assert_eq!(get_str(&dict, "type"), "tool_call_end");
+            assert_eq!(get_str(&dict, "step_id"), "s3");
+            assert_eq!(get_str(&dict, "tool_use_id"), "tu_1");
+            let args: serde_json::Value = serde_json::from_str(&get_str(&dict, "args")).unwrap();
+            assert_eq!(args["city"], "Boston");
+            assert_eq!(args["n"], 2);
+        });
+    }
+
+    #[test]
+    fn step_progress_tool_execution_start_serializes_flat() {
+        Python::attach(|py| {
+            let dict = to_dict(
+                py,
+                &WorkflowEvent::StepProgress {
+                    step_id: "s3".into(),
+                    progress: StepProgress::ToolExecutionStart {
+                        tool_use_id: "tu_1".into(),
+                        tool_name: "search".into(),
+                    },
+                },
+            );
+            assert_eq!(get_str(&dict, "type"), "tool_execution_start");
+            assert_eq!(get_str(&dict, "step_id"), "s3");
+            assert_eq!(get_str(&dict, "tool_use_id"), "tu_1");
+            assert_eq!(get_str(&dict, "tool_name"), "search");
+        });
+    }
+
+    #[test]
+    fn step_progress_tool_execution_end_success_has_null_error() {
+        Python::attach(|py| {
+            let dict = to_dict(
+                py,
+                &WorkflowEvent::StepProgress {
+                    step_id: "s3".into(),
+                    progress: StepProgress::ToolExecutionEnd {
+                        tool_use_id: "tu_1".into(),
+                        ok: true,
+                        error: None,
+                    },
+                },
+            );
+            assert_eq!(get_str(&dict, "type"), "tool_execution_end");
+            assert_eq!(get_str(&dict, "step_id"), "s3");
+            assert_eq!(get_str(&dict, "tool_use_id"), "tu_1");
+            assert_eq!(get_str(&dict, "ok"), "True");
+            assert!(dict.get_item("error").unwrap().unwrap().is_none());
+        });
+    }
+
+    #[test]
+    fn step_progress_tool_execution_end_error_carries_message() {
+        Python::attach(|py| {
+            let dict = to_dict(
+                py,
+                &WorkflowEvent::StepProgress {
+                    step_id: "s3".into(),
+                    progress: StepProgress::ToolExecutionEnd {
+                        tool_use_id: "tu_1".into(),
+                        ok: false,
+                        error: Some("boom".into()),
+                    },
+                },
+            );
+            assert_eq!(get_str(&dict, "type"), "tool_execution_end");
+            assert_eq!(get_str(&dict, "ok"), "False");
+            assert_eq!(get_str(&dict, "error"), "boom");
+        });
+    }
+
+    #[test]
+    fn step_progress_turn_end_serializes_flat() {
+        Python::attach(|py| {
+            let dict = to_dict(
+                py,
+                &WorkflowEvent::StepProgress {
+                    step_id: "s3".into(),
+                    progress: StepProgress::TurnEnd { index: 2 },
+                },
+            );
+            assert_eq!(get_str(&dict, "type"), "turn_end");
+            assert_eq!(get_str(&dict, "step_id"), "s3");
+            assert_eq!(get_str(&dict, "index"), "2");
+        });
+    }
+
+    #[test]
+    fn step_progress_turn_start_serializes_flat() {
+        Python::attach(|py| {
+            let dict = to_dict(
+                py,
+                &WorkflowEvent::StepProgress {
+                    step_id: "s3".into(),
+                    progress: StepProgress::TurnStart { index: 0 },
+                },
+            );
+            assert_eq!(get_str(&dict, "type"), "turn_start");
+            assert_eq!(get_str(&dict, "step_id"), "s3");
+            assert_eq!(get_str(&dict, "index"), "0");
+        });
+    }
+
+    #[test]
+    fn step_progress_compaction_lifecycle_serializes_flat() {
+        Python::attach(|py| {
+            let dict = to_dict(
+                py,
+                &WorkflowEvent::StepProgress {
+                    step_id: "s3".into(),
+                    progress: StepProgress::CompactionStart,
+                },
+            );
+            assert_eq!(get_str(&dict, "type"), "compaction_start");
+            assert_eq!(get_str(&dict, "step_id"), "s3");
+
+            let dict = to_dict(
+                py,
+                &WorkflowEvent::StepProgress {
+                    step_id: "s3".into(),
+                    progress: StepProgress::CompactionEnd,
+                },
+            );
+            assert_eq!(get_str(&dict, "type"), "compaction_end");
+            assert_eq!(get_str(&dict, "step_id"), "s3");
+        });
+    }
+
+    #[test]
+    fn step_progress_message_end_stays_valid_after_flattening() {
+        Python::attach(|py| {
+            let dict = to_dict(
+                py,
+                &WorkflowEvent::StepProgress {
+                    step_id: "s3".into(),
+                    progress: StepProgress::MessageEnd {
+                        message_id: "m1".into(),
+                        kind: AssistantMessageKind::Progress,
+                    },
+                },
+            );
+            assert_eq!(get_str(&dict, "type"), "message_end");
+            assert_eq!(get_str(&dict, "step_id"), "s3");
+            assert_eq!(get_str(&dict, "message_id"), "m1");
+            assert_eq!(get_str(&dict, "kind"), "Progress");
+            assert!(dict.get_item("progress").unwrap().is_none());
+        });
+    }
+
+    #[test]
+    fn emitter_turn_end_round_trips_through_broadcast() {
+        let (tx, mut rx) = tokio::sync::broadcast::channel(8);
+        let emitter = PyExecutorEmitter {
+            event_tx: tx,
+            step_id: "s1".into(),
+        };
+        emitter.turn_end(3);
+        match rx.try_recv().expect("event must arrive") {
+            WorkflowEvent::StepProgress { step_id, progress } => {
+                assert_eq!(step_id, "s1");
+                assert!(matches!(progress, StepProgress::TurnEnd { index: 3 }));
+            }
+            other => panic!("expected StepProgress, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn emitter_turn_start_round_trips_through_broadcast() {
+        let (tx, mut rx) = tokio::sync::broadcast::channel(8);
+        let emitter = PyExecutorEmitter {
+            event_tx: tx,
+            step_id: "s1".into(),
+        };
+        emitter.turn_start(0);
+        match rx.try_recv().expect("event must arrive") {
+            WorkflowEvent::StepProgress { step_id, progress } => {
+                assert_eq!(step_id, "s1");
+                assert!(matches!(progress, StepProgress::TurnStart { index: 0 }));
+            }
+            other => panic!("expected StepProgress, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn emitter_compaction_lifecycle_round_trips_through_broadcast() {
+        let (tx, mut rx) = tokio::sync::broadcast::channel(8);
+        let emitter = PyExecutorEmitter {
+            event_tx: tx,
+            step_id: "s1".into(),
+        };
+        emitter.compaction_start();
+        emitter.compaction_end();
+        match rx.try_recv().expect("start event must arrive") {
+            WorkflowEvent::StepProgress { progress, .. } => {
+                assert!(matches!(progress, StepProgress::CompactionStart));
+            }
+            other => panic!("expected StepProgress, got {other:?}"),
+        }
+        match rx.try_recv().expect("end event must arrive") {
+            WorkflowEvent::StepProgress { progress, .. } => {
+                assert!(matches!(progress, StepProgress::CompactionEnd));
+            }
+            other => panic!("expected StepProgress, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn emitter_tool_call_end_parses_args_json() {
+        let (tx, mut rx) = tokio::sync::broadcast::channel(8);
+        let emitter = PyExecutorEmitter {
+            event_tx: tx,
+            step_id: "s1".into(),
+        };
+        Python::attach(|_| {
+            emitter
+                .tool_call_end("tu_1".into(), r#"{"city": "Boston"}"#.into())
+                .unwrap();
+        });
+        match rx.try_recv().expect("event must arrive") {
+            WorkflowEvent::StepProgress { progress, .. } => match progress {
+                StepProgress::ToolCallEnd { tool_use_id, args } => {
+                    assert_eq!(tool_use_id, "tu_1");
+                    assert_eq!(args["city"], "Boston");
+                }
+                other => panic!("expected ToolCallEnd, got {other:?}"),
+            },
+            other => panic!("expected StepProgress, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn emitter_tool_call_end_rejects_malformed_json_without_emitting() {
+        let (tx, mut rx) = tokio::sync::broadcast::channel(8);
+        let emitter = PyExecutorEmitter {
+            event_tx: tx,
+            step_id: "s1".into(),
+        };
+        Python::attach(|py| {
+            let err = emitter
+                .tool_call_end("tu_1".into(), "{not json".into())
+                .expect_err("malformed JSON must raise");
+            assert!(err.is_instance_of::<pyo3::exceptions::PyValueError>(py));
+        });
+        assert!(
+            rx.try_recv().is_err(),
+            "no event may be broadcast when args parsing fails"
+        );
+    }
+
+    #[test]
+    fn emitter_send_without_subscribers_does_not_panic() {
+        let (tx, rx) = tokio::sync::broadcast::channel(8);
+        drop(rx);
+        let emitter = PyExecutorEmitter {
+            event_tx: tx,
+            step_id: "s1".into(),
+        };
+        emitter.tool_call_start("tu_1".into(), "search".into());
+        emitter.tool_execution_end("tu_1".into(), false, Some("boom".into()));
     }
 }
