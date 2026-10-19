@@ -102,6 +102,8 @@ pub(crate) fn dict_to_sandbox_config(
             timeout,
         },
         work_dir,
+        trust_profile: Default::default(),
+        host_binds: Vec::new(),
     })
 }
 
