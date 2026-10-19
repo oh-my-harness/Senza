@@ -1,5 +1,7 @@
 # Senza (森座)
 
+> **V0.1.1 / Studio 构建**：见 [SDK 构建说明](docs/v0-studio-build.md)，包含 Ubuntu/WSL 首次虚拟环境、maturin、Runtime 固定版本与 Git 源码 wheel 安装包路径；完整产品启动请跟随其中的 Studio 快速开始。
+
 > **生产级 Agent 运行时 — Rust 性能，Python 易用，崩溃可恢复，成本可控**
 
 Senza 是 oh-my-harness Rust runtime 的 Python SDK，基于 PyO3 构建。面向需要长流程编排、崩溃恢复和成本管控的生产级 AI Agent 场景。
