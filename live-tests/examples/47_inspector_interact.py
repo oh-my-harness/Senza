@@ -98,7 +98,7 @@ async def main() -> None:
                 print(f"\n  [tool: {event.get('tool_name', '?')}]", flush=True)
             elif etype in ("settled", "aborted", "error"):
                 if etype == "error":
-                    print(f"\n  [ERROR] {event.get('error', '?')}")
+                    print(f"\n  [ERROR] {event.get('message', event.get('error', '?'))} (error_type={event.get('error_type', '?')})")
                 else:
                     print(f"\n  [{etype}]")
                 print("\nWaiting for next task from browser...\n")
