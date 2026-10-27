@@ -119,7 +119,11 @@ def test_dict_qevos_style_image_block():
         lambda args, ctx: {
             "content": [
                 {"type": "text", "text": "screenshot"},
-                {"type": "image", "media_type": "image/png", "data": base64.b64encode(PNG_1X1).decode()},
+                {
+                    "type": "image",
+                    "media_type": "image/png",
+                    "data": base64.b64encode(PNG_1X1).decode(),
+                },
             ]
         }
     )
@@ -134,9 +138,7 @@ def test_dict_qevos_style_image_block():
 
 def test_dict_image_block_defaults_png():
     """缺 media_type → image/png。"""
-    tool = _make_tool(
-        lambda args, ctx: {"content": [{"type": "image", "data": "AAAA"}]}
-    )
+    tool = _make_tool(lambda args, ctx: {"content": [{"type": "image", "data": "AAAA"}]})
     result = tool.drive({})
     block = result["content"][0]
     assert block["type"] == "image"
@@ -196,4 +198,172 @@ def test_dict_image_block_missing_data_and_url():
     """image 块缺 data 和 url → 明确报错。"""
     tool = _make_tool(lambda args, ctx: {"content": [{"type": "image"}]})
     with pytest.raises(RuntimeError, match="data.*or.*url"):
+        tool.drive({})
+
+
+# ── 扁平 document 块（issue #37 契约）─────────────────────────────────
+
+
+def test_dict_text_block_regression():
+    """{"type":"text"} 路径不受影响。"""
+    tool = _make_tool(lambda args, ctx: {"content": [{"type": "text", "text": "hi"}]})
+    assert tool.drive({})["content"] == [{"type": "text", "text": "hi"}]
+
+
+def test_dict_document_data_block():
+    """{"type":"document","media_type","data"} → document 块。"""
+    tool = _make_tool(
+        lambda args, ctx: {
+            "content": [
+                {
+                    "type": "document",
+                    "name": "d.pdf",
+                    "media_type": "application/pdf",
+                    "data": "AAAA",
+                }
+            ]
+        }
+    )
+    block = tool.drive({})["content"][0]
+    assert block["type"] == "document"
+    assert block["name"] == "d.pdf"
+    assert block["media_type"] == "application/pdf"
+    assert block["data"] == {"type": "base64", "data": "AAAA"}
+
+
+def test_dict_document_url_block():
+    """{"type":"document","media_type","url"} → URL document 块。"""
+    tool = _make_tool(
+        lambda args, ctx: {
+            "content": [
+                {
+                    "type": "document",
+                    "media_type": "application/pdf",
+                    "url": "https://example.com/d.pdf",
+                }
+            ]
+        }
+    )
+    block = tool.drive({})["content"][0]
+    assert block["type"] == "document"
+    assert block["data"] == {"type": "url", "url": "https://example.com/d.pdf"}
+
+
+def test_dict_document_url_shorthand():
+    """{"type":"document_url","media_type","url"} 构造器风格。"""
+    tool = _make_tool(
+        lambda args, ctx: {
+            "content": [
+                {
+                    "type": "document_url",
+                    "media_type": "application/pdf",
+                    "url": "https://example.com/d.pdf",
+                }
+            ]
+        }
+    )
+    assert tool.drive({})["content"][0]["data"]["type"] == "url"
+
+
+def test_dict_document_requires_media_type():
+    """document* 缺 media_type → 明确报错，绝不推断。"""
+    for block in (
+        {"type": "document", "data": "AAAA"},
+        {"type": "document_url", "url": "https://example.com/d.pdf"},
+        {"type": "document_base64", "data": "AAAA"},
+    ):
+        tool = _make_tool(lambda args, ctx, block=block: {"content": [block]})
+        with pytest.raises(RuntimeError, match="explicit 'media_type'"):
+            tool.drive({})
+
+
+def test_dict_document_empty_media_type_rejected():
+    """空 media_type 无效。"""
+    tool = _make_tool(
+        lambda args, ctx: {"content": [{"type": "document", "media_type": " ", "data": "AAAA"}]}
+    )
+    with pytest.raises(RuntimeError, match="non-empty MIME"):
+        tool.drive({})
+
+
+def test_dict_document_url_rejects_data_key():
+    """document_url 用错键（data）→ 明确报错。"""
+    tool = _make_tool(
+        lambda args, ctx: {
+            "content": [
+                {
+                    "type": "document_url",
+                    "media_type": "application/pdf",
+                    "data": "AAAA",
+                }
+            ]
+        }
+    )
+    with pytest.raises(RuntimeError, match="does not accept 'data'"):
+        tool.drive({})
+
+
+def test_dict_image_base64_rejects_url_key():
+    """image_base64 用错键（url）→ 明确报错。"""
+    tool = _make_tool(
+        lambda args, ctx: {
+            "content": [{"type": "image_base64", "url": "https://example.com/x.png"}]
+        }
+    )
+    with pytest.raises(RuntimeError, match="does not accept 'url'"):
+        tool.drive({})
+
+
+def test_dict_nested_image_source_rejected():
+    """规范嵌套 shape（image.source）→ 明确拒绝并给出扁平形状提示。"""
+    tool = _make_tool(
+        lambda args, ctx: {
+            "content": [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "image/png",
+                        "data": "AAAA",
+                    },
+                }
+            ]
+        }
+    )
+    with pytest.raises(RuntimeError, match="nested content block shape is not accepted"):
+        tool.drive({})
+
+
+def test_dict_nested_document_data_rejected():
+    """规范嵌套 shape（document.data = 嵌套 DataBlock）→ 明确拒绝。"""
+    tool = _make_tool(
+        lambda args, ctx: {
+            "content": [
+                {
+                    "type": "document",
+                    "media_type": "application/pdf",
+                    "data": {"type": "base64", "data": "AAAA"},
+                }
+            ]
+        }
+    )
+    with pytest.raises(RuntimeError, match="nested content block shape is not accepted"):
+        tool.drive({})
+
+
+def test_dict_openai_wire_image_url_rejected():
+    """OpenAI wire shape（image_url.image_url）→ 明确拒绝。"""
+    tool = _make_tool(
+        lambda args, ctx: {
+            "content": [{"type": "image_url", "image_url": {"url": "https://example.com/x.png"}}]
+        }
+    )
+    with pytest.raises(RuntimeError, match="nested content block shape is not accepted"):
+        tool.drive({})
+
+
+def test_dict_explicit_none_rejected():
+    """显式 None 不被当作缺省。"""
+    tool = _make_tool(lambda args, ctx: {"content": [{"type": "image", "data": None}]})
+    with pytest.raises(RuntimeError, match="explicit None is not accepted"):
         tool.drive({})

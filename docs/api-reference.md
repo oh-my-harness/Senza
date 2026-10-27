@@ -140,6 +140,26 @@ tool = senza.create_tool(
   - ⚠️ **回调签名不是独立参数**：`def search(query: str)` 是**错误**的——`query` 会收到整个 dict 而非字符串。正确写法是 `def search(args: dict, ctx=None)` 然后内部 `args["query"]`，或使用下面的 `@senza.tool` 装饰器。
 - 返回 dict: `{"content": [ContentBlock...], "terminate": bool}`。`terminate=True` 停止 agent 循环。也接受纯字符串（自动包装为 text content）或不含 `content` 键的 dict（整体 JSON 序列化为 text）。
 - **多模态返回（1.2.4+）**：回调可返回 `Attachment`（裸值）、含 `Attachment` 的 list/tuple（元素为 `Attachment` 或 str）、或在 `content` 列表中混入 `Attachment`——自动转为 image/document 内容块，多模态模型可直接消费。
+- **`content` 列表中的扁平字典块**：也可以直接返回 dict 块，无需构造 `Attachment`：
+
+  | 形状 | 结果 |
+  |------|------|
+  | `{"type": "text", "text": ...}` | 文本块 |
+  | `{"type": "image", "data": <base64>, "media_type"?: <mime>}` | 内联图片（`media_type` 缺省 `image/png`） |
+  | `{"type": "image", "url": ...}` | URL 图片 |
+  | `{"type": "image_url", "url": ...}` | URL 图片（构造器风格） |
+  | `{"type": "image_base64", "data": <base64>, "media_type"?: <mime>}` | 内联图片（构造器风格） |
+  | `{"type": "document", "name"?: ..., "media_type": <mime>, "data" 或 "url": ...}` | 文档 |
+  | `{"type": "document_url", "url": ..., "media_type": <mime>}` | URL 文档 |
+  | `{"type": "document_base64", "data": <base64>, "media_type": <mime>}` | 内联文档 |
+
+  约束（违反时抛出带修复提示的 `ValueError`，错误文本会作为工具结果回传给模型）：
+  - `image` / `document` 必须**二选一**提供 `data`（base64）或 `url`，不能同时提供。
+  - `image` / `image_base64` 的 `media_type` 可省略（默认 `image/png`）；`document*` **必须显式**提供非空 `media_type`——不会从文件名或 URL 推断。
+  - kind 专属键不可混用：`image_url` / `document_url` 只接受 `url`，`image_base64` / `document_base64` 只接受 `data`；URL 图片不接受 `media_type`。
+  - 显式 `None` 视为非法值而非缺省；非字符串 `data` / `url` / `media_type` 直接报错。
+  - 规范嵌套 DataBlock（`{"type": "image", "source": {...}}`、`{"type": "document", "data": {"type": "base64", ...}}`）与 OpenAI wire（`{"type": "image_url", "image_url": {...}}`）**不支持**，需改写为上面的扁平形状或改用 `Attachment`。
+
 - `create_tool(..., report_duration=True)`（1.2.4+）：在回传 LLM 的结果末尾附加执行耗时标注（如 `[duration: 812ms]`），让模型感知慢操作。默认关闭；仅当工具经 agent loop 的 HookedTool 包装时生效。
 
 #### `@senza.tool` 装饰器（便捷方式）

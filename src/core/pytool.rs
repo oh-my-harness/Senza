@@ -135,7 +135,94 @@ impl PyAttachment {
     }
 }
 
+/// Media block shape a flat dict stub describes.
+#[derive(Clone, Copy)]
+enum MediaKind {
+    Image,
+    Document,
+}
+
+/// Locator that a block uses to find its bytes.
+enum BlockSource {
+    Url(String),
+    Base64(String),
+}
+
+/// Hint attached to every shape error so the caller can repair the return
+/// value without reading the Rust source (the message is fed back to the LLM
+/// as the tool result).
+const NESTED_SHAPE_ERROR: &str = "nested content block shape is not accepted; use a flat image/document block \
+({\"type\": \"image\", \"url\"|\"data\": ...}, \
+{\"type\": \"document\", \"media_type\": <mime>, \"data\"|\"url\": ...}) or a senza.Attachment";
+
+const SUPPORTED_BLOCK_TYPES: &str =
+    "text, image, image_url, image_base64, document, document_url, document_base64";
+
+/// Build the `ContentBlock` for a media block from already-validated parts.
+///
+/// This is the single construction path shared by the `Attachment`
+/// constructor and by flat dict content blocks, so both accept exactly the
+/// same media-type rules: images default to `image/png` for inline data,
+/// documents always require an explicit non-empty `media_type`.
+fn build_media_block(
+    kind: MediaKind,
+    source: BlockSource,
+    name: Option<String>,
+    media_type: Option<String>,
+) -> Result<ContentBlock, String> {
+    match kind {
+        MediaKind::Image => match source {
+            BlockSource::Url(url) => {
+                if media_type.is_some() {
+                    return Err(
+                        "image URL blocks do not accept 'media_type'; only inline 'data' images carry one"
+                            .to_string(),
+                    );
+                }
+                Ok(ContentBlock::Image {
+                    source: ImageSource::Url { url },
+                })
+            }
+            BlockSource::Base64(data) => {
+                let media_type = media_type.unwrap_or_else(|| "image/png".to_string());
+                if media_type.trim().is_empty() {
+                    return Err(
+                        "image content block 'media_type' must be a non-empty MIME type"
+                            .to_string(),
+                    );
+                }
+                Ok(ContentBlock::Image {
+                    source: ImageSource::Base64 { media_type, data },
+                })
+            }
+        },
+        MediaKind::Document => {
+            let media_type = media_type.ok_or_else(|| {
+                "document content block requires an explicit 'media_type' (e.g. \"application/pdf\"); it is never inferred"
+                    .to_string()
+            })?;
+            if media_type.trim().is_empty() {
+                return Err(
+                    "document content block 'media_type' must be a non-empty MIME type".to_string(),
+                );
+            }
+            let data = match source {
+                BlockSource::Url(url) => BinarySource::Url { url },
+                BlockSource::Base64(data) => BinarySource::Base64 { data },
+            };
+            Ok(ContentBlock::Document {
+                name,
+                media_type,
+                data,
+            })
+        }
+    }
+}
+
 /// 从 Python 构造函数参数构造 `ContentBlock`（纯转换，可单测）。
+///
+/// `image_url` / `document_url` 的 `data` 参数是 URL；`image_base64` /
+/// `document_base64` 的 `data` 参数是 base64 字符串。
 pub(crate) fn attachment_to_content_block(
     kind: &str,
     data: &str,
@@ -143,31 +230,30 @@ pub(crate) fn attachment_to_content_block(
     media_type: Option<String>,
 ) -> Result<ContentBlock, String> {
     match kind {
-        "image_url" => Ok(ContentBlock::Image {
-            source: ImageSource::Url {
-                url: data.to_string(),
-            },
-        }),
-        "image_base64" => Ok(ContentBlock::Image {
-            source: ImageSource::Base64 {
-                media_type: media_type.unwrap_or_else(|| "image/png".to_string()),
-                data: data.to_string(),
-            },
-        }),
-        "document_url" => Ok(ContentBlock::Document {
+        "image_url" => build_media_block(
+            MediaKind::Image,
+            BlockSource::Url(data.to_string()),
+            None,
+            media_type,
+        ),
+        "image_base64" => build_media_block(
+            MediaKind::Image,
+            BlockSource::Base64(data.to_string()),
+            None,
+            media_type,
+        ),
+        "document_url" => build_media_block(
+            MediaKind::Document,
+            BlockSource::Url(data.to_string()),
             name,
-            media_type: media_type.ok_or("document requires media_type")?,
-            data: BinarySource::Url {
-                url: data.to_string(),
-            },
-        }),
-        "document_base64" => Ok(ContentBlock::Document {
+            media_type,
+        ),
+        "document_base64" => build_media_block(
+            MediaKind::Document,
+            BlockSource::Base64(data.to_string()),
             name,
-            media_type: media_type.ok_or("document requires media_type")?,
-            data: BinarySource::Base64 {
-                data: data.to_string(),
-            },
-        }),
+            media_type,
+        ),
         other => Err(format!("unknown attachment kind: {other}")),
     }
 }
@@ -195,80 +281,254 @@ pub(crate) fn content_block_to_data_block(cb: &ContentBlock) -> Option<DataBlock
     }
 }
 
-/// Parse one dict-shaped content block into a `ContentBlock`.
+fn value_error(message: impl Into<String>) -> PyErr {
+    pyo3::exceptions::PyValueError::new_err(message.into())
+}
+
+fn py_type_name(value: &Bound<'_, PyAny>) -> String {
+    value
+        .get_type()
+        .name()
+        .map(|name| name.to_string())
+        .unwrap_or_else(|_| "unknown".to_string())
+}
+
+/// Read a flat string field.
 ///
-/// Accepts the Qevos/legacy shapes so existing tools migrate without change:
-/// - `{"type": "text", "text": ...}`
-/// - `{"type": "image", "media_type": ..., "data": <base64>}` (Qevos style)
-/// - `{"type": "image", "url": ...}` / `{"type": "image_url", "url": ...}`
-/// - `{"type": "image_base64", "data": ..., "media_type"?}` — same as the
-///   `Attachment` constructor kinds
-/// - `{"type": "document", "name": ..., "media_type": ..., "data"/"url": ...}`
-pub(crate) fn dict_content_block(
-    item_dict: &Bound<'_, pyo3::types::PyDict>,
-) -> PyResult<Option<ContentBlock>> {
-    let block_type: String = item_dict
-        .get_item("type")?
-        .ok_or_else(|| pyo3::exceptions::PyValueError::new_err("content block missing 'type'"))?
-        .extract()?;
+/// Absent → `Ok(None)`. An explicit `None` is rejected rather than treated as
+/// absent (silently falling through to a different shape would hide bugs).
+/// A dict/list value is reported as a nested shape; any other non-`str` value
+/// is reported with its Python type.
+fn string_field(item_dict: &Bound<'_, PyDict>, label: &str, key: &str) -> PyResult<Option<String>> {
+    let Some(value) = item_dict.get_item(key)? else {
+        return Ok(None);
+    };
+    if value.is_none() {
+        return Err(value_error(format!(
+            "{label} '{key}' must be a string; explicit None is not accepted (omit the key instead)"
+        )));
+    }
+    if value.cast::<PyDict>().is_ok() || value.cast::<PyList>().is_ok() {
+        return Err(value_error(format!(
+            "{NESTED_SHAPE_ERROR} (found nested '{key}' field)"
+        )));
+    }
+    value.extract::<String>().map(Some).map_err(|_| {
+        value_error(format!(
+            "{label} '{key}' must be a string, got {}",
+            py_type_name(&value)
+        ))
+    })
+}
+
+fn required_string(item_dict: &Bound<'_, PyDict>, label: &str, key: &str) -> PyResult<String> {
+    string_field(item_dict, label, key)?
+        .ok_or_else(|| value_error(format!("{label} requires '{key}'")))
+}
+
+/// Document `name` is optional and may legitimately be `None`.
+fn optional_name(item_dict: &Bound<'_, PyDict>, label: &str) -> PyResult<Option<String>> {
+    match item_dict.get_item("name")? {
+        None => Ok(None),
+        Some(value) if value.is_none() => Ok(None),
+        Some(value) => value.extract::<String>().map(Some).map_err(|_| {
+            value_error(format!(
+                "{label} 'name' must be a string, got {}",
+                py_type_name(&value)
+            ))
+        }),
+    }
+}
+
+/// A constructor-style kind (`image_url`, `document_base64`, ...) accepts only
+/// its own locator key; pointing it at the other one is a permanent mistake,
+/// not a fallback.
+fn reject_field(
+    item_dict: &Bound<'_, PyDict>,
+    label: &str,
+    key: &str,
+    guidance: &str,
+) -> PyResult<()> {
+    if item_dict.get_item(key)?.is_some() {
+        return Err(value_error(format!(
+            "{label} does not accept '{key}'; {guidance}"
+        )));
+    }
+    Ok(())
+}
+
+/// Reject nested DataBlock / OpenAI wire shapes before kind dispatch so the
+/// error names the actual problem instead of "missing 'data' or 'url'".
+fn reject_nested_shape(item_dict: &Bound<'_, PyDict>) -> PyResult<()> {
+    const NESTED_KEYS: [&str; 6] = [
+        "source",
+        "image_url",
+        "input_image",
+        "input_file",
+        "file",
+        "image",
+    ];
+    for key in NESTED_KEYS {
+        if let Some(value) = item_dict.get_item(key)?
+            && (value.cast::<PyDict>().is_ok() || value.cast::<PyList>().is_ok())
+        {
+            return Err(value_error(format!(
+                "{NESTED_SHAPE_ERROR} (found nested '{key}' field)"
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn decode_constructor_style(
+    item_dict: &Bound<'_, PyDict>,
+    block_type: &str,
+    kind: MediaKind,
+    base64_data: bool,
+) -> PyResult<ContentBlock> {
+    let label = format!("{block_type} content block");
+    let media_type = string_field(item_dict, &label, "media_type")?;
+    let name = optional_name(item_dict, &label)?;
+    let source = if base64_data {
+        BlockSource::Base64(required_string(item_dict, &label, "data")?)
+    } else {
+        BlockSource::Url(required_string(item_dict, &label, "url")?)
+    };
+    build_media_block(kind, source, name, media_type).map_err(value_error)
+}
+
+/// Parse one flat dict-shaped content block into a `ContentBlock`.
+///
+/// Accepted `type` values (all keys are flat strings, never nested dicts):
+/// - `text`: `text`
+/// - `image`: `data` (base64; `media_type` optional, defaults to `image/png`)
+///   **or** `url` (exactly one)
+/// - `image_url`: `url`
+/// - `image_base64`: `data` (base64; `media_type` optional, defaults to
+///   `image/png`)
+/// - `document`: `data` (base64) **or** `url`, plus an explicit `media_type`
+/// - `document_url`: `url` plus an explicit `media_type`
+/// - `document_base64`: `data` (base64) plus an explicit `media_type`
+///
+/// `name` is optional for documents. Explicit `None` is rejected instead of
+/// being treated as an absent key, an empty/whitespace-only `media_type` is
+/// invalid, and `document*` never infers `media_type`. Nested DataBlock
+/// shapes, OpenAI wire shapes and unknown `type` values raise `ValueError`
+/// with a repair hint.
+pub(crate) fn dict_content_block(item_dict: &Bound<'_, PyDict>) -> PyResult<ContentBlock> {
+    reject_nested_shape(item_dict)?;
+    let block_type = required_string(item_dict, "content block", "type")?;
     match block_type.as_str() {
-        "text" => {
-            let text: String = item_dict
-                .get_item("text")?
-                .ok_or_else(|| {
-                    pyo3::exceptions::PyValueError::new_err("text content block missing 'text'")
-                })?
-                .extract()?;
-            Ok(Some(ContentBlock::Text { text }))
-        }
+        "text" => Ok(ContentBlock::Text {
+            text: required_string(item_dict, "text content block", "text")?,
+        }),
         "image" => {
-            if let Some(url) = item_dict.get_item("url")?.filter(|v| !v.is_none()) {
-                let url: String = url.extract()?;
-                return Ok(Some(ContentBlock::Image {
-                    source: ImageSource::Url { url },
-                }));
+            let label = "image content block";
+            let url = string_field(item_dict, label, "url")?;
+            let data = string_field(item_dict, label, "data")?;
+            let media_type = string_field(item_dict, label, "media_type")?;
+            let source = match (url, data) {
+                (Some(_), Some(_)) => {
+                    return Err(value_error(
+                        "image content block must specify exactly one of 'data' (base64) or 'url', not both",
+                    ));
+                }
+                (Some(url), None) => BlockSource::Url(url),
+                (None, Some(data)) => BlockSource::Base64(data),
+                (None, None) => {
+                    return Err(value_error(format!(
+                        "image content block requires 'data' (base64) or 'url'; supported flat types: {SUPPORTED_BLOCK_TYPES}"
+                    )));
+                }
+            };
+            build_media_block(MediaKind::Image, source, None, media_type).map_err(value_error)
+        }
+        "image_url" => {
+            let label = "image_url content block";
+            reject_field(
+                item_dict,
+                label,
+                "data",
+                "use {\"type\": \"image_base64\", \"data\": ...} or {\"type\": \"image\", \"data\": ...} for inline bytes",
+            )?;
+            reject_field(
+                item_dict,
+                label,
+                "media_type",
+                "URL images carry no media type",
+            )?;
+            let url = required_string(item_dict, label, "url")?;
+            build_media_block(MediaKind::Image, BlockSource::Url(url), None, None)
+                .map_err(value_error)
+        }
+        "image_base64" => {
+            let label = "image_base64 content block";
+            reject_field(
+                item_dict,
+                label,
+                "url",
+                "use {\"type\": \"image_url\", \"url\": ...} or {\"type\": \"image\", \"url\": ...} for URL images",
+            )?;
+            let data = required_string(item_dict, label, "data")?;
+            let media_type = string_field(item_dict, label, "media_type")?;
+            build_media_block(
+                MediaKind::Image,
+                BlockSource::Base64(data),
+                None,
+                media_type,
+            )
+            .map_err(value_error)
+        }
+        "document" => {
+            let label = "document content block";
+            let url = string_field(item_dict, label, "url")?;
+            let data = string_field(item_dict, label, "data")?;
+            let media_type = string_field(item_dict, label, "media_type")?;
+            let name = optional_name(item_dict, label)?;
+            if media_type.is_none() {
+                return Err(value_error(
+                    "document content block requires an explicit 'media_type' (e.g. \"application/pdf\"); it is never inferred",
+                ));
             }
-            let data: String = item_dict
-                .get_item("data")?
-                .ok_or_else(|| {
-                    pyo3::exceptions::PyValueError::new_err(
-                        "image content block requires 'data' (base64) or 'url'",
-                    )
-                })?
-                .extract()?;
-            let media_type: String = item_dict
-                .get_item("media_type")?
-                .and_then(|v| v.extract().ok())
-                .unwrap_or_else(|| "image/png".to_string());
-            Ok(Some(ContentBlock::Image {
-                source: ImageSource::Base64 { media_type, data },
-            }))
+            let source = match (url, data) {
+                (Some(_), Some(_)) => {
+                    return Err(value_error(
+                        "document content block must specify exactly one of 'data' (base64) or 'url', not both",
+                    ));
+                }
+                (Some(url), None) => BlockSource::Url(url),
+                (None, Some(data)) => BlockSource::Base64(data),
+                (None, None) => {
+                    return Err(value_error(
+                        "document content block requires 'data' (base64) or 'url' alongside 'media_type'",
+                    ));
+                }
+            };
+            build_media_block(MediaKind::Document, source, name, media_type).map_err(value_error)
         }
-        // Constructor-style kinds: delegate to the shared converter so the
-        // accepted shapes stay identical to `image_url()` / `document_*()`.
-        "image_url" | "image_base64" | "document_url" | "document_base64" => {
-            let data: String = item_dict
-                .get_item("data")?
-                .or_else(|| item_dict.get_item("url").ok().flatten())
-                .ok_or_else(|| {
-                    pyo3::exceptions::PyValueError::new_err(
-                        "attachment content block missing 'data'/'url'",
-                    )
-                })?
-                .extract()?;
-            let name: Option<String> = item_dict
-                .get_item("name")?
-                .filter(|v| !v.is_none())
-                .and_then(|v| v.extract().ok());
-            let media_type: Option<String> = item_dict
-                .get_item("media_type")?
-                .filter(|v| !v.is_none())
-                .and_then(|v| v.extract().ok());
-            attachment_to_content_block(&block_type, &data, name, media_type)
-                .map(Some)
-                .map_err(pyo3::exceptions::PyValueError::new_err)
+        "document_url" => {
+            let label = "document_url content block";
+            reject_field(
+                item_dict,
+                label,
+                "data",
+                "use {\"type\": \"document_base64\", \"data\": ..., \"media_type\": ...} for inline bytes",
+            )?;
+            decode_constructor_style(item_dict, "document_url", MediaKind::Document, false)
         }
-        _other => Ok(None),
+        "document_base64" => {
+            let label = "document_base64 content block";
+            reject_field(
+                item_dict,
+                label,
+                "url",
+                "use {\"type\": \"document_url\", \"url\": ..., \"media_type\": ...} for URL documents",
+            )?;
+            decode_constructor_style(item_dict, "document_base64", MediaKind::Document, true)
+        }
+        other => Err(value_error(format!(
+            "unsupported content block type: {other:?}; supported flat types: {SUPPORTED_BLOCK_TYPES} — or return a bare str / senza.Attachment"
+        ))),
     }
 }
 
@@ -308,112 +568,345 @@ impl PyAttachment {
 
 #[cfg(test)]
 mod attachment_tests {
-    use super::{attachment_to_content_block, dict_content_block};
+    use super::{PyToolContext, attachment_to_content_block, dict_content_block};
     use crate::core::pytool::{ContentBlock, ImageSource};
-    use pyo3::Python;
-    use pyo3::types::PyDict;
+    use llm_harness_types::{BinarySource, DataBlock};
+    use pyo3::types::{PyAny, PyDict};
+    use pyo3::{Bound, Python};
+    use tokio_util::sync::CancellationToken;
 
-    fn block_from_dict(py: Python<'_>, json: &str) -> Option<ContentBlock> {
-        let value = py
-            .eval(std::ffi::CString::new(json).unwrap().as_c_str(), None, None)
-            .unwrap();
-        let dict = value.cast::<PyDict>().unwrap();
-        dict_content_block(dict).unwrap()
+    fn eval_json<'py>(py: Python<'py>, json: &str) -> Bound<'py, PyAny> {
+        py.eval(std::ffi::CString::new(json).unwrap().as_c_str(), None, None)
+            .unwrap()
     }
 
-    #[test]
-    fn dict_qevos_image_block() {
+    fn parse_block(json: &str) -> Result<ContentBlock, String> {
         Python::attach(|py| {
-            let b = block_from_dict(
-                py,
-                r#"{"type": "image", "media_type": "image/jpeg", "data": "AAAA"}"#,
-            )
-            .unwrap();
-            match b {
-                ContentBlock::Image {
-                    source: ImageSource::Base64 { media_type, data },
-                } => {
-                    assert_eq!(media_type, "image/jpeg");
-                    assert_eq!(data, "AAAA");
-                }
-                _ => panic!("expected base64 image"),
-            }
-        });
-    }
-
-    #[test]
-    fn dict_image_url_block() {
-        Python::attach(|py| {
-            for shape in [
-                r#"{"type": "image", "url": "https://x/y.png"}"#,
-                r#"{"type": "image_url", "url": "https://x/y.png"}"#,
-            ] {
-                let b = block_from_dict(py, shape).unwrap();
-                assert!(
-                    matches!(
-                        b,
-                        ContentBlock::Image {
-                            source: ImageSource::Url { .. }
-                        }
-                    ),
-                    "shape: {shape}"
-                );
-            }
-        });
-    }
-
-    #[test]
-    fn dict_document_block_delegates() {
-        Python::attach(|py| {
-            let b = block_from_dict(
-                py,
-                r#"{"type": "document_base64", "name": "d.pdf", "media_type": "application/pdf", "data": "AAAA"}"#,
-            )
-            .unwrap();
-            assert!(matches!(b, ContentBlock::Document { .. }));
-        });
-    }
-
-    #[test]
-    fn dict_unknown_type_returns_none() {
-        Python::attach(|py| {
-            let b = block_from_dict(py, r#"{"type": "audio", "data": "x"}"#);
-            assert!(b.is_none());
-        });
-    }
-
-    #[test]
-    fn dict_image_missing_data_and_url_errors() {
-        Python::attach(|py| {
-            let value = py
-                .eval(
-                    std::ffi::CString::new(r#"{"type": "image"}"#)
-                        .unwrap()
-                        .as_c_str(),
-                    None,
-                    None,
-                )
-                .unwrap();
+            let value = eval_json(py, json);
             let dict = value.cast::<PyDict>().unwrap();
-            assert!(dict_content_block(dict).is_err());
-        });
+            dict_content_block(dict).map_err(|e| e.to_string())
+        })
     }
+
+    fn parse_block_err(json: &str) -> String {
+        match parse_block(json) {
+            Ok(block) => panic!("expected an error for {json}, got {block:?}"),
+            Err(message) => message,
+        }
+    }
+
+    fn assert_rejects(json: &str, needles: &[&str]) {
+        let message = parse_block_err(json);
+        for needle in needles {
+            assert!(
+                message.contains(needle),
+                "error for {json} does not contain {needle:?}: {message}"
+            );
+        }
+    }
+
+    fn base64_image(block: &ContentBlock) -> (&str, &str) {
+        match block {
+            ContentBlock::Image {
+                source: ImageSource::Base64 { media_type, data },
+            } => (media_type, data),
+            other => panic!("expected base64 image, got {other:?}"),
+        }
+    }
+
+    fn url_image(block: &ContentBlock) -> &str {
+        match block {
+            ContentBlock::Image {
+                source: ImageSource::Url { url },
+            } => url,
+            other => panic!("expected URL image, got {other:?}"),
+        }
+    }
+
+    // ── accepted shapes ─────────────────────────────────────────────
+
+    #[test]
+    fn accepts_text_block() {
+        match parse_block(r#"{"type": "text", "text": "hello"}"#).unwrap() {
+            ContentBlock::Text { text } => assert_eq!(text, "hello"),
+            other => panic!("expected text, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn accepts_qevos_image_data_block() {
+        let block = parse_block(r#"{"type": "image", "media_type": "image/jpeg", "data": "AAAA"}"#)
+            .unwrap();
+        assert_eq!(base64_image(&block), ("image/jpeg", "AAAA"));
+    }
+
+    #[test]
+    fn accepts_image_data_without_media_type_defaults_png() {
+        let block = parse_block(r#"{"type": "image", "data": "AAAA"}"#).unwrap();
+        assert_eq!(base64_image(&block), ("image/png", "AAAA"));
+    }
+
+    #[test]
+    fn accepts_image_url_forms() {
+        for shape in [
+            r#"{"type": "image", "url": "https://x/y.png"}"#,
+            r#"{"type": "image_url", "url": "https://x/y.png"}"#,
+        ] {
+            let block = parse_block(shape).unwrap();
+            assert_eq!(url_image(&block), "https://x/y.png", "shape: {shape}");
+        }
+    }
+
+    #[test]
+    fn accepts_image_base64_shorthand() {
+        let block = parse_block(r#"{"type": "image_base64", "data": "AAAA"}"#).unwrap();
+        assert_eq!(base64_image(&block), ("image/png", "AAAA"));
+        let block =
+            parse_block(r#"{"type": "image_base64", "media_type": "image/webp", "data": "AAAA"}"#)
+                .unwrap();
+        assert_eq!(base64_image(&block), ("image/webp", "AAAA"));
+    }
+
+    #[test]
+    fn accepts_document_data_block() {
+        let block = parse_block(
+            r#"{"type": "document", "name": "d.pdf", "media_type": "application/pdf", "data": "AAAA"}"#,
+        )
+        .unwrap();
+        match block {
+            ContentBlock::Document {
+                name,
+                media_type,
+                data: BinarySource::Base64 { data },
+            } => {
+                assert_eq!(name.as_deref(), Some("d.pdf"));
+                assert_eq!(media_type, "application/pdf");
+                assert_eq!(data, "AAAA");
+            }
+            other => panic!("expected inline document, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn accepts_document_url_forms() {
+        for shape in [
+            r#"{"type": "document", "media_type": "application/pdf", "url": "https://x/d.pdf"}"#,
+            r#"{"type": "document_url", "media_type": "application/pdf", "url": "https://x/d.pdf"}"#,
+        ] {
+            let block = parse_block(shape).unwrap();
+            match block {
+                ContentBlock::Document {
+                    media_type,
+                    data: BinarySource::Url { url },
+                    ..
+                } => {
+                    assert_eq!(media_type, "application/pdf");
+                    assert_eq!(url, "https://x/d.pdf");
+                }
+                other => panic!("expected URL document for {shape}, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn accepts_document_base64_shorthand() {
+        let block = parse_block(
+            r#"{"type": "document_base64", "name": "d.pdf", "media_type": "application/pdf", "data": "AAAA"}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            block,
+            ContentBlock::Document {
+                data: BinarySource::Base64 { .. },
+                ..
+            }
+        ));
+    }
+
+    // ── rejected shapes ─────────────────────────────────────────────
+
+    #[test]
+    fn rejects_nested_anthropic_image_source() {
+        assert_rejects(
+            r#"{"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "AAAA"}}"#,
+            &["nested content block shape is not accepted", "Attachment"],
+        );
+    }
+
+    #[test]
+    fn rejects_nested_datablock_document_data() {
+        assert_rejects(
+            r#"{"type": "document", "media_type": "application/pdf", "data": {"type": "base64", "data": "AAAA"}}"#,
+            &["nested content block shape is not accepted"],
+        );
+    }
+
+    #[test]
+    fn rejects_openai_wire_image_url() {
+        assert_rejects(
+            r#"{"type": "image_url", "image_url": {"url": "https://x/y.png"}}"#,
+            &["nested content block shape is not accepted", "image_url"],
+        );
+    }
+
+    #[test]
+    fn rejects_wrong_key_for_constructor_kinds() {
+        assert_rejects(
+            r#"{"type": "document_url", "media_type": "application/pdf", "data": "AAAA"}"#,
+            &["does not accept 'data'", "document_base64"],
+        );
+        assert_rejects(
+            r#"{"type": "document_base64", "media_type": "application/pdf", "url": "https://x/d.pdf"}"#,
+            &["does not accept 'url'", "document_url"],
+        );
+        assert_rejects(
+            r#"{"type": "image_base64", "url": "https://x/y.png"}"#,
+            &["does not accept 'url'", "image_url"],
+        );
+        assert_rejects(
+            r#"{"type": "image_url", "data": "AAAA"}"#,
+            &["does not accept 'data'", "image_base64"],
+        );
+    }
+
+    #[test]
+    fn rejects_explicit_none_as_missing() {
+        assert_rejects(
+            r#"{"type": "image_base64", "data": None}"#,
+            &["explicit None is not accepted"],
+        );
+        assert_rejects(
+            r#"{"type": "image", "url": None}"#,
+            &["explicit None is not accepted"],
+        );
+        assert_rejects(
+            r#"{"type": "image", "data": "AAAA", "media_type": None}"#,
+            &["explicit None is not accepted"],
+        );
+        assert_rejects(r#"{"type": None}"#, &["explicit None is not accepted"]);
+    }
+
+    #[test]
+    fn rejects_non_string_fields() {
+        assert_rejects(
+            r#"{"type": "image", "data": 42}"#,
+            &["'data' must be a string, got int"],
+        );
+        assert_rejects(
+            r#"{"type": "image", "url": 42}"#,
+            &["'url' must be a string, got int"],
+        );
+        assert_rejects(
+            r#"{"type": "image", "data": "AAAA", "media_type": 42}"#,
+            &["'media_type' must be a string, got int"],
+        );
+        assert_rejects(r#"{"type": 42}"#, &["'type' must be a string, got int"]);
+    }
+
+    #[test]
+    fn document_requires_explicit_media_type() {
+        for shape in [
+            r#"{"type": "document", "data": "AAAA"}"#,
+            r#"{"type": "document_url", "url": "https://x/d.pdf"}"#,
+            r#"{"type": "document_base64", "data": "AAAA"}"#,
+        ] {
+            assert_rejects(shape, &["requires an explicit 'media_type'"]);
+        }
+    }
+
+    #[test]
+    fn empty_media_type_is_invalid() {
+        assert_rejects(
+            r#"{"type": "document", "media_type": "  ", "data": "AAAA"}"#,
+            &["non-empty MIME type"],
+        );
+        assert_rejects(
+            r#"{"type": "image", "media_type": "", "data": "AAAA"}"#,
+            &["non-empty MIME type"],
+        );
+        assert_rejects(
+            r#"{"type": "image_base64", "media_type": "", "data": "AAAA"}"#,
+            &["non-empty MIME type"],
+        );
+    }
+
+    #[test]
+    fn rejects_both_data_and_url() {
+        assert_rejects(
+            r#"{"type": "image", "data": "AAAA", "url": "https://x/y.png"}"#,
+            &["exactly one of 'data'"],
+        );
+        assert_rejects(
+            r#"{"type": "document", "media_type": "application/pdf", "data": "AAAA", "url": "https://x/d.pdf"}"#,
+            &["exactly one of 'data'"],
+        );
+    }
+
+    #[test]
+    fn rejects_media_type_on_url_image() {
+        assert_rejects(
+            r#"{"type": "image", "url": "https://x/y.png", "media_type": "image/png"}"#,
+            &["do not accept 'media_type'"],
+        );
+        assert_rejects(
+            r#"{"type": "image_url", "url": "https://x/y.png", "media_type": "image/png"}"#,
+            &["does not accept 'media_type'"],
+        );
+    }
+
+    #[test]
+    fn rejects_unknown_and_missing_type() {
+        assert_rejects(
+            r#"{"type": "audio", "data": "x"}"#,
+            &["unsupported content block type", "Attachment"],
+        );
+        assert_rejects(r#"{"data": "x"}"#, &["requires 'type'"]);
+        assert_rejects(
+            r#"{"type": "image"}"#,
+            &["requires 'data' (base64) or 'url'"],
+        );
+    }
+
+    #[test]
+    fn rejects_document_without_locator() {
+        assert_rejects(
+            r#"{"type": "document", "media_type": "application/pdf"}"#,
+            &["requires 'data' (base64) or 'url'"],
+        );
+    }
+
+    // ── Attachment constructor parity ───────────────────────────────
 
     #[test]
     fn image_url_block() {
         let b = attachment_to_content_block("image_url", "https://x/y.png", None, None).unwrap();
-        assert!(matches!(b, ContentBlock::Image { .. }));
+        assert_eq!(url_image(&b), "https://x/y.png");
     }
 
     #[test]
     fn image_base64_defaults_png() {
         let b = attachment_to_content_block("image_base64", "AAAA", None, None).unwrap();
-        match b {
-            ContentBlock::Image {
-                source: ImageSource::Base64 { media_type, .. },
-            } => assert_eq!(media_type, "image/png"),
-            _ => panic!("expected base64 image"),
-        }
+        assert_eq!(base64_image(&b), ("image/png", "AAAA"));
+    }
+
+    #[test]
+    fn image_base64_empty_media_type_errors() {
+        assert!(
+            attachment_to_content_block("image_base64", "AAAA", None, Some(String::new())).is_err()
+        );
+    }
+
+    #[test]
+    fn image_url_rejects_media_type() {
+        assert!(
+            attachment_to_content_block(
+                "image_url",
+                "https://x/y.png",
+                None,
+                Some("image/png".into())
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -421,6 +914,7 @@ mod attachment_tests {
         assert!(
             attachment_to_content_block("document_url", "https://x/d.pdf", None, None).is_err()
         );
+        assert!(attachment_to_content_block("document_base64", "AAAA", None, None).is_err());
     }
 
     #[test]
@@ -432,12 +926,73 @@ mod attachment_tests {
             Some("application/pdf".into()),
         )
         .unwrap();
-        assert!(matches!(b, ContentBlock::Document { .. }));
+        assert!(matches!(
+            b,
+            ContentBlock::Document {
+                data: BinarySource::Base64 { .. },
+                ..
+            }
+        ));
     }
 
     #[test]
     fn unknown_kind_errors() {
         assert!(attachment_to_content_block("audio", "x", None, None).is_err());
+    }
+
+    // ── send_update shares the same decoder ─────────────────────────
+
+    #[test]
+    fn send_update_accepts_image_and_document_blocks() {
+        Python::attach(|py| {
+            let value = eval_json(
+                py,
+                r#"{
+                    "content": [
+                        {"type": "image", "data": "AAAA"},
+                        {"type": "document", "media_type": "application/pdf", "url": "https://x/d.pdf"}
+                    ]
+                }"#,
+            );
+            let dict = value.cast::<PyDict>().unwrap();
+            let (tx, mut rx) = tokio::sync::mpsc::channel(4);
+            let ctx = PyToolContext::new(CancellationToken::new(), tx);
+            ctx.send_update(dict.as_any()).unwrap();
+            let progress = rx.try_recv().unwrap();
+            assert_eq!(progress.content.len(), 2);
+            assert!(matches!(
+                &progress.content[0],
+                DataBlock::Image {
+                    source: ImageSource::Base64 { media_type, data }
+                } if media_type == "image/png" && data == "AAAA"
+            ));
+            assert!(matches!(
+                &progress.content[1],
+                DataBlock::Document {
+                    media_type,
+                    data: BinarySource::Url { url },
+                    ..
+                } if media_type == "application/pdf" && url == "https://x/d.pdf"
+            ));
+        });
+    }
+
+    #[test]
+    fn send_update_rejects_nested_shape() {
+        Python::attach(|py| {
+            let value = eval_json(
+                py,
+                r#"{"content": [{"type": "image_url", "image_url": {"url": "https://x/y.png"}}]}"#,
+            );
+            let dict = value.cast::<PyDict>().unwrap();
+            let (tx, _rx) = tokio::sync::mpsc::channel(4);
+            let ctx = PyToolContext::new(CancellationToken::new(), tx);
+            let err = ctx.send_update(dict.as_any()).unwrap_err().to_string();
+            assert!(
+                err.contains("nested content block shape is not accepted"),
+                "unexpected error: {err}"
+            );
+        });
     }
 }
 
@@ -535,24 +1090,13 @@ fn parse_tool_result(obj: &Bound<'_, PyAny>) -> PyResult<ToolResult> {
                     continue;
                 }
                 let item_dict = item.cast::<PyDict>()?;
-                match dict_content_block(item_dict)? {
-                    Some(cb) => {
-                        if let Some(block) = content_block_to_data_block(&cb) {
-                            blocks.push(block);
-                        } else {
-                            return Err(pyo3::exceptions::PyValueError::new_err(
-                                "content block is not a valid image/document/text block",
-                            ));
-                        }
-                    }
+                let cb = dict_content_block(item_dict)?;
+                match content_block_to_data_block(&cb) {
+                    Some(block) => blocks.push(block),
                     None => {
-                        return Err(pyo3::exceptions::PyValueError::new_err(format!(
-                            "unsupported content block type: {} (hint: return a bare Attachment or list of Attachments for images/documents)",
-                            item_dict
-                                .get_item("type")?
-                                .and_then(|v| v.extract::<String>().ok())
-                                .unwrap_or_default()
-                        )));
+                        return Err(pyo3::exceptions::PyValueError::new_err(
+                            "content block is not a valid image/document/text block",
+                        ));
                     }
                 }
             }
