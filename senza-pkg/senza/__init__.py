@@ -259,7 +259,9 @@ def _wrap_tool_callback(callback):
     return callback
 
 
-def create_tool(name, description, parameters=None, parameters_schema=None, callback=None, report_duration=False):
+def create_tool(
+    name, description, parameters=None, parameters_schema=None, callback=None, report_duration=False
+):
     """Create a Tool from a callback.
 
     Args:
@@ -270,8 +272,19 @@ def create_tool(name, description, parameters=None, parameters_schema=None, call
             When used positionally as the 4th arg, accepts the callback
             for backward compatibility with the old Rust signature.
         callback: Callable with signature ``(args, ctx)`` or ``(args)``.
-            Async callables are supported. May return a str, a dict, an
-            ``Attachment``, or a list of str/``Attachment``.
+            Async callables are supported. May return a str, an
+            ``Attachment``, a list of str/``Attachment``, or a dict. A dict
+            with ``content`` may mix ``Attachment`` objects with flat
+            content-block dicts: ``{"type": "text", "text": ...}``,
+            ``{"type": "image", "data": <base64>}`` (``media_type``
+            defaults to ``image/png``) or ``{"type": "image", "url": ...}``,
+            ``{"type": "image_url", "url": ...}``, ``{"type":
+            "image_base64", "data": <base64>}``, ``{"type": "document",
+            "media_type": <mime>, "data"/"url": ...}``, ``{"type":
+            "document_url", ...}`` and ``{"type": "document_base64", ...}``.
+            Documents must carry an explicit non-empty ``media_type`` (it is
+            never inferred); nested DataBlock / OpenAI wire shapes are
+            rejected with ``ValueError``.
         report_duration: When True, the agent loop appends an execution
             duration annotation (e.g. ``[duration: 812ms]``) to the tool
             result fed back to the model. Only takes effect when hooks
